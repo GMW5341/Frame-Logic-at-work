@@ -17,16 +17,16 @@
   }
 
   function toast(msg) {
-    const el = $('#toast');
+    var el = $('#toast');
     el.textContent = msg;
     el.classList.add('show');
     clearTimeout(el._t);
-    el._t = setTimeout(() => el.classList.remove('show'), 2000);
+    el._t = setTimeout(function () { el.classList.remove('show'); }, 2000);
   }
 
   function formatDate(iso) {
     if (!iso) return '';
-    const d = new Date(iso);
+    var d = new Date(iso);
     return d.toLocaleDateString('ko-KR', {
       year: 'numeric', month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit'
@@ -39,43 +39,92 @@
 
   function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(
-      () => toast('클립보드에 복사되었습니다'),
-      () => toast('복사에 실패했습니다')
+      function () { toast('클립보드에 복사되었습니다'); },
+      function () { toast('복사에 실패했습니다'); }
     );
   }
 
-  // ── Tab Navigation ──
-  const tabBtns = $$('.tab-btn');
-  const tabPanels = $$('.tab-panel');
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
 
-  tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      tabBtns.forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
-      tabPanels.forEach(p => p.classList.remove('active'));
+  function nowLocalISO() {
+    var now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16);
+  }
+
+  function setDatetimeNow(inputId) {
+    $(inputId).value = nowLocalISO();
+  }
+
+  // ── Live Clock ──
+  function updateClocks() {
+    var now = new Date();
+    var str = now.toLocaleDateString('ko-KR', {
+      year: 'numeric', month: 'long', day: 'numeric', weekday: 'short'
+    }) + ' ' + now.toLocaleTimeString('ko-KR', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    $$('[data-clock]').forEach(function (el) {
+      el.textContent = str;
+    });
+  }
+  updateClocks();
+  setInterval(updateClocks, 1000);
+
+  // ── Tab Navigation ──
+  var tabBtns = $$('.tab-btn');
+  var tabPanels = $$('.tab-panel');
+
+  tabBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      tabBtns.forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+      tabPanels.forEach(function (p) { p.classList.remove('active'); });
       btn.classList.add('active');
       btn.setAttribute('aria-selected', 'true');
-      $(`#tab-${btn.dataset.tab}`).classList.add('active');
+      $('#tab-' + btn.dataset.tab).classList.add('active');
     });
   });
 
   // ══════════════════════════════════════
   // 1. AI 컨텍스트 탭
   // ══════════════════════════════════════
-  const CTX_KEY = 'fl_contexts';
+  var CTX_KEY = 'fl_contexts';
+
+  function showCtxList() {
+    $('#ctx-list-view').style.display = '';
+    $('#ctx-form-view').style.display = 'none';
+  }
+
+  function showCtxForm() {
+    $('#ctx-list-view').style.display = 'none';
+    $('#ctx-form-view').style.display = '';
+  }
+
+  function clearContextForm() {
+    $('#ctx-project').value = '';
+    $('#ctx-background').value = '';
+    $('#ctx-goal').value = '';
+    $('#ctx-constraints').value = '';
+    $('#ctx-reference').value = '';
+    setDatetimeNow('#ctx-datetime');
+  }
 
   function buildContextPrompt() {
-    const project = $('#ctx-project').value.trim();
-    const background = $('#ctx-background').value.trim();
-    const goal = $('#ctx-goal').value.trim();
-    const constraints = $('#ctx-constraints').value.trim();
-    const reference = $('#ctx-reference').value.trim();
-
-    let prompt = '';
-    if (project) prompt += `## 프로젝트: ${project}\n\n`;
-    if (background) prompt += `## 배경\n${background}\n\n`;
-    if (goal) prompt += `## 목표\n${goal}\n\n`;
-    if (constraints) prompt += `## 제약 조건\n${constraints}\n\n`;
-    if (reference) prompt += `## 참고 자료\n${reference}\n`;
+    var project = $('#ctx-project').value.trim();
+    var background = $('#ctx-background').value.trim();
+    var goal = $('#ctx-goal').value.trim();
+    var constraints = $('#ctx-constraints').value.trim();
+    var reference = $('#ctx-reference').value.trim();
+    var prompt = '';
+    if (project) prompt += '## 프로젝트: ' + project + '\n\n';
+    if (background) prompt += '## 배경\n' + background + '\n\n';
+    if (goal) prompt += '## 목표\n' + goal + '\n\n';
+    if (constraints) prompt += '## 제약 조건\n' + constraints + '\n\n';
+    if (reference) prompt += '## 참고 자료\n' + reference + '\n';
     return prompt.trim();
   }
 
@@ -87,81 +136,90 @@
       goal: $('#ctx-goal').value.trim(),
       constraints: $('#ctx-constraints').value.trim(),
       reference: $('#ctx-reference').value.trim(),
-      createdAt: new Date().toISOString()
+      createdAt: $('#ctx-datetime').value || new Date().toISOString()
     };
   }
 
   function loadContextToForm(item) {
+    showCtxForm();
     $('#ctx-project').value = item.project || '';
     $('#ctx-background').value = item.background || '';
     $('#ctx-goal').value = item.goal || '';
     $('#ctx-constraints').value = item.constraints || '';
     $('#ctx-reference').value = item.reference || '';
-  }
-
-  function clearContextForm() {
-    $('#ctx-project').value = '';
-    $('#ctx-background').value = '';
-    $('#ctx-goal').value = '';
-    $('#ctx-constraints').value = '';
-    $('#ctx-reference').value = '';
+    // Load saved datetime
+    if (item.createdAt) {
+      var d = new Date(item.createdAt);
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      $('#ctx-datetime').value = d.toISOString().slice(0, 16);
+    }
   }
 
   function renderContextList() {
-    const items = load(CTX_KEY);
-    const ul = $('#ctx-items');
+    var items = load(CTX_KEY);
+    var ul = $('#ctx-items');
     if (items.length === 0) {
       ul.innerHTML = '<li class="empty-state">저장된 컨텍스트가 없습니다</li>';
       return;
     }
-    ul.innerHTML = items.map(item => `
-      <li class="saved-item" data-id="${item.id}">
-        <div class="saved-item-info" data-action="load">
-          <div class="saved-item-title">${escapeHtml(item.project || '(제목 없음)')}</div>
-          <div class="saved-item-date">${formatDate(item.createdAt)}</div>
-        </div>
-        <div class="saved-item-actions">
-          <button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>
-        </div>
-      </li>
-    `).join('');
+    ul.innerHTML = items.map(function (item) {
+      return '<li class="saved-item" data-id="' + item.id + '">' +
+        '<div class="saved-item-info" data-action="load">' +
+          '<div class="saved-item-title">' + escapeHtml(item.project || '(제목 없음)') + '</div>' +
+          '<div class="saved-item-date">' + formatDate(item.createdAt) + '</div>' +
+        '</div>' +
+        '<div class="saved-item-actions">' +
+          '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
+        '</div>' +
+      '</li>';
+    }).join('');
   }
 
-  $('#ctx-copy').addEventListener('click', () => {
-    const text = buildContextPrompt();
+  $('#ctx-new').addEventListener('click', function () {
+    clearContextForm();
+    showCtxForm();
+  });
+
+  $('#ctx-back').addEventListener('click', function () {
+    showCtxList();
+  });
+
+  $('#ctx-copy').addEventListener('click', function () {
+    var text = buildContextPrompt();
     if (!text) { toast('내용을 입력해주세요'); return; }
     copyToClipboard(text);
   });
 
-  $('#ctx-save').addEventListener('click', () => {
-    const data = getContextData();
+  $('#ctx-save').addEventListener('click', function () {
+    var data = getContextData();
     if (!data.project && !data.background && !data.goal) {
       toast('최소 한 가지 항목을 입력해주세요');
       return;
     }
-    const items = load(CTX_KEY);
+    var items = load(CTX_KEY);
     items.unshift(data);
     save(CTX_KEY, items);
     renderContextList();
+    showCtxList();
     toast('컨텍스트가 저장되었습니다');
   });
 
-  $('#ctx-clear').addEventListener('click', () => {
+  $('#ctx-clear').addEventListener('click', function () {
     clearContextForm();
     toast('초기화되었습니다');
   });
 
-  $('#ctx-items').addEventListener('click', (e) => {
-    const li = e.target.closest('.saved-item');
+  $('#ctx-items').addEventListener('click', function (e) {
+    var li = e.target.closest('.saved-item');
     if (!li) return;
-    const id = li.dataset.id;
-    const items = load(CTX_KEY);
+    var id = li.dataset.id;
+    var items = load(CTX_KEY);
     if (e.target.closest('[data-action="delete"]')) {
-      save(CTX_KEY, items.filter(i => i.id !== id));
+      save(CTX_KEY, items.filter(function (i) { return i.id !== id; }));
       renderContextList();
       toast('삭제되었습니다');
     } else {
-      const item = items.find(i => i.id === id);
+      var item = items.find(function (i) { return i.id === id; });
       if (item) { loadContextToForm(item); toast('불러왔습니다'); }
     }
   });
@@ -169,85 +227,138 @@
   // ══════════════════════════════════════
   // 2. 아이디어 보드 탭
   // ══════════════════════════════════════
-  const IDEA_KEY = 'fl_ideas';
+  var IDEA_KEY = 'fl_ideas';
 
-  function getIdeaData() {
-    return {
-      id: uid(),
-      title: $('#idea-title').value.trim(),
-      detail: $('#idea-detail').value.trim(),
-      tags: $('#idea-tags').value.split(',').map(t => t.trim()).filter(Boolean),
-      createdAt: new Date().toISOString()
-    };
+  function showIdeaList() {
+    $('#idea-list-view').style.display = '';
+    $('#idea-form-view').style.display = 'none';
+  }
+
+  function showIdeaForm() {
+    $('#idea-list-view').style.display = 'none';
+    $('#idea-form-view').style.display = '';
   }
 
   function clearIdeaForm() {
     $('#idea-title').value = '';
     $('#idea-detail').value = '';
     $('#idea-tags').value = '';
+    setDatetimeNow('#idea-datetime');
+  }
+
+  function getIdeaData() {
+    return {
+      id: uid(),
+      title: $('#idea-title').value.trim(),
+      detail: $('#idea-detail').value.trim(),
+      tags: $('#idea-tags').value.split(',').map(function (t) { return t.trim(); }).filter(Boolean),
+      createdAt: $('#idea-datetime').value || new Date().toISOString()
+    };
+  }
+
+  function loadIdeaToForm(item) {
+    showIdeaForm();
+    $('#idea-title').value = item.title || '';
+    $('#idea-detail').value = item.detail || '';
+    $('#idea-tags').value = (item.tags || []).join(', ');
+    if (item.createdAt) {
+      var d = new Date(item.createdAt);
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      $('#idea-datetime').value = d.toISOString().slice(0, 16);
+    }
   }
 
   function renderIdeaBoard(filter) {
-    let items = load(IDEA_KEY);
+    var items = load(IDEA_KEY);
     if (filter) {
-      const q = filter.toLowerCase();
-      items = items.filter(i =>
-        i.title.toLowerCase().includes(q) ||
-        (i.detail && i.detail.toLowerCase().includes(q)) ||
-        i.tags.some(t => t.toLowerCase().includes(q))
-      );
+      var q = filter.toLowerCase();
+      items = items.filter(function (i) {
+        return i.title.toLowerCase().includes(q) ||
+          (i.detail && i.detail.toLowerCase().includes(q)) ||
+          i.tags.some(function (t) { return t.toLowerCase().includes(q); });
+      });
     }
-    const board = $('#idea-board');
+    var board = $('#idea-board');
     if (items.length === 0) {
       board.innerHTML = '<div class="empty-state">아이디어를 추가해보세요</div>';
       return;
     }
-    board.innerHTML = items.map(item => `
-      <div class="idea-card" data-id="${item.id}">
-        <div class="idea-card-header">
-          <div class="idea-card-title">${escapeHtml(item.title)}</div>
-          <button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>
-        </div>
-        ${item.detail ? `<div class="idea-card-detail">${escapeHtml(item.detail)}</div>` : ''}
-        <div class="idea-card-footer">
-          <div class="idea-tags">${item.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>
-          <div class="idea-card-date">${formatDate(item.createdAt)}</div>
-        </div>
-      </div>
-    `).join('');
+    board.innerHTML = items.map(function (item) {
+      return '<div class="idea-card" data-id="' + item.id + '">' +
+        '<div class="idea-card-header">' +
+          '<div class="idea-card-title">' + escapeHtml(item.title) + '</div>' +
+          '<div class="idea-card-actions">' +
+            '<button class="btn btn-small btn-secondary" data-action="edit" title="편집">✎</button>' +
+            '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
+          '</div>' +
+        '</div>' +
+        (item.detail ? '<div class="idea-card-detail">' + escapeHtml(item.detail) + '</div>' : '') +
+        '<div class="idea-card-footer">' +
+          '<div class="idea-tags">' + (item.tags || []).map(function (t) { return '<span class="tag">' + escapeHtml(t) + '</span>'; }).join('') + '</div>' +
+          '<div class="idea-card-date">' + formatDate(item.createdAt) + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
   }
 
-  $('#idea-add').addEventListener('click', () => {
-    const data = getIdeaData();
+  $('#idea-new').addEventListener('click', function () {
+    clearIdeaForm();
+    showIdeaForm();
+  });
+
+  $('#idea-back').addEventListener('click', function () {
+    showIdeaList();
+  });
+
+  $('#idea-add').addEventListener('click', function () {
+    var data = getIdeaData();
     if (!data.title) { toast('아이디어 제목을 입력해주세요'); return; }
-    const items = load(IDEA_KEY);
+    var items = load(IDEA_KEY);
     items.unshift(data);
     save(IDEA_KEY, items);
     clearIdeaForm();
     renderIdeaBoard($('#idea-search').value);
-    toast('아이디어가 추가되었습니다');
+    showIdeaList();
+    toast('아이디어가 저장되었습니다');
   });
 
-  $('#idea-search').addEventListener('input', (e) => {
+  $('#idea-form-clear').addEventListener('click', function () {
+    clearIdeaForm();
+    toast('초기화되었습니다');
+  });
+
+  $('#idea-search').addEventListener('input', function (e) {
     renderIdeaBoard(e.target.value);
   });
 
-  $('#idea-board').addEventListener('click', (e) => {
-    if (!e.target.closest('[data-action="delete"]')) return;
-    const card = e.target.closest('.idea-card');
+  $('#idea-board').addEventListener('click', function (e) {
+    var card = e.target.closest('.idea-card');
     if (!card) return;
-    const items = load(IDEA_KEY).filter(i => i.id !== card.dataset.id);
-    save(IDEA_KEY, items);
-    renderIdeaBoard($('#idea-search').value);
-    toast('삭제되었습니다');
+    var id = card.dataset.id;
+
+    if (e.target.closest('[data-action="delete"]')) {
+      var items = load(IDEA_KEY).filter(function (i) { return i.id !== id; });
+      save(IDEA_KEY, items);
+      renderIdeaBoard($('#idea-search').value);
+      toast('삭제되었습니다');
+    } else if (e.target.closest('[data-action="edit"]')) {
+      var item = load(IDEA_KEY).find(function (i) { return i.id === id; });
+      if (item) {
+        // Remove old, user will re-save
+        var filtered = load(IDEA_KEY).filter(function (i) { return i.id !== id; });
+        save(IDEA_KEY, filtered);
+        loadIdeaToForm(item);
+        toast('편집 모드');
+      }
+    }
   });
 
   // ══════════════════════════════════════
   // 3. 회의 메모 탭
   // ══════════════════════════════════════
-  const MTG_KEY = 'fl_meetings';
+  var MTG_KEY = 'fl_meetings';
 
-  const MTG_TYPE_LABELS = {
+  var MTG_TYPE_LABELS = {
     regular: '📅 정기 회의',
     brainstorm: '🧠 브레인스토밍',
     sprint: '🏃 스프린트 리뷰',
@@ -256,10 +367,9 @@
     oneone: '👥 1:1 미팅'
   };
 
-  let currentMtgType = '';
-  let mtgAgendaItems = [];
+  var currentMtgType = '';
+  var mtgAgendaItems = [];
 
-  // -- View switching --
   function showMtgTypeSelect() {
     $('#mtg-type-select').style.display = '';
     $('#mtg-form-view').style.display = 'none';
@@ -272,9 +382,8 @@
     $('#mtg-type-badge').textContent = MTG_TYPE_LABELS[type] || type;
   }
 
-  // -- Agenda items --
   function renderAgendaList() {
-    const container = $('#mtg-agenda-list');
+    var container = $('#mtg-agenda-list');
     if (mtgAgendaItems.length === 0) {
       container.innerHTML = '<div style="font-size:0.8rem;color:var(--text-dim);padding:4px 0;">아래에서 안건을 추가하세요</div>';
       return;
@@ -294,7 +403,6 @@
     renderAgendaList();
   }
 
-  // -- Data --
   function getMeetingData() {
     return {
       id: uid(),
@@ -335,7 +443,6 @@
     $('#mtg-title').value = item.title || '';
     $('#mtg-date').value = item.date || '';
     $('#mtg-attendees').value = item.attendees || '';
-    // agenda: support both old string format and new array format
     if (Array.isArray(item.agenda)) {
       mtgAgendaItems = item.agenda.slice();
     } else if (item.agenda) {
@@ -351,17 +458,13 @@
 
   function clearMeetingForm() {
     $('#mtg-title').value = '';
-    $('#mtg-date').value = '';
     $('#mtg-attendees').value = '';
     mtgAgendaItems = [];
     renderAgendaList();
     $('#mtg-notes').value = '';
     $('#mtg-decisions').value = '';
     $('#mtg-actions').value = '';
-    // Reset datetime
-    var now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    $('#mtg-date').value = now.toISOString().slice(0, 16);
+    setDatetimeNow('#mtg-date');
   }
 
   function renderMeetingList() {
@@ -387,8 +490,6 @@
     }).join('');
   }
 
-  // -- Event listeners --
-  // Type selection
   $$('.mtg-type-card').forEach(function (card) {
     card.addEventListener('click', function () {
       clearMeetingForm();
@@ -396,12 +497,10 @@
     });
   });
 
-  // Back button
   $('#mtg-back').addEventListener('click', function () {
     showMtgTypeSelect();
   });
 
-  // Agenda add
   $('#mtg-agenda-add-btn').addEventListener('click', function () {
     var input = $('#mtg-agenda-input');
     addAgendaItem(input.value.trim());
@@ -417,7 +516,6 @@
     }
   });
 
-  // Agenda remove
   $('#mtg-agenda-list').addEventListener('click', function (e) {
     if (e.target.closest('.mtg-agenda-remove')) {
       var item = e.target.closest('.mtg-agenda-item');
@@ -427,7 +525,6 @@
     }
   });
 
-  // Save
   $('#mtg-save').addEventListener('click', function () {
     var data = getMeetingData();
     if (!data.title && !data.notes) { toast('회의명 또는 내용을 입력해주세요'); return; }
@@ -435,10 +532,10 @@
     items.unshift(data);
     save(MTG_KEY, items);
     renderMeetingList();
+    showMtgTypeSelect();
     toast('회의 메모가 저장되었습니다');
   });
 
-  // Copy
   $('#mtg-copy').addEventListener('click', function () {
     var data = getMeetingData();
     var text = buildMeetingText(data);
@@ -446,13 +543,11 @@
     copyToClipboard(text);
   });
 
-  // Clear
   $('#mtg-clear').addEventListener('click', function () {
     clearMeetingForm();
     toast('초기화되었습니다');
   });
 
-  // Saved list interactions
   $('#mtg-items').addEventListener('click', function (e) {
     var li = e.target.closest('.saved-item');
     if (!li) return;
@@ -471,12 +566,22 @@
   // ══════════════════════════════════════
   // 4. 제언 템플릿 탭 (동적 항목)
   // ══════════════════════════════════════
-  const PROP_KEY = 'fl_proposals';
+  var PROP_KEY = 'fl_proposals';
+
+  function showPropList() {
+    $('#prop-list-view').style.display = '';
+    $('#prop-form-view').style.display = 'none';
+  }
+
+  function showPropForm() {
+    $('#prop-list-view').style.display = 'none';
+    $('#prop-form-view').style.display = '';
+  }
 
   function addProposalField(label, value) {
-    const container = $('#prop-fields');
-    const fieldId = 'pf-' + uid();
-    const div = document.createElement('div');
+    var container = $('#prop-fields');
+    var fieldId = 'pf-' + uid();
+    var div = document.createElement('div');
     div.className = 'prop-field-item';
     div.dataset.fieldId = fieldId;
     div.innerHTML =
@@ -489,10 +594,10 @@
   }
 
   function getProposalData() {
-    const fields = [];
+    var fields = [];
     $$('.prop-field-item').forEach(function (el) {
-      const label = el.querySelector('.prop-field-label').value.trim();
-      const value = el.querySelector('.prop-field-value').value.trim();
+      var label = el.querySelector('.prop-field-label').value.trim();
+      var value = el.querySelector('.prop-field-value').value.trim();
       if (label || value) {
         fields.push({ label: label, value: value });
       }
@@ -501,12 +606,12 @@
       id: uid(),
       title: $('#prop-title').value.trim(),
       fields: fields,
-      createdAt: new Date().toISOString()
+      createdAt: $('#prop-datetime').value || new Date().toISOString()
     };
   }
 
   function buildProposalText(item) {
-    let text = '';
+    var text = '';
     if (item.title) text += '# ' + item.title + '\n\n';
     if (item.fields) {
       item.fields.forEach(function (f) {
@@ -523,6 +628,7 @@
   }
 
   function loadProposalToForm(item) {
+    showPropForm();
     $('#prop-title').value = item.title || '';
     $('#prop-fields').innerHTML = '';
     if (item.fields && item.fields.length > 0) {
@@ -530,76 +636,92 @@
         addProposalField(f.label, f.value);
       });
     }
+    if (item.createdAt) {
+      var d = new Date(item.createdAt);
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      $('#prop-datetime').value = d.toISOString().slice(0, 16);
+    }
   }
 
   function clearProposalForm() {
     $('#prop-title').value = '';
     $('#prop-fields').innerHTML = '';
+    setDatetimeNow('#prop-datetime');
   }
 
   function renderProposalList() {
-    const items = load(PROP_KEY);
-    const ul = $('#prop-items');
+    var items = load(PROP_KEY);
+    var ul = $('#prop-items');
     if (items.length === 0) {
       ul.innerHTML = '<li class="empty-state">저장된 제언서가 없습니다</li>';
       return;
     }
-    ul.innerHTML = items.map(item => `
-      <li class="saved-item" data-id="${item.id}">
-        <div class="saved-item-info" data-action="load">
-          <div class="saved-item-title">${escapeHtml(item.title || '(제목 없음)')}</div>
-          <div class="saved-item-date">${formatDate(item.createdAt)}</div>
-        </div>
-        <div class="saved-item-actions">
-          <button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>
-        </div>
-      </li>
-    `).join('');
+    ul.innerHTML = items.map(function (item) {
+      return '<li class="saved-item" data-id="' + item.id + '">' +
+        '<div class="saved-item-info" data-action="load">' +
+          '<div class="saved-item-title">' + escapeHtml(item.title || '(제목 없음)') + '</div>' +
+          '<div class="saved-item-date">' + formatDate(item.createdAt) + '</div>' +
+        '</div>' +
+        '<div class="saved-item-actions">' +
+          '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
+        '</div>' +
+      '</li>';
+    }).join('');
   }
 
-  $('#prop-add-field').addEventListener('click', () => {
+  $('#prop-new').addEventListener('click', function () {
+    clearProposalForm();
+    showPropForm();
+  });
+
+  $('#prop-back').addEventListener('click', function () {
+    showPropList();
+  });
+
+  $('#prop-add-field').addEventListener('click', function () {
     addProposalField('', '');
   });
 
-  $('#prop-fields').addEventListener('click', (e) => {
+  $('#prop-fields').addEventListener('click', function (e) {
     if (e.target.closest('.prop-field-remove')) {
       e.target.closest('.prop-field-item').remove();
     }
   });
 
-  $('#prop-copy').addEventListener('click', () => {
-    const data = getProposalData();
-    const text = buildProposalText(data);
+  $('#prop-copy').addEventListener('click', function () {
+    var data = getProposalData();
+    var text = buildProposalText(data);
     if (!text) { toast('내용을 입력해주세요'); return; }
     copyToClipboard(text);
   });
 
-  $('#prop-save').addEventListener('click', () => {
-    const data = getProposalData();
+  $('#prop-save').addEventListener('click', function () {
+    var data = getProposalData();
     if (!data.title && data.fields.length === 0) { toast('제목 또는 항목을 입력해주세요'); return; }
-    const items = load(PROP_KEY);
+    var items = load(PROP_KEY);
     items.unshift(data);
     save(PROP_KEY, items);
     renderProposalList();
+    showPropList();
     toast('제언서가 저장되었습니다');
   });
 
-  $('#prop-clear').addEventListener('click', () => {
+  $('#prop-clear').addEventListener('click', function () {
     clearProposalForm();
     toast('초기화되었습니다');
   });
 
-  $('#prop-items').addEventListener('click', (e) => {
-    const li = e.target.closest('.saved-item');
+  $('#prop-items').addEventListener('click', function (e) {
+    var li = e.target.closest('.saved-item');
     if (!li) return;
-    const id = li.dataset.id;
-    const items = load(PROP_KEY);
+    var id = li.dataset.id;
+    var items = load(PROP_KEY);
     if (e.target.closest('[data-action="delete"]')) {
-      save(PROP_KEY, items.filter(i => i.id !== id));
+      save(PROP_KEY, items.filter(function (i) { return i.id !== id; }));
       renderProposalList();
       toast('삭제되었습니다');
     } else {
-      const item = items.find(i => i.id === id);
+      var item = items.find(function (i) { return i.id === id; });
       if (item) { loadProposalToForm(item); toast('불러왔습니다'); }
     }
   });
@@ -607,18 +729,16 @@
   // ══════════════════════════════════════
   // 5. 프레젠테이션 모드
   // ══════════════════════════════════════
-  let presSlides = [];
-  let presIndex = 0;
+  var presSlides = [];
+  var presIndex = 0;
 
   function buildPresSlides(data) {
     var slides = [];
-    // Title slide
     slides.push({
       type: 'title',
       title: data.title || '(제목 없음)',
       subtitle: formatDate(new Date().toISOString())
     });
-    // Each field becomes a content slide
     if (data.fields) {
       data.fields.forEach(function (f) {
         if (f.label || f.value) {
@@ -696,13 +816,6 @@
       if (presIndex < presSlides.length - 1) { presIndex++; renderPresSlide(); }
     }
   });
-
-  // ── HTML Escape ──
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
 
   // ── Init ──
   function init() {

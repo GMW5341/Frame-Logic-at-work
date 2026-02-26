@@ -151,20 +151,65 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.panel-header {
-  margin-bottom: 24px;
+/* ===== Panel Top Bar (title + clock) ===== */
+.panel-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
-.panel-header h2 {
+.panel-top h2 {
   font-size: 1.25rem;
   font-weight: 600;
-  margin-bottom: 4px;
+}
+
+.live-clock {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-surface);
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--border);
 }
 
 .panel-desc {
   font-size: 0.82rem;
   color: var(--text-muted);
   line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+/* ===== List/Form View Pattern ===== */
+.btn-new {
+  margin-bottom: 20px;
+}
+
+.view-form-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.form-datetime-group {
+  margin-bottom: 0 !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-datetime-group label {
+  margin-bottom: 0 !important;
+  white-space: nowrap;
+  text-transform: none;
+  font-size: 0.82rem;
+}
+
+.form-datetime-group input {
+  width: auto;
 }
 
 /* ===== Forms ===== */
@@ -281,9 +326,7 @@ body {
 
 /* ===== Saved Lists ===== */
 .saved-list {
-  margin-top: 28px;
-  border-top: 1px solid var(--border);
-  padding-top: 20px;
+  margin-top: 8px;
 }
 
 .saved-list h3 {
@@ -392,6 +435,12 @@ body {
   justify-content: space-between;
   align-items: flex-start;
   gap: 8px;
+}
+
+.idea-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .idea-card-title {

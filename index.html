@@ -39,13 +39,32 @@
 
       <main class="tab-content">
 
-      <!-- AI 컨텍스트 탭 -->
+      <!-- ==================== AI 컨텍스트 탭 ==================== -->
       <section id="tab-context" class="tab-panel active" role="tabpanel">
-        <div class="panel-header">
+        <div class="panel-top">
           <h2>AI 컨텍스트</h2>
-          <p class="panel-desc">AI에게 전달할 배경, 목표, 제약 조건을 구조화하세요. 복사 버튼으로 바로 AI 대화에 붙여넣을 수 있습니다.</p>
+          <div class="live-clock" data-clock></div>
         </div>
-        <div class="context-form">
+
+        <!-- 목록 뷰 -->
+        <div id="ctx-list-view">
+          <p class="panel-desc">AI에게 전달할 배경, 목표, 제약 조건을 구조화하세요.</p>
+          <button class="btn btn-primary btn-new" id="ctx-new">+ 새 컨텍스트 작성</button>
+          <div class="saved-list">
+            <h3>저장된 컨텍스트</h3>
+            <ul id="ctx-items"></ul>
+          </div>
+        </div>
+
+        <!-- 작성 뷰 -->
+        <div id="ctx-form-view" style="display:none">
+          <div class="view-form-header">
+            <button class="btn btn-secondary btn-small" id="ctx-back">← 목록</button>
+            <div class="form-group form-datetime-group">
+              <label for="ctx-datetime">작성 시간</label>
+              <input type="datetime-local" id="ctx-datetime">
+            </div>
+          </div>
           <div class="form-group">
             <label for="ctx-project">프로젝트 / 주제</label>
             <input type="text" id="ctx-project" placeholder="예: 신규 온보딩 플로우 개선">
@@ -71,48 +90,64 @@
             <button class="btn btn-secondary" id="ctx-save">저장</button>
             <button class="btn btn-ghost" id="ctx-clear">초기화</button>
           </div>
-          <div class="saved-list" id="ctx-saved-list">
-            <h3>저장된 컨텍스트</h3>
-            <ul id="ctx-items"></ul>
-          </div>
         </div>
       </section>
 
-      <!-- 아이디어 탭 -->
+      <!-- ==================== 아이디어 탭 ==================== -->
       <section id="tab-ideas" class="tab-panel" role="tabpanel">
-        <div class="panel-header">
+        <div class="panel-top">
           <h2>아이디어 보드</h2>
-          <p class="panel-desc">떠오르는 아이디어를 빠르게 캡처하세요. 태그로 분류하고 나중에 찾기 쉽게 정리합니다.</p>
+          <div class="live-clock" data-clock></div>
         </div>
-        <div class="idea-input">
-          <div class="form-group">
-            <input type="text" id="idea-title" placeholder="아이디어 한 줄 요약">
+
+        <!-- 목록 뷰 -->
+        <div id="idea-list-view">
+          <p class="panel-desc">떠오르는 아이디어를 빠르게 캡처하세요. 태그로 분류하고 나중에 찾기 쉽게 정리합니다.</p>
+          <button class="btn btn-primary btn-new" id="idea-new">+ 새 아이디어 작성</button>
+          <div class="idea-filter">
+            <input type="text" id="idea-search" placeholder="🔍 아이디어 검색...">
+          </div>
+          <div class="idea-board" id="idea-board"></div>
+        </div>
+
+        <!-- 작성 뷰 -->
+        <div id="idea-form-view" style="display:none">
+          <div class="view-form-header">
+            <button class="btn btn-secondary btn-small" id="idea-back">← 목록</button>
+            <div class="form-group form-datetime-group">
+              <label for="idea-datetime">작성 시간</label>
+              <input type="datetime-local" id="idea-datetime">
+            </div>
           </div>
           <div class="form-group">
-            <textarea id="idea-detail" rows="6" placeholder="상세 내용 (선택)"></textarea>
+            <label for="idea-title">아이디어 한 줄 요약</label>
+            <input type="text" id="idea-title" placeholder="핵심 아이디어를 한 문장으로">
           </div>
           <div class="form-group">
-            <input type="text" id="idea-tags" placeholder="태그 (쉼표로 구분, 예: UX, 마케팅, 기술)">
+            <label for="idea-detail">상세 내용</label>
+            <textarea id="idea-detail" rows="10" placeholder="아이디어를 자세히 설명하세요"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="idea-tags">태그</label>
+            <input type="text" id="idea-tags" placeholder="쉼표로 구분 (예: UX, 마케팅, 기술)">
           </div>
           <div class="btn-row">
-            <button class="btn btn-primary" id="idea-add">+ 아이디어 추가</button>
+            <button class="btn btn-primary" id="idea-add">저장</button>
+            <button class="btn btn-ghost" id="idea-form-clear">초기화</button>
           </div>
         </div>
-        <div class="idea-filter">
-          <input type="text" id="idea-search" placeholder="🔍 아이디어 검색...">
-        </div>
-        <div class="idea-board" id="idea-board"></div>
       </section>
 
-      <!-- 회의 메모 탭 -->
+      <!-- ==================== 회의 메모 탭 ==================== -->
       <section id="tab-meeting" class="tab-panel" role="tabpanel">
+        <div class="panel-top">
+          <h2>회의 메모</h2>
+          <div class="live-clock" data-clock></div>
+        </div>
 
-        <!-- STEP 1: 회의 종류 선택 -->
+        <!-- STEP 1: 회의 종류 선택 + 목록 -->
         <div id="mtg-type-select" class="mtg-step">
-          <div class="panel-header">
-            <h2>회의 메모</h2>
-            <p class="panel-desc">회의 종류를 선택하면 맞춤 양식이 열립니다.</p>
-          </div>
+          <p class="panel-desc">회의 종류를 선택하면 맞춤 양식이 열립니다.</p>
           <div class="mtg-type-grid">
             <button class="mtg-type-card" data-mtg-type="regular">
               <span class="mtg-type-icon">📅</span>
@@ -207,16 +242,34 @@
             </div>
           </div>
         </div>
-
       </section>
 
-      <!-- 제언 템플릿 탭 -->
+      <!-- ==================== 제언 템플릿 탭 ==================== -->
       <section id="tab-proposal" class="tab-panel" role="tabpanel">
-        <div class="panel-header">
+        <div class="panel-top">
           <h2>제언 템플릿</h2>
-          <p class="panel-desc">자유롭게 항목을 추가하여 나만의 제언서를 작성하세요. 항목명과 내용을 직접 지정할 수 있습니다.</p>
+          <div class="live-clock" data-clock></div>
         </div>
-        <div class="proposal-form">
+
+        <!-- 목록 뷰 -->
+        <div id="prop-list-view">
+          <p class="panel-desc">자유롭게 항목을 추가하여 나만의 제언서를 작성하세요.</p>
+          <button class="btn btn-primary btn-new" id="prop-new">+ 새 제언서 작성</button>
+          <div class="saved-list">
+            <h3>저장된 제언서</h3>
+            <ul id="prop-items"></ul>
+          </div>
+        </div>
+
+        <!-- 작성 뷰 -->
+        <div id="prop-form-view" style="display:none">
+          <div class="view-form-header">
+            <button class="btn btn-secondary btn-small" id="prop-back">← 목록</button>
+            <div class="form-group form-datetime-group">
+              <label for="prop-datetime">작성 시간</label>
+              <input type="datetime-local" id="prop-datetime">
+            </div>
+          </div>
           <div class="form-group">
             <label for="prop-title">제언 제목</label>
             <input type="text" id="prop-title" placeholder="예: 고객 피드백 자동 분류 시스템 도입 제안">
@@ -231,10 +284,6 @@
             <button class="btn btn-secondary" id="prop-present">🖥 프레젠테이션</button>
             <button class="btn btn-ghost" id="prop-clear">초기화</button>
           </div>
-        </div>
-        <div class="saved-list" id="prop-saved-list">
-          <h3>저장된 제언서</h3>
-          <ul id="prop-items"></ul>
         </div>
       </section>
 
