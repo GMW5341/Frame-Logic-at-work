@@ -1311,6 +1311,55 @@
   var richEditors = {};
   var activeRichEditor = null; // 그리기 삽입 대상
 
+  // ── Undo/Redo 시스템 ──
+  var undoMap = {}; // id → { stack: [], pointer: -1 }
+  var UNDO_LIMIT = 80;
+
+  function getUndoState(editorEl) {
+    var id = editorEl.dataset.undoId;
+    if (!id) { id = 're-undo-' + uid(); editorEl.dataset.undoId = id; }
+    if (!undoMap[id]) undoMap[id] = { stack: [], pointer: -1 };
+    return undoMap[id];
+  }
+
+  function saveSnapshot(editorEl) {
+    var state = getUndoState(editorEl);
+    var html = editorEl.innerHTML;
+    // 현재 포인터 이후 스택 잘라냄 (redo 분기 제거)
+    if (state.pointer < state.stack.length - 1) {
+      state.stack = state.stack.slice(0, state.pointer + 1);
+    }
+    // 중복 저장 방지
+    if (state.stack.length > 0 && state.stack[state.pointer] === html) return;
+    state.stack.push(html);
+    if (state.stack.length > UNDO_LIMIT) state.stack.shift();
+    state.pointer = state.stack.length - 1;
+  }
+
+  function editorUndo(editorEl) {
+    var state = getUndoState(editorEl);
+    if (state.pointer <= 0) return false;
+    state.pointer--;
+    editorEl.innerHTML = state.stack[state.pointer];
+    wrapBareImages(editorEl);
+    return true;
+  }
+
+  function editorRedo(editorEl) {
+    var state = getUndoState(editorEl);
+    if (state.pointer >= state.stack.length - 1) return false;
+    state.pointer++;
+    editorEl.innerHTML = state.stack[state.pointer];
+    wrapBareImages(editorEl);
+    return true;
+  }
+
+  // 외부에서 undo 후 스냅샷 저장 + 버튼 갱신 트리거
+  function saveSnapshotAndNotify(editorEl) {
+    saveSnapshot(editorEl);
+    editorEl.dispatchEvent(new Event('undo-update'));
+  }
+
   function createRichEditor(textarea) {
     var id = textarea.id || ('re-' + uid());
     textarea.style.display = 'none';
@@ -1322,6 +1371,9 @@
     var toolbar = document.createElement('div');
     toolbar.className = 'rich-toolbar';
     toolbar.innerHTML =
+      '<button type="button" class="rich-btn rich-undo-btn" data-action="undo" title="되돌리기 (Ctrl+Z)" disabled>↩</button>' +
+      '<button type="button" class="rich-btn rich-redo-btn" data-action="redo" title="다시실행 (Ctrl+Shift+Z)" disabled>↪</button>' +
+      '<span class="rich-sep"></span>' +
       '<button type="button" class="rich-btn" data-cmd="bold" title="볼드 (Ctrl+B)"><b>B</b></button>' +
       '<button type="button" class="rich-btn" data-cmd="underline" title="밑줄 (Ctrl+U)"><u>U</u></button>' +
       '<span class="rich-sep"></span>' +
@@ -1376,6 +1428,55 @@
         openTablePicker(btn, editor);
       } else if (action === 'table-border') {
         openTableBorderPicker(btn, editor);
+      } else if (action === 'undo') {
+        editorUndo(editor);
+        updateUndoButtons();
+      } else if (action === 'redo') {
+        editorRedo(editor);
+        updateUndoButtons();
+      }
+    });
+
+    // Undo/Redo 버튼 상태 업데이트
+    var undoBtn = toolbar.querySelector('.rich-undo-btn');
+    var redoBtn = toolbar.querySelector('.rich-redo-btn');
+    function updateUndoButtons() {
+      var state = getUndoState(editor);
+      undoBtn.disabled = state.pointer <= 0;
+      redoBtn.disabled = state.pointer >= state.stack.length - 1;
+    }
+
+    // 초기 스냅샷
+    saveSnapshot(editor);
+
+    // 외부 DOM 변경 후 버튼 갱신 이벤트
+    editor.addEventListener('undo-update', updateUndoButtons);
+
+    // 입력 변경 시 디바운스 스냅샷
+    var inputTimer = null;
+    editor.addEventListener('input', function () {
+      clearTimeout(inputTimer);
+      inputTimer = setTimeout(function () {
+        saveSnapshot(editor);
+        updateUndoButtons();
+      }, 500);
+    });
+
+    // Ctrl+Z / Ctrl+Shift+Z 키보드 처리
+    editor.addEventListener('keydown', function (e) {
+      var isMod = e.ctrlKey || e.metaKey;
+      if (isMod && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        editorUndo(editor);
+        updateUndoButtons();
+      } else if (isMod && e.key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        editorRedo(editor);
+        updateUndoButtons();
+      } else if (isMod && e.key === 'y') {
+        e.preventDefault();
+        editorRedo(editor);
+        updateUndoButtons();
       }
     });
 
@@ -1412,7 +1513,7 @@
       var td = e.target.closest('td, th');
       if (td && td.closest('.re-table')) {
         e.preventDefault();
-        showTableContextMenu(td, editor);
+        showTableContextMenu(td, editor, e);
       }
     });
 
@@ -1450,6 +1551,10 @@
       setHTML: function (html) {
         editor.innerHTML = html || '';
         wrapBareImages(editor);
+        // 초기 콘텐츠를 undo 스택 시작점으로 저장
+        var state = getUndoState(editor);
+        state.stack = [editor.innerHTML];
+        state.pointer = 0;
       },
       getText: function () { return editor.innerText || ''; }
     };
@@ -1515,6 +1620,9 @@
     var disabledDraggable = null; // 임시 비활성화한 draggable 요소
 
     editor.addEventListener('mousedown', function (e) {
+      // 우클릭(button=2)은 기존 선택 유지 (컨텍스트 메뉴용)
+      if (e.button === 2) return;
+
       var cell = e.target.closest('td, th');
       if (!cell || !cell.closest('.re-table')) {
         // 표 밖 클릭 → 선택 해제
@@ -1715,6 +1823,7 @@
       var item = e.target.closest('.table-border-item');
       var colorBtn = e.target.closest('[data-bcolor]');
       if (item) {
+        saveSnapshot(editor);
         var bid = item.dataset.borderId;
         // 기존 border 클래스 모두 제거
         borderPresets.forEach(function (p) {
@@ -1725,7 +1834,9 @@
         picker.querySelectorAll('.table-border-item').forEach(function (i) {
           i.classList.toggle('active', i.dataset.borderId === bid);
         });
+        saveSnapshotAndNotify(editor);
       } else if (colorBtn) {
+        saveSnapshot(editor);
         var color = colorBtn.dataset.bcolor;
         if (color) {
           table.style.setProperty('--table-border-color', color);
@@ -1734,6 +1845,7 @@
           table.style.removeProperty('--table-border-color');
           table.classList.remove('custom-border-color');
         }
+        saveSnapshotAndNotify(editor);
       }
     });
 
@@ -1793,10 +1905,23 @@
   // ── 표 컨텍스트 메뉴 ──
   var tableCtx = null;
 
-  function showTableContextMenu(cell, editor) {
+  function showTableContextMenu(cell, editor, evt) {
     hideTableContextMenu();
     var table = cell.closest('.re-table');
     if (!table) return;
+
+    // 우클릭한 셀이 선택 범위에 없으면, 기존 선택을 유지하되 cell 정보만 갱신
+    if (tableSel.cells.length > 0 && tableSel.cells.indexOf(cell) === -1) {
+      // 선택 범위 밖 우클릭 → 기존 선택 해제하고 단일 셀로
+      clearCellSelection();
+      cell.classList.add('re-table-cell-selected');
+      tableSel.cells = [cell];
+      tableSel.table = table;
+    } else if (tableSel.cells.length === 0) {
+      cell.classList.add('re-table-cell-selected');
+      tableSel.cells = [cell];
+      tableSel.table = table;
+    }
 
     // 선택 범위 정보
     var bounds = getSelectionBounds();
@@ -1847,20 +1972,24 @@
         hideTableContextMenu();
       } else if (colorBtn) {
         // 선택된 셀들에 일괄 적용
+        saveSnapshot(editor);
         var color = colorBtn.dataset.color || '';
         if (tableSel.cells.length > 0) {
           tableSel.cells.forEach(function (c) { c.style.backgroundColor = color; });
         } else {
           cell.style.backgroundColor = color;
         }
+        saveSnapshotAndNotify(editor);
         hideTableContextMenu();
       }
     });
 
-    var rect = cell.getBoundingClientRect();
+    // 우클릭 위치 또는 셀 위치에 메뉴 배치
+    var posX = evt ? evt.clientX : cell.getBoundingClientRect().left;
+    var posY = evt ? evt.clientY : cell.getBoundingClientRect().bottom + 4;
     menu.style.position = 'fixed';
-    menu.style.top = (rect.bottom + 4) + 'px';
-    menu.style.left = rect.left + 'px';
+    menu.style.top = posY + 'px';
+    menu.style.left = posX + 'px';
     menu.style.zIndex = '9999';
     document.body.appendChild(menu);
     tableCtx = menu;
@@ -1872,7 +2001,7 @@
         menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
       }
       if (mr.bottom > window.innerHeight) {
-        menu.style.top = (rect.top - mr.height - 4) + 'px';
+        menu.style.top = (posY - mr.height - 4) + 'px';
       }
     });
 
@@ -1896,6 +2025,7 @@
   }
 
   function handleTableAction(act, cell, table, editor) {
+    saveSnapshot(editor); // undo 지점 저장
     var row = cell.parentElement;
     var tbody = table.querySelector('tbody');
     var thead = table.querySelector('thead');
@@ -1958,6 +2088,7 @@
         clearCellSelection();
         break;
     }
+    saveSnapshotAndNotify(editor);
   }
 
   function createTableRow(colCount, tag) {
