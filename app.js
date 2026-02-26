@@ -1408,8 +1408,13 @@
       var cmd = btn.dataset.cmd;
       var action = btn.dataset.action;
       if (cmd) {
-        editor.focus();
-        document.execCommand(cmd, false, null);
+        // 표 셀 다중 선택 상태에서 서식 적용
+        if (tableSel.cells.length > 0 && tableSel.table && editor.contains(tableSel.table)) {
+          applyFormatToSelectedCells(cmd, editor);
+        } else {
+          editor.focus();
+          document.execCommand(cmd, false, null);
+        }
       } else if (action === 'image') {
         // 파일 선택으로 이미지 추가
         var input = document.createElement('input');
@@ -1462,21 +1467,33 @@
       }, 500);
     });
 
-    // Ctrl+Z / Ctrl+Shift+Z 키보드 처리
+    // Ctrl+Z / Ctrl+Shift+Z / 서식 단축키 처리
     editor.addEventListener('keydown', function (e) {
       var isMod = e.ctrlKey || e.metaKey;
-      if (isMod && e.key === 'z' && !e.shiftKey) {
+      if (!isMod) return;
+
+      // Undo / Redo
+      if (e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         editorUndo(editor);
         updateUndoButtons();
-      } else if (isMod && e.key === 'z' && e.shiftKey) {
+        return;
+      }
+      if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
         e.preventDefault();
         editorRedo(editor);
         updateUndoButtons();
-      } else if (isMod && e.key === 'y') {
-        e.preventDefault();
-        editorRedo(editor);
-        updateUndoButtons();
+        return;
+      }
+
+      // 셀 다중 선택 시 서식 단축키 가로채기
+      if (tableSel.cells.length > 0 && tableSel.table && editor.contains(tableSel.table)) {
+        var formatMap = { b: 'bold', u: 'underline', i: 'italic' };
+        var fmt = formatMap[e.key.toLowerCase()];
+        if (fmt) {
+          e.preventDefault();
+          applyFormatToSelectedCells(fmt, editor);
+        }
       }
     });
 
@@ -1613,6 +1630,27 @@
     rows.sort(function(a,b){return a-b;});
     cols.sort(function(a,b){return a-b;});
     return { rows: rows, cols: cols };
+  }
+
+  // 선택된 셀들에 서식(bold, underline 등) 일괄 적용
+  function applyFormatToSelectedCells(cmd, editor) {
+    if (tableSel.cells.length === 0) return;
+    saveSnapshot(editor);
+    var sel = window.getSelection();
+    tableSel.cells.forEach(function (cell) {
+      // 셀 전체 내용을 선택한 뒤 execCommand 적용
+      var range = document.createRange();
+      range.selectNodeContents(cell);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand(cmd, false, null);
+    });
+    // 선택 해제 후 셀 하이라이트 복원
+    sel.removeAllRanges();
+    tableSel.cells.forEach(function (c) {
+      c.classList.add('re-table-cell-selected');
+    });
+    saveSnapshotAndNotify(editor);
   }
 
   function initTableCellSelection(editor) {
