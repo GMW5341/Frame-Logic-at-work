@@ -1373,15 +1373,17 @@
       }
     });
 
-    // 표 컨텍스트 메뉴
-    editor.addEventListener('click', function (e) {
+    // 표 컨텍스트 메뉴 (우클릭)
+    editor.addEventListener('contextmenu', function (e) {
       var td = e.target.closest('td, th');
       if (td && td.closest('.re-table')) {
+        e.preventDefault();
         showTableContextMenu(td, editor);
-      } else {
-        hideTableContextMenu();
       }
     });
+
+    // 표 셀 다중 선택 (좌클릭 드래그)
+    initTableCellSelection(editor);
 
     // Paste images
     editor.addEventListener('paste', function (e) {
@@ -1419,6 +1421,104 @@
     };
     richEditors[id] = re;
     return re;
+  }
+
+  // ── 표 셀 다중 선택 ──
+  var tableSel = { active: false, table: null, startCell: null, cells: [] };
+
+  function getCellPos(cell) {
+    var row = cell.parentElement;
+    var table = cell.closest('.re-table');
+    var allRows = Array.prototype.slice.call(table.querySelectorAll('tr'));
+    var ri = allRows.indexOf(row);
+    var ci = Array.prototype.indexOf.call(row.children, cell);
+    return { row: ri, col: ci };
+  }
+
+  function clearCellSelection() {
+    document.querySelectorAll('.re-table-cell-selected').forEach(function (c) {
+      c.classList.remove('re-table-cell-selected');
+    });
+    tableSel.cells = [];
+  }
+
+  function selectCellRange(table, startCell, endCell) {
+    clearCellSelection();
+    var s = getCellPos(startCell);
+    var e = getCellPos(endCell);
+    var minR = Math.min(s.row, e.row), maxR = Math.max(s.row, e.row);
+    var minC = Math.min(s.col, e.col), maxC = Math.max(s.col, e.col);
+    var allRows = Array.prototype.slice.call(table.querySelectorAll('tr'));
+    var selected = [];
+    for (var r = minR; r <= maxR; r++) {
+      if (!allRows[r]) continue;
+      for (var c = minC; c <= maxC; c++) {
+        var cell = allRows[r].children[c];
+        if (cell) {
+          cell.classList.add('re-table-cell-selected');
+          selected.push(cell);
+        }
+      }
+    }
+    tableSel.cells = selected;
+  }
+
+  function getSelectionBounds() {
+    if (tableSel.cells.length === 0) return null;
+    var rows = [], cols = [];
+    tableSel.cells.forEach(function (c) {
+      var p = getCellPos(c);
+      if (rows.indexOf(p.row) === -1) rows.push(p.row);
+      if (cols.indexOf(p.col) === -1) cols.push(p.col);
+    });
+    rows.sort(function(a,b){return a-b;});
+    cols.sort(function(a,b){return a-b;});
+    return { rows: rows, cols: cols };
+  }
+
+  function initTableCellSelection(editor) {
+    var selecting = false;
+
+    editor.addEventListener('mousedown', function (e) {
+      var cell = e.target.closest('td, th');
+      if (!cell || !cell.closest('.re-table')) {
+        // 표 밖 클릭 → 선택 해제
+        if (!e.target.closest('.table-ctx-menu')) {
+          clearCellSelection();
+          tableSel.active = false;
+          tableSel.table = null;
+        }
+        return;
+      }
+
+      // 리사이즈 중이면 무시
+      var table = cell.closest('.re-table');
+      var rect = cell.getBoundingClientRect();
+      var nearEdge = Math.abs(e.clientX - rect.right) <= 6 || Math.abs(e.clientY - rect.bottom) <= 6 ||
+                     Math.abs(e.clientX - rect.left) <= 6 || Math.abs(e.clientY - rect.top) <= 6;
+      if (nearEdge) return;
+
+      hideTableContextMenu();
+      clearCellSelection();
+      tableSel.active = true;
+      tableSel.table = table;
+      tableSel.startCell = cell;
+      cell.classList.add('re-table-cell-selected');
+      tableSel.cells = [cell];
+      selecting = true;
+    });
+
+    editor.addEventListener('mousemove', function (e) {
+      if (!selecting || !tableSel.table) return;
+      var cell = e.target.closest('td, th');
+      if (!cell || cell.closest('.re-table') !== tableSel.table) return;
+      e.preventDefault();
+      selectCellRange(tableSel.table, tableSel.startCell, cell);
+    });
+
+    var stopSelecting = function () { selecting = false; };
+    editor.addEventListener('mouseup', stopSelecting);
+    document.addEventListener('mouseup', stopSelecting);
   }
 
   // ── 표 삽입 그리드 피커 ──
@@ -1522,6 +1622,15 @@
     var table = cell.closest('.re-table');
     if (!table) return;
 
+    // 선택 범위 정보
+    var bounds = getSelectionBounds();
+    var rowCount = bounds ? bounds.rows.length : 1;
+    var colCount = bounds ? bounds.cols.length : 1;
+    var rowLabel = rowCount > 1 ? rowCount + '개 행 삭제' : '행 삭제';
+    var colLabel = colCount > 1 ? colCount + '개 열 삭제' : '열 삭제';
+    var selCount = tableSel.cells.length;
+    var colorLabel = selCount > 1 ? '선택 셀 배경색 (' + selCount + '개)' : '셀 배경색';
+
     var menu = document.createElement('div');
     menu.className = 'table-ctx-menu';
     menu.innerHTML =
@@ -1529,16 +1638,16 @@
         '<span class="table-ctx-title">행</span>' +
         '<button class="table-ctx-btn" data-act="add-row-above">↑ 위에 추가</button>' +
         '<button class="table-ctx-btn" data-act="add-row-below">↓ 아래에 추가</button>' +
-        '<button class="table-ctx-btn table-ctx-danger" data-act="del-row">삭제</button>' +
+        '<button class="table-ctx-btn table-ctx-danger" data-act="del-row">🗑 ' + rowLabel + '</button>' +
       '</div>' +
       '<div class="table-ctx-section">' +
         '<span class="table-ctx-title">열</span>' +
         '<button class="table-ctx-btn" data-act="add-col-left">← 왼쪽에 추가</button>' +
         '<button class="table-ctx-btn" data-act="add-col-right">→ 오른쪽에 추가</button>' +
-        '<button class="table-ctx-btn table-ctx-danger" data-act="del-col">삭제</button>' +
+        '<button class="table-ctx-btn table-ctx-danger" data-act="del-col">🗑 ' + colLabel + '</button>' +
       '</div>' +
       '<div class="table-ctx-section">' +
-        '<span class="table-ctx-title">셀 배경색</span>' +
+        '<span class="table-ctx-title">' + colorLabel + '</span>' +
         '<div class="table-ctx-colors">' +
           '<button class="table-ctx-color" data-color="" title="없음" style="background:#fff;border:1px solid #ccc"></button>' +
           '<button class="table-ctx-color" data-color="#e8f0fe" title="파랑" style="background:#e8f0fe"></button>' +
@@ -1551,7 +1660,7 @@
         '</div>' +
       '</div>' +
       '<div class="table-ctx-section">' +
-        '<button class="table-ctx-btn table-ctx-danger" data-act="del-table">표 전체 삭제</button>' +
+        '<button class="table-ctx-btn table-ctx-danger" data-act="del-table">🗑 표 전체 삭제</button>' +
       '</div>';
 
     menu.addEventListener('click', function (e) {
@@ -1561,7 +1670,13 @@
         handleTableAction(btn.dataset.act, cell, table, editor);
         hideTableContextMenu();
       } else if (colorBtn) {
-        cell.style.backgroundColor = colorBtn.dataset.color || '';
+        // 선택된 셀들에 일괄 적용
+        var color = colorBtn.dataset.color || '';
+        if (tableSel.cells.length > 0) {
+          tableSel.cells.forEach(function (c) { c.style.backgroundColor = color; });
+        } else {
+          cell.style.backgroundColor = color;
+        }
         hideTableContextMenu();
       }
     });
@@ -1610,12 +1725,12 @@
     var thead = table.querySelector('thead');
     var colIndex = Array.prototype.indexOf.call(row.children, cell);
     var colCount = row.children.length;
+    var bounds = getSelectionBounds();
 
     switch (act) {
       case 'add-row-above': {
         var newRow = createTableRow(colCount, 'td');
         row.parentElement.insertBefore(newRow, row);
-        // thead 안에 삽입됐으면 tbody로 이동
         if (row.parentElement === thead && tbody) {
           tbody.insertBefore(newRow, tbody.firstChild);
         }
@@ -1632,9 +1747,15 @@
         break;
       }
       case 'del-row': {
-        var allRows = table.querySelectorAll('tr');
-        if (allRows.length <= 1) { table.remove(); break; }
-        row.remove();
+        var allRows = Array.prototype.slice.call(table.querySelectorAll('tr'));
+        var delRows = bounds ? bounds.rows : [allRows.indexOf(row)];
+        // 전부 삭제하면 표 자체 제거
+        if (delRows.length >= allRows.length) { table.remove(); clearCellSelection(); break; }
+        // 뒤에서부터 삭제 (인덱스 꼬임 방지)
+        delRows.sort(function(a,b){return b-a;}).forEach(function (ri) {
+          if (allRows[ri]) allRows[ri].remove();
+        });
+        clearCellSelection();
         break;
       }
       case 'add-col-left':
@@ -1644,14 +1765,21 @@
         addColumn(table, colIndex + 1);
         break;
       case 'del-col': {
-        if (colCount <= 1) { table.remove(); break; }
-        table.querySelectorAll('tr').forEach(function (tr) {
-          if (tr.children[colIndex]) tr.children[colIndex].remove();
+        var delCols = bounds ? bounds.cols : [colIndex];
+        var totalCols = row.children.length;
+        if (delCols.length >= totalCols) { table.remove(); clearCellSelection(); break; }
+        // 뒤에서부터 삭제
+        delCols.sort(function(a,b){return b-a;}).forEach(function (ci) {
+          table.querySelectorAll('tr').forEach(function (tr) {
+            if (tr.children[ci]) tr.children[ci].remove();
+          });
         });
+        clearCellSelection();
         break;
       }
       case 'del-table':
         table.remove();
+        clearCellSelection();
         break;
     }
   }
