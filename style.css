@@ -875,10 +875,10 @@ body {
 }
 
 .pres-body .re-table {
-  width: 100%;
   border-collapse: collapse;
   margin: 16px 0;
   font-size: 1rem;
+  max-width: 100%;
 }
 
 .pres-body .re-table th,
@@ -886,6 +886,9 @@ body {
   border: 1px solid rgba(255,255,255,0.15);
   padding: 10px 14px;
   text-align: left;
+  vertical-align: top;
+  line-height: 1.5;
+  word-wrap: break-word;
 }
 
 .pres-body .re-table th {

@@ -121,7 +121,56 @@
     toast('Excel 파일이 다운로드되었습니다');
   }
 
+  // HTML 내보내기 전처리: 표 열 너비를 비율로 변환, 에디터 전용 요소 제거
+  function prepareExportHTML(htmlContent) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = htmlContent;
+
+    // 에디터 전용 요소 제거
+    tmp.querySelectorAll('.re-img-handle, .re-img-delete, .re-table-cell-selected').forEach(function (el) {
+      el.classList.remove('re-table-cell-selected');
+    });
+    tmp.querySelectorAll('.re-img-handle, .re-img-delete').forEach(function (el) { el.remove(); });
+
+    // 표 열 너비 px → % 변환
+    tmp.querySelectorAll('.re-table').forEach(function (table) {
+      var firstRow = table.querySelector('tr');
+      if (!firstRow) return;
+      var cells = firstRow.children;
+      var widths = [];
+      var totalPx = 0;
+      var hasPxWidth = false;
+      for (var i = 0; i < cells.length; i++) {
+        var w = parseInt(cells[i].style.width, 10);
+        if (w > 0) {
+          widths.push(w);
+          totalPx += w;
+          hasPxWidth = true;
+        } else {
+          widths.push(0);
+        }
+      }
+      if (hasPxWidth && totalPx > 0) {
+        // 첫 행의 너비를 %로 변환, 나머지 행도 동일하게
+        table.querySelectorAll('tr').forEach(function (tr) {
+          for (var j = 0; j < tr.children.length; j++) {
+            if (widths[j] > 0) {
+              tr.children[j].style.width = Math.round((widths[j] / totalPx) * 100) + '%';
+            } else {
+              tr.children[j].style.width = '';
+            }
+          }
+        });
+        table.style.tableLayout = 'fixed';
+        table.style.width = '100%';
+      }
+    });
+
+    return tmp.innerHTML;
+  }
+
   function exportAsPDF(title, htmlContent) {
+    htmlContent = prepareExportHTML(htmlContent);
     var w = window.open('', '_blank');
     if (!w) { toast('팝업이 차단되었습니다. 팝업을 허용해주세요.'); return; }
     w.document.write(
@@ -134,7 +183,25 @@
       'p,div{font-size:14px;line-height:1.8}' +
       '.meta{font-size:12px;color:#888;margin-bottom:20px}' +
       'pre{white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.8}' +
-      '@media print{body{padding:20px}}' +
+      /* 표 스타일 */
+      '.re-table{border-collapse:collapse;margin:12px 0;font-size:13px;max-width:100%}' +
+      '.re-table th,.re-table td{border:1px solid #d1d5db;padding:8px 10px;text-align:left;vertical-align:top;line-height:1.5;word-wrap:break-word}' +
+      '.re-table th{background:#f3f4f6;font-weight:600}' +
+      /* 표 테두리 프리셋 */
+      '.re-table.border-none th,.re-table.border-none td{border:none!important}' +
+      '.re-table.border-outer{border:1px solid var(--tbc,#d1d5db)}.re-table.border-outer th,.re-table.border-outer td{border:none!important}' +
+      '.re-table.border-horiz th,.re-table.border-horiz td{border-left:none!important;border-right:none!important;border-top:1px solid var(--tbc,#d1d5db);border-bottom:1px solid var(--tbc,#d1d5db)}' +
+      '.re-table.border-vert th,.re-table.border-vert td{border-top:none!important;border-bottom:none!important;border-left:1px solid var(--tbc,#d1d5db);border-right:1px solid var(--tbc,#d1d5db)}' +
+      '.re-table.border-header th,.re-table.border-header td{border:none!important}.re-table.border-header thead tr{border-bottom:2px solid var(--tbc,#d1d5db)}' +
+      '.re-table.border-thick th,.re-table.border-thick td{border:2px solid var(--tbc,#d1d5db)!important}' +
+      '.re-table.border-dashed th,.re-table.border-dashed td{border:1px dashed var(--tbc,#d1d5db)!important}' +
+      '.re-table.custom-border-color th,.re-table.custom-border-color td{border-color:var(--table-border-color)!important}' +
+      /* 이미지 */
+      '.re-img-wrap{display:inline-block}.re-img{max-width:100%;height:auto}' +
+      '.re-img-handle,.re-img-delete{display:none}' +
+      /* 링크 */
+      'a{color:#3b6fdb;text-decoration:underline}' +
+      '@media print{body{padding:20px}a{color:#3b6fdb!important}}' +
       '</style></head><body>' +
       htmlContent +
       '<script>window.onload=function(){window.print()}<\/script>' +
@@ -1220,7 +1287,8 @@
     if (slide.type === 'title') {
       stage.innerHTML = '<div class="pres-slide pres-slide-title"><h1>' + escapeHtml(slide.title) + '</h1><div class="pres-subtitle">' + escapeHtml(slide.subtitle) + '</div></div>';
     } else {
-      stage.innerHTML = '<div class="pres-slide pres-slide-content">' + (slide.heading ? '<h2>' + escapeHtml(slide.heading) + '</h2>' : '') + '<div class="pres-body">' + slide.body + '</div></div>';
+      var exportedBody = prepareExportHTML(slide.body);
+      stage.innerHTML = '<div class="pres-slide pres-slide-content">' + (slide.heading ? '<h2>' + escapeHtml(slide.heading) + '</h2>' : '') + '<div class="pres-body">' + exportedBody + '</div></div>';
     }
     $('#pres-page-info').textContent = (presIndex + 1) + ' / ' + presSlides.length;
     $('#pres-prev').disabled = presIndex === 0;
