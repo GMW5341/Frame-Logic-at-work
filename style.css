@@ -637,6 +637,129 @@ body {
   color: var(--text-dim);
 }
 
+/* ===== Presentation Overlay ===== */
+.pres-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #0f1117;
+  color: #e8e9ed;
+  display: none;
+  flex-direction: column;
+}
+
+.pres-overlay.active {
+  display: flex;
+}
+
+.pres-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+
+.pres-page-info {
+  font-size: 0.85rem;
+  color: #8b8fa3;
+  font-weight: 500;
+}
+
+.pres-toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pres-btn {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius);
+  color: #e8e9ed;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: inherit;
+}
+
+.pres-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.pres-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.pres-btn-close {
+  background: rgba(220, 38, 38, 0.2);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+.pres-btn-close:hover {
+  background: rgba(220, 38, 38, 0.4);
+}
+
+.pres-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 80px;
+  overflow-y: auto;
+}
+
+/* Slide */
+.pres-slide {
+  max-width: 900px;
+  width: 100%;
+  animation: presFadeIn 0.35s ease;
+}
+
+@keyframes presFadeIn {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Title slide */
+.pres-slide-title {
+  text-align: center;
+}
+
+.pres-slide-title h1 {
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: #ffffff;
+  margin-bottom: 16px;
+}
+
+.pres-slide-title .pres-subtitle {
+  font-size: 1.1rem;
+  color: #8b8fa3;
+}
+
+/* Content slide */
+.pres-slide-content h2 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #7ba4f7;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(123, 164, 247, 0.2);
+  letter-spacing: -0.02em;
+}
+
+.pres-slide-content .pres-body {
+  font-size: 1.2rem;
+  line-height: 1.9;
+  color: #d0d1d8;
+  white-space: pre-wrap;
+}
+
 /* ===== Toast ===== */
 .toast {
   position: fixed;

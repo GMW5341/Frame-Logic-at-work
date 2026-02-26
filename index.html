@@ -228,6 +228,7 @@
           <div class="btn-row">
             <button class="btn btn-primary" id="prop-copy">📋 제언서 복사</button>
             <button class="btn btn-secondary" id="prop-save">저장</button>
+            <button class="btn btn-secondary" id="prop-present">🖥 프레젠테이션</button>
             <button class="btn btn-ghost" id="prop-clear">초기화</button>
           </div>
         </div>
@@ -242,6 +243,19 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <!-- 프레젠테이션 오버레이 -->
+  <div class="pres-overlay" id="pres-overlay">
+    <div class="pres-toolbar">
+      <span class="pres-page-info" id="pres-page-info"></span>
+      <div class="pres-toolbar-actions">
+        <button class="pres-btn" id="pres-prev" title="이전">←</button>
+        <button class="pres-btn" id="pres-next" title="다음">→</button>
+        <button class="pres-btn pres-btn-close" id="pres-close" title="닫기 (ESC)">✕</button>
+      </div>
+    </div>
+    <div class="pres-stage" id="pres-stage"></div>
+  </div>
 
   <script src="app.js"></script>
 </body>

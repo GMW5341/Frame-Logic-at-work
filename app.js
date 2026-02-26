@@ -604,6 +604,99 @@
     }
   });
 
+  // ══════════════════════════════════════
+  // 5. 프레젠테이션 모드
+  // ══════════════════════════════════════
+  let presSlides = [];
+  let presIndex = 0;
+
+  function buildPresSlides(data) {
+    var slides = [];
+    // Title slide
+    slides.push({
+      type: 'title',
+      title: data.title || '(제목 없음)',
+      subtitle: formatDate(new Date().toISOString())
+    });
+    // Each field becomes a content slide
+    if (data.fields) {
+      data.fields.forEach(function (f) {
+        if (f.label || f.value) {
+          slides.push({
+            type: 'content',
+            heading: f.label || '',
+            body: f.value || ''
+          });
+        }
+      });
+    }
+    return slides;
+  }
+
+  function renderPresSlide() {
+    var slide = presSlides[presIndex];
+    var stage = $('#pres-stage');
+    if (slide.type === 'title') {
+      stage.innerHTML =
+        '<div class="pres-slide pres-slide-title">' +
+          '<h1>' + escapeHtml(slide.title) + '</h1>' +
+          '<div class="pres-subtitle">' + escapeHtml(slide.subtitle) + '</div>' +
+        '</div>';
+    } else {
+      stage.innerHTML =
+        '<div class="pres-slide pres-slide-content">' +
+          (slide.heading ? '<h2>' + escapeHtml(slide.heading) + '</h2>' : '') +
+          '<div class="pres-body">' + escapeHtml(slide.body) + '</div>' +
+        '</div>';
+    }
+    $('#pres-page-info').textContent = (presIndex + 1) + ' / ' + presSlides.length;
+    $('#pres-prev').disabled = presIndex === 0;
+    $('#pres-next').disabled = presIndex === presSlides.length - 1;
+  }
+
+  function openPresentation(data) {
+    presSlides = buildPresSlides(data);
+    if (presSlides.length === 0) { toast('내용을 입력해주세요'); return; }
+    presIndex = 0;
+    $('#pres-overlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+    renderPresSlide();
+  }
+
+  function closePresentation() {
+    $('#pres-overlay').classList.remove('active');
+    document.body.style.overflow = '';
+  }
+
+  $('#prop-present').addEventListener('click', function () {
+    var data = getProposalData();
+    if (!data.title && data.fields.length === 0) {
+      toast('제언서 내용을 입력해주세요');
+      return;
+    }
+    openPresentation(data);
+  });
+
+  $('#pres-close').addEventListener('click', closePresentation);
+
+  $('#pres-prev').addEventListener('click', function () {
+    if (presIndex > 0) { presIndex--; renderPresSlide(); }
+  });
+
+  $('#pres-next').addEventListener('click', function () {
+    if (presIndex < presSlides.length - 1) { presIndex++; renderPresSlide(); }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (!$('#pres-overlay').classList.contains('active')) return;
+    if (e.key === 'Escape') { closePresentation(); }
+    else if (e.key === 'ArrowLeft') { if (presIndex > 0) { presIndex--; renderPresSlide(); } }
+    else if (e.key === 'ArrowRight' || e.key === ' ') {
+      e.preventDefault();
+      if (presIndex < presSlides.length - 1) { presIndex++; renderPresSlide(); }
+    }
+  });
+
   // ── HTML Escape ──
   function escapeHtml(str) {
     const div = document.createElement('div');
