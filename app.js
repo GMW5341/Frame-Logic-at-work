@@ -3534,7 +3534,9 @@
     items.forEach(function (e) {
       if (e.category) cats[e.category] = true;
     });
-    return Object.keys(cats).sort();
+    return Object.keys(cats).sort(function (a, b) {
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    });
   }
 
   function populateJnlCategoryFilter() {
@@ -3551,6 +3553,10 @@
   // 칼럼 필터 상태
   var jnlColFilters = { category: '', item: '', subitem: '', date: '', feedback: '', note: '', ref: '' };
 
+  function naturalSort(a, b) {
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  }
+
   function populateJnlColFilters() {
     var items = load(JNL_KEY);
     var fields = ['category', 'item', 'subitem'];
@@ -3561,14 +3567,14 @@
       if (!sel) return;
       var current = sel.value;
       var html = '<option value="">전체</option>';
-      Object.keys(vals).sort().forEach(function (v) {
+      Object.keys(vals).sort(naturalSort).forEach(function (v) {
         html += '<option value="' + escapeHtml(v) + '"' + (v === current ? ' selected' : '') + '>' + escapeHtml(v) + '</option>';
       });
       sel.innerHTML = html;
     });
   }
 
-  function renderJnlTable() {
+  function getFilteredJnlItems() {
     var items = load(JNL_KEY);
     var search = ($('#jnl-search').value || '').toLowerCase();
     var filterCat = $('#jnl-filter-category').value;
@@ -3577,7 +3583,6 @@
       items = items.filter(function (e) { return e.category === filterCat; });
     }
 
-    // 칼럼별 필터 적용
     ['category', 'item', 'subitem'].forEach(function (field) {
       if (jnlColFilters[field]) {
         items = items.filter(function (e) { return (e[field] || '') === jnlColFilters[field]; });
@@ -3604,6 +3609,23 @@
       });
     }
 
+    // 구분(숫자) 내림차순 정렬
+    items.sort(function (a, b) {
+      var na = parseInt(a.category, 10);
+      var nb = parseInt(b.category, 10);
+      var aIsNum = !isNaN(na);
+      var bIsNum = !isNaN(nb);
+      if (aIsNum && bIsNum) return nb - na; // 숫자 내림차순
+      if (aIsNum) return -1;
+      if (bIsNum) return 1;
+      return (b.category || '').localeCompare(a.category || '', 'ko');
+    });
+
+    return items;
+  }
+
+  function renderJnlTable() {
+    var items = getFilteredJnlItems();
     var tbody = $('#jnl-tbody');
 
     if (items.length === 0) {
@@ -3711,30 +3733,110 @@
     });
   });
 
-  // 인라인 편집: 셀 클릭 시 편집 모드
-  var jnlEditingCell = null;
+  // 인라인 편집 상태: { id, field } 또는 null
+  var jnlEditing = null;
+  var jnlSaving = false;
 
-  function saveJnlCellEdit(td) {
-    if (!td || !td.classList.contains('jnl-editing')) return;
+  function renderJnlCellContent(field, entry) {
+    var val = entry[field] || '';
+    if (field === 'category') return '<span class="jnl-category-badge">' + escapeHtml(val || '-') + '</span>';
+    if (field === 'date') return escapeHtml(formatJnlDate(val));
+    if (field === 'feedback' || field === 'note') return '<div class="jnl-cell-text">' + escapeHtml(val) + '</div>';
+    if (field === 'ref') return '<div class="jnl-cell-ref">' + escapeHtml(val) + '</div>';
+    return escapeHtml(val);
+  }
+
+  function commitJnlEdit(skipRender) {
+    if (jnlSaving || !jnlEditing) return;
+    jnlSaving = true;
+
+    var editId = jnlEditing.id;
+    var editField = jnlEditing.field;
+    jnlEditing = null;
+
+    var td = document.querySelector('#jnl-tbody tr[data-id="' + editId + '"] td[data-field="' + editField + '"]');
+    if (!td) { jnlSaving = false; return; }
+
     td.classList.remove('jnl-editing');
-    var tr = td.closest('tr[data-id]');
-    if (!tr) return;
-    var id = tr.dataset.id;
-    var field = td.dataset.field;
     var input = td.querySelector('.jnl-cell-input, .jnl-cell-textarea');
-    if (!input) return;
+    if (!input) { jnlSaving = false; return; }
     var newVal = input.value.trim();
 
     var items = load(JNL_KEY);
-    var entry = items.find(function (i) { return i.id === id; });
-    if (entry && entry[field] !== newVal) {
-      entry[field] = newVal;
-      save(JNL_KEY, items);
-      populateJnlCategoryFilter();
-      populateJnlColFilters();
+    var entry = items.find(function (i) { return i.id === editId; });
+    if (entry) {
+      var changed = entry[editField] !== newVal;
+      entry[editField] = newVal;
+      if (changed) {
+        save(JNL_KEY, items);
+        populateJnlCategoryFilter();
+        populateJnlColFilters();
+      }
+      // 셀 내용만 교체 (전체 테이블 리렌더 안 함)
+      td.innerHTML = renderJnlCellContent(editField, entry);
+      if (editField === 'date') td.dataset.raw = newVal;
     }
-    renderJnlTable();
-    jnlEditingCell = null;
+
+    jnlSaving = false;
+    // 구분 변경 시 정렬이 바뀔 수 있으므로 전체 리렌더
+    if (!skipRender && editField === 'category') {
+      renderJnlTable();
+    }
+  }
+
+  function startJnlEdit(td, id, field) {
+    var items = load(JNL_KEY);
+    var entry = items.find(function (i) { return i.id === id; });
+    if (!entry) return;
+
+    jnlEditing = { id: id, field: field };
+    td.classList.add('jnl-editing');
+    var currentVal = entry[field] || '';
+
+    if (field === 'date') {
+      td.innerHTML = '<input type="date" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">';
+    } else if (field === 'feedback' || field === 'note' || field === 'ref') {
+      td.innerHTML = '<textarea class="jnl-cell-textarea" rows="3">' + escapeHtml(currentVal) + '</textarea>';
+    } else {
+      td.innerHTML = '<input type="text" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">';
+    }
+
+    var inputEl = td.querySelector('.jnl-cell-input, .jnl-cell-textarea');
+    if (!inputEl) return;
+    inputEl.focus();
+
+    inputEl.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && !ev.shiftKey) {
+        ev.preventDefault();
+        commitJnlEdit();
+      } else if (ev.key === 'Escape') {
+        jnlEditing = null;
+        td.classList.remove('jnl-editing');
+        td.innerHTML = renderJnlCellContent(field, entry);
+        if (field === 'date') td.dataset.raw = currentVal;
+      } else if (ev.key === 'Tab') {
+        ev.preventDefault();
+        commitJnlEdit(true);
+        // Tab으로 다음 편집 가능한 셀로 이동
+        var nextTd = td.nextElementSibling;
+        while (nextTd && !nextTd.classList.contains('jnl-editable')) {
+          nextTd = nextTd.nextElementSibling;
+        }
+        if (nextTd) {
+          var nextTr = nextTd.closest('tr[data-id]');
+          if (nextTr) startJnlEdit(nextTd, nextTr.dataset.id, nextTd.dataset.field);
+        }
+      }
+    });
+
+    inputEl.addEventListener('blur', function () {
+      // 짧은 지연으로 다른 셀 클릭 시 순서 보장
+      setTimeout(function () {
+        if (jnlEditing && jnlEditing.id === id && jnlEditing.field === field) {
+          commitJnlEdit();
+        }
+      }, 100);
+    });
   }
 
   $('#jnl-tbody').addEventListener('click', function (e) {
@@ -3749,12 +3851,17 @@
       return;
     }
 
+    // 이미 편집 중인 input/textarea 클릭은 무시
+    if (e.target.closest('.jnl-cell-input, .jnl-cell-textarea')) return;
+
     var tr = e.target.closest('tr[data-id]');
     if (!tr) return;
     var id = tr.dataset.id;
-    var items = load(JNL_KEY);
 
     if (e.target.closest('[data-action="delete"]')) {
+      // 편집 중이면 취소
+      jnlEditing = null;
+      var items = load(JNL_KEY);
       var delEntry = items.find(function (i) { return i.id === id; });
       if (delEntry && delEntry.attachments && delEntry.attachments.length > 0) {
         var fileStore = loadJnlFiles();
@@ -3771,56 +3878,18 @@
 
     // 인라인 편집: 셀 클릭
     var td = e.target.closest('.jnl-editable');
-    if (!td || td.classList.contains('jnl-editing')) return;
-    if (e.target.closest('.jnl-cell-attach-tag')) return;
-
-    // 이전 편집 중인 셀 저장
-    if (jnlEditingCell && jnlEditingCell !== td) {
-      saveJnlCellEdit(jnlEditingCell);
-    }
-
+    if (!td) return;
     var field = td.dataset.field;
-    var entry = items.find(function (i) { return i.id === id; });
-    if (!entry) return;
 
-    td.classList.add('jnl-editing');
-    jnlEditingCell = td;
-    var currentVal = entry[field] || '';
+    // 같은 셀 재클릭은 무시
+    if (jnlEditing && jnlEditing.id === id && jnlEditing.field === field) return;
 
-    if (field === 'date') {
-      td.innerHTML = '<input type="date" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">';
-    } else if (field === 'feedback' || field === 'note' || field === 'ref') {
-      td.innerHTML = '<textarea class="jnl-cell-textarea" rows="3">' + escapeHtml(currentVal) + '</textarea>';
-    } else {
-      td.innerHTML = '<input type="text" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">';
+    // 이전 편집 저장
+    if (jnlEditing) {
+      commitJnlEdit(true);
     }
 
-    var inputEl = td.querySelector('.jnl-cell-input, .jnl-cell-textarea');
-    if (inputEl) {
-      inputEl.focus();
-      inputEl.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter' && !ev.shiftKey) {
-          ev.preventDefault();
-          saveJnlCellEdit(td);
-        } else if (ev.key === 'Escape') {
-          td.classList.remove('jnl-editing');
-          jnlEditingCell = null;
-          renderJnlTable();
-        } else if (ev.key === 'Tab') {
-          ev.preventDefault();
-          saveJnlCellEdit(td);
-          // Tab으로 다음 편집 가능한 셀로 이동
-          var nextTd = td.nextElementSibling;
-          while (nextTd && !nextTd.classList.contains('jnl-editable')) {
-            nextTd = nextTd.nextElementSibling;
-          }
-          if (nextTd) nextTd.click();
-        }
-      });
-      inputEl.addEventListener('blur', function () {
-        setTimeout(function () { saveJnlCellEdit(td); }, 150);
-      });
-    }
+    startJnlEdit(td, id, field);
   });
 
   // -- File Attach Events --
