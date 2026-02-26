@@ -1521,7 +1521,55 @@
   // 8. 업무일지 탭
   // ══════════════════════════════════════
   var JNL_KEY = 'fl_journal';
+  var JNL_FILES_KEY = 'fl_journal_files';
   var currentJnlEditId = null;
+  var jnlAttachments = []; // { id, name, size, type, dataUrl }
+
+  function loadJnlFiles() {
+    try { return JSON.parse(localStorage.getItem(JNL_FILES_KEY)) || {}; }
+    catch { return {}; }
+  }
+
+  function saveJnlFiles(data) {
+    localStorage.setItem(JNL_FILES_KEY, JSON.stringify(data));
+  }
+
+  function getFileIcon(type, name) {
+    if (type && type.startsWith('image/')) return '🖼';
+    if (type === 'application/pdf' || (name && name.endsWith('.pdf'))) return '📕';
+    if (type && (type.includes('spreadsheet') || type.includes('excel')) || (name && /\.xlsx?$/.test(name))) return '📊';
+    if (type && (type.includes('word') || type.includes('document')) || (name && /\.docx?$/.test(name))) return '📄';
+    if (type && type.includes('presentation') || (name && /\.pptx?$/.test(name))) return '📙';
+    return '📎';
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function renderJnlAttachList() {
+    var container = $('#jnl-attach-list');
+    if (jnlAttachments.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+    container.innerHTML = jnlAttachments.map(function (f, i) {
+      var isImage = f.type && f.type.startsWith('image/');
+      var preview = isImage ? '<img class="jnl-attach-preview" src="' + f.dataUrl + '" alt="' + escapeHtml(f.name) + '">' : '';
+      return '<div class="jnl-attach-item" data-idx="' + i + '">' +
+        preview +
+        '<span class="jnl-attach-icon">' + getFileIcon(f.type, f.name) + '</span>' +
+        '<span class="jnl-attach-name" title="' + escapeHtml(f.name) + '">' + escapeHtml(f.name) + '</span>' +
+        '<span class="jnl-attach-size">' + formatFileSize(f.size) + '</span>' +
+        '<div class="jnl-attach-actions">' +
+          '<button class="btn btn-small btn-secondary" data-action="download" title="다운로드">⬇</button>' +
+          '<button class="btn btn-small btn-danger" data-action="remove" title="삭제">✕</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
 
   function showJnlList() {
     $('#jnl-list-view').style.display = '';
@@ -1543,9 +1591,19 @@
     $('#jnl-note').value = '';
     $('#jnl-ref').value = '';
     $('#jnl-form-title-label').textContent = '새 항목 추가';
+    jnlAttachments = [];
+    renderJnlAttachList();
   }
 
   function getJnlData() {
+    // Save attachments to separate storage keyed by file ID
+    var fileStore = loadJnlFiles();
+    var attachIds = jnlAttachments.map(function (f) {
+      fileStore[f.id] = { name: f.name, size: f.size, type: f.type, dataUrl: f.dataUrl };
+      return f.id;
+    });
+    saveJnlFiles(fileStore);
+
     return {
       id: currentJnlEditId || uid(),
       category: $('#jnl-category').value.trim(),
@@ -1555,6 +1613,7 @@
       feedback: $('#jnl-feedback').value.trim(),
       note: $('#jnl-note').value.trim(),
       ref: $('#jnl-ref').value.trim(),
+      attachments: attachIds,
       createdAt: new Date().toISOString()
     };
   }
@@ -1570,6 +1629,19 @@
     $('#jnl-note').value = entry.note || '';
     $('#jnl-ref').value = entry.ref || '';
     $('#jnl-form-title-label').textContent = '항목 수정';
+
+    // Restore attachments
+    jnlAttachments = [];
+    if (entry.attachments && entry.attachments.length > 0) {
+      var fileStore = loadJnlFiles();
+      entry.attachments.forEach(function (fid) {
+        var f = fileStore[fid];
+        if (f) {
+          jnlAttachments.push({ id: fid, name: f.name, size: f.size, type: f.type, dataUrl: f.dataUrl });
+        }
+      });
+    }
+    renderJnlAttachList();
   }
 
   function getJnlCategories() {
@@ -1621,7 +1693,19 @@
       return;
     }
 
+    var fileStore = loadJnlFiles();
     tbody.innerHTML = items.map(function (e) {
+      var attachHtml = '';
+      if (e.attachments && e.attachments.length > 0) {
+        attachHtml = '<div class="jnl-cell-attachments">' +
+          e.attachments.map(function (fid) {
+            var f = fileStore[fid];
+            if (!f) return '';
+            return '<a class="jnl-cell-attach-tag" data-file-id="' + fid + '" title="' + escapeHtml(f.name) + '">' +
+              getFileIcon(f.type, f.name) + ' <span>' + escapeHtml(f.name) + '</span></a>';
+          }).join('') +
+        '</div>';
+      }
       return '<tr data-id="' + e.id + '">' +
         '<td><span class="jnl-category-badge">' + escapeHtml(e.category || '-') + '</span></td>' +
         '<td>' + escapeHtml(e.item || '-') + '</td>' +
@@ -1629,7 +1713,7 @@
         '<td>' + escapeHtml(e.date || '-') + '</td>' +
         '<td><div class="jnl-cell-text">' + escapeHtml(e.feedback || '') + '</div></td>' +
         '<td><div class="jnl-cell-text">' + escapeHtml(e.note || '') + '</div></td>' +
-        '<td><div class="jnl-cell-ref">' + escapeHtml(e.ref || '') + '</div></td>' +
+        '<td><div class="jnl-cell-ref">' + escapeHtml(e.ref || '') + '</div>' + attachHtml + '</td>' +
         '<td class="jnl-td-actions">' +
           '<button class="btn btn-small btn-secondary" data-action="edit" title="수정">✎</button> ' +
           '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
@@ -1676,11 +1760,29 @@
   $('#jnl-filter-category').addEventListener('change', function () { renderJnlTable(); });
 
   $('#jnl-tbody').addEventListener('click', function (e) {
+    // File download from table
+    var attachTag = e.target.closest('.jnl-cell-attach-tag');
+    if (attachTag) {
+      e.preventDefault();
+      var fid = attachTag.dataset.fileId;
+      var fileStore = loadJnlFiles();
+      var f = fileStore[fid];
+      if (f) downloadJnlFile(f);
+      return;
+    }
+
     var tr = e.target.closest('tr[data-id]');
     if (!tr) return;
     var id = tr.dataset.id;
     var items = load(JNL_KEY);
     if (e.target.closest('[data-action="delete"]')) {
+      // Clean up attached files
+      var delEntry = items.find(function (i) { return i.id === id; });
+      if (delEntry && delEntry.attachments && delEntry.attachments.length > 0) {
+        var fileStore = loadJnlFiles();
+        delEntry.attachments.forEach(function (fid) { delete fileStore[fid]; });
+        saveJnlFiles(fileStore);
+      }
       save(JNL_KEY, items.filter(function (i) { return i.id !== id; }));
       renderJnlTable();
       populateJnlCategoryFilter();
@@ -1694,12 +1796,73 @@
     }
   });
 
+  // -- File Attach Events --
+  $('#jnl-attach-btn').addEventListener('click', function () {
+    $('#jnl-attach-input').click();
+  });
+
+  $('#jnl-attach-input').addEventListener('change', function (e) {
+    var files = e.target.files;
+    if (!files || files.length === 0) return;
+    e.target.value = '';
+
+    var maxSize = 5 * 1024 * 1024; // 5MB
+    for (var i = 0; i < files.length; i++) {
+      (function (file) {
+        if (file.size > maxSize) {
+          toast(file.name + ': 5MB 초과 (건너뜀)');
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          jnlAttachments.push({
+            id: 'af-' + uid(),
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            dataUrl: ev.target.result
+          });
+          renderJnlAttachList();
+        };
+        reader.readAsDataURL(file);
+      })(files[i]);
+    }
+  });
+
+  $('#jnl-attach-list').addEventListener('click', function (e) {
+    var item = e.target.closest('.jnl-attach-item');
+    if (!item) return;
+    var idx = parseInt(item.dataset.idx, 10);
+
+    if (e.target.closest('[data-action="remove"]')) {
+      jnlAttachments.splice(idx, 1);
+      renderJnlAttachList();
+      toast('첨부 파일 제거됨');
+    } else if (e.target.closest('[data-action="download"]')) {
+      var f = jnlAttachments[idx];
+      if (f) downloadJnlFile(f);
+    }
+  });
+
+  function downloadJnlFile(f) {
+    var link = document.createElement('a');
+    link.href = f.dataUrl;
+    link.download = f.name;
+    link.click();
+    toast(f.name + ' 다운로드');
+  }
+
   // -- Excel Export --
   $('#jnl-export-excel').addEventListener('click', function () {
     var items = load(JNL_KEY);
     if (items.length === 0) { toast('내보낼 데이터가 없습니다'); return; }
-    var sheetData = [['구분', '항목', '세부 항목', '날짜', '피드백 및 결정', '느낀 점 및 수행해야 할 사항', '레퍼런스']];
+    var fileStore = loadJnlFiles();
+    var sheetData = [['구분', '항목', '세부 항목', '날짜', '피드백 및 결정', '느낀 점 및 수행해야 할 사항', '레퍼런스', '첨부파일']];
     items.forEach(function (e) {
+      var attachNames = (e.attachments || []).map(function (fid) {
+        var f = fileStore[fid];
+        return f ? f.name : '';
+      }).filter(Boolean).join(', ');
       sheetData.push([
         e.category || '',
         e.item || '',
@@ -1707,7 +1870,8 @@
         e.date || '',
         e.feedback || '',
         e.note || '',
-        e.ref || ''
+        e.ref || '',
+        attachNames
       ]);
     });
     exportAsExcel('업무일지_전략기획팀', sheetData);
@@ -1717,9 +1881,14 @@
   $('#jnl-export-csv').addEventListener('click', function () {
     var items = load(JNL_KEY);
     if (items.length === 0) { toast('내보낼 데이터가 없습니다'); return; }
-    var headers = ['구분', '항목', '세부 항목', '날짜', '피드백 및 결정', '느낀 점 및 수행해야 할 사항', '레퍼런스'];
+    var fileStore = loadJnlFiles();
+    var headers = ['구분', '항목', '세부 항목', '날짜', '피드백 및 결정', '느낀 점 및 수행해야 할 사항', '레퍼런스', '첨부파일'];
     var rows = [headers.join(',')];
     items.forEach(function (e) {
+      var attachNames = (e.attachments || []).map(function (fid) {
+        var f = fileStore[fid];
+        return f ? f.name : '';
+      }).filter(Boolean).join('; ');
       var row = [
         e.category || '',
         e.item || '',
@@ -1727,7 +1896,8 @@
         e.date || '',
         e.feedback || '',
         e.note || '',
-        e.ref || ''
+        e.ref || '',
+        attachNames
       ].map(function (cell) {
         // CSV escape: wrap in quotes if contains comma, quote, or newline
         if (cell.indexOf(',') !== -1 || cell.indexOf('"') !== -1 || cell.indexOf('\n') !== -1) {

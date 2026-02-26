@@ -387,6 +387,12 @@
           <div class="form-group">
             <label for="jnl-ref">레퍼런스</label>
             <textarea id="jnl-ref" rows="3" placeholder="참고 링크, 문서, 자료 등"></textarea>
+            <div class="jnl-attach-area">
+              <button type="button" class="btn btn-small btn-secondary" id="jnl-attach-btn">📎 파일 첨부</button>
+              <input type="file" id="jnl-attach-input" multiple style="display:none">
+              <span class="jnl-attach-hint">이미지, PDF, 문서 등 (파일당 최대 5MB)</span>
+            </div>
+            <div class="jnl-attach-list" id="jnl-attach-list"></div>
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" id="jnl-save">저장</button>

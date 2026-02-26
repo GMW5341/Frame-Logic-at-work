@@ -1299,6 +1299,108 @@ body {
   color: var(--accent);
 }
 
+/* -- Journal File Attachments -- */
+.jnl-attach-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.jnl-attach-hint {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.jnl-attach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.jnl-attach-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+}
+
+.jnl-attach-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.jnl-attach-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.jnl-attach-size {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.jnl-attach-preview {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.jnl-attach-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Attachments in table cell */
+.jnl-cell-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.jnl-cell-attach-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--transition);
+  max-width: 120px;
+}
+
+.jnl-cell-attach-tag:hover {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.jnl-cell-attach-tag span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ===== Empty State ===== */
 .empty-state {
   text-align: center;
