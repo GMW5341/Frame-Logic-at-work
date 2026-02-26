@@ -1162,6 +1162,143 @@ body {
   touch-action: none;
 }
 
+/* ===== Work Journal (업무일지) ===== */
+.jnl-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.jnl-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.jnl-filter-row input[type="text"] {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  transition: border-color var(--transition);
+}
+
+.jnl-filter-row input[type="text"]:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.jnl-filter-row select {
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.jnl-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.jnl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 900px;
+}
+
+.jnl-table thead {
+  background: var(--bg-surface);
+}
+
+.jnl-table th {
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+
+.jnl-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.jnl-table tbody tr:hover {
+  background: var(--accent-subtle);
+}
+
+.jnl-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.jnl-th-category { width: 90px; }
+.jnl-th-item { width: 110px; }
+.jnl-th-subitem { width: 120px; }
+.jnl-th-date { width: 100px; }
+.jnl-th-feedback { min-width: 160px; }
+.jnl-th-note { min-width: 160px; }
+.jnl-th-ref { min-width: 120px; }
+.jnl-th-actions { width: 80px; text-align: center; }
+
+.jnl-table td.jnl-td-actions {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.jnl-cell-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jnl-cell-ref {
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 60px;
+  overflow: hidden;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.jnl-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.jnl-category-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
 /* ===== Empty State ===== */
 .empty-state {
   text-align: center;
@@ -1249,5 +1386,18 @@ body {
 
   .mtg-col-side {
     position: static;
+  }
+
+  .jnl-toolbar {
+    flex-direction: column;
+  }
+
+  .jnl-filter-row {
+    flex-direction: column;
+  }
+
+  .jnl-filter-row select {
+    min-width: 0;
+    width: 100%;
   }
 }

@@ -31,6 +31,10 @@
             <span class="tab-icon">📨</span>
             <span class="tab-label">제언 템플릿</span>
           </button>
+          <button class="tab-btn" data-tab="journal" role="tab" aria-selected="false">
+            <span class="tab-icon">📝</span>
+            <span class="tab-label">업무일지</span>
+          </button>
         </nav>
         <div class="sidebar-footer">
           <button class="settings-btn" id="open-settings">⚙ 설정</button>
@@ -302,6 +306,91 @@
           <div class="btn-row">
             <button class="btn btn-secondary" id="prop-export-excel">📊 Excel 내보내기</button>
             <button class="btn btn-secondary" id="prop-export-pdf">📄 PDF 내보내기</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 업무일지 탭 ==================== -->
+      <section id="tab-journal" class="tab-panel" role="tabpanel">
+        <div class="panel-top">
+          <h2>업무일지</h2>
+          <div class="live-clock" data-clock></div>
+        </div>
+        <div id="jnl-list-view">
+          <p class="panel-desc">전략기획팀 업무일지를 작성하고 관리하세요. Excel/CSV 파일을 업로드하거나 내보낼 수 있습니다.</p>
+          <div class="jnl-toolbar">
+            <button class="btn btn-primary" id="jnl-new">+ 새 항목 추가</button>
+            <button class="btn btn-secondary" id="jnl-import-excel">📥 Excel/CSV 업로드</button>
+            <button class="btn btn-secondary" id="jnl-export-excel">📊 Excel 내보내기</button>
+            <button class="btn btn-secondary" id="jnl-export-csv">📄 CSV 내보내기</button>
+            <input type="file" id="jnl-file-input" accept=".xlsx,.xls,.csv" style="display:none">
+          </div>
+          <div class="jnl-filter-row">
+            <input type="text" id="jnl-search" placeholder="검색 (구분, 항목, 세부 항목...)">
+            <select id="jnl-filter-category">
+              <option value="">전체 구분</option>
+            </select>
+          </div>
+          <div class="jnl-table-wrap">
+            <table class="jnl-table" id="jnl-table">
+              <thead>
+                <tr>
+                  <th class="jnl-th-category">구분</th>
+                  <th class="jnl-th-item">항목</th>
+                  <th class="jnl-th-subitem">세부 항목</th>
+                  <th class="jnl-th-date">날짜</th>
+                  <th class="jnl-th-feedback">피드백 및 결정</th>
+                  <th class="jnl-th-note">느낀 점 및 수행해야 할 사항</th>
+                  <th class="jnl-th-ref">레퍼런스</th>
+                  <th class="jnl-th-actions">관리</th>
+                </tr>
+              </thead>
+              <tbody id="jnl-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 업무일지 작성/수정 폼 -->
+        <div id="jnl-form-view" style="display:none">
+          <div class="view-form-header">
+            <button class="btn btn-secondary btn-small" id="jnl-back">← 목록</button>
+            <span id="jnl-form-title-label" style="font-weight:600;font-size:0.9rem;color:var(--text-muted)">새 항목 추가</span>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="jnl-category">구분</label>
+              <input type="text" id="jnl-category" placeholder="예: 기획, 리서치, 미팅">
+            </div>
+            <div class="form-group flex-1">
+              <label for="jnl-item">항목</label>
+              <input type="text" id="jnl-item" placeholder="예: 시장 조사">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="jnl-subitem">세부 항목</label>
+              <input type="text" id="jnl-subitem" placeholder="예: 경쟁사 분석">
+            </div>
+            <div class="form-group">
+              <label for="jnl-date">날짜</label>
+              <input type="date" id="jnl-date">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="jnl-feedback">피드백 및 결정</label>
+            <textarea id="jnl-feedback" rows="4" placeholder="관련 피드백 및 결정 사항을 기록하세요"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="jnl-note">느낀 점 및 수행해야 할 사항</label>
+            <textarea id="jnl-note" rows="4" placeholder="느낀 점이나 앞으로 수행해야 할 사항을 기록하세요"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="jnl-ref">레퍼런스</label>
+            <textarea id="jnl-ref" rows="3" placeholder="참고 링크, 문서, 자료 등"></textarea>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="jnl-save">저장</button>
+            <button class="btn btn-ghost" id="jnl-form-clear">초기화</button>
           </div>
         </div>
       </section>

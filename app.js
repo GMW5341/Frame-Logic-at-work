@@ -1517,6 +1517,363 @@
     return richEditors[id.replace('#', '')];
   }
 
+  // ══════════════════════════════════════
+  // 8. 업무일지 탭
+  // ══════════════════════════════════════
+  var JNL_KEY = 'fl_journal';
+  var currentJnlEditId = null;
+
+  function showJnlList() {
+    $('#jnl-list-view').style.display = '';
+    $('#jnl-form-view').style.display = 'none';
+  }
+
+  function showJnlForm() {
+    $('#jnl-list-view').style.display = 'none';
+    $('#jnl-form-view').style.display = '';
+  }
+
+  function clearJnlForm() {
+    currentJnlEditId = null;
+    $('#jnl-category').value = '';
+    $('#jnl-item').value = '';
+    $('#jnl-subitem').value = '';
+    $('#jnl-date').value = new Date().toISOString().slice(0, 10);
+    $('#jnl-feedback').value = '';
+    $('#jnl-note').value = '';
+    $('#jnl-ref').value = '';
+    $('#jnl-form-title-label').textContent = '새 항목 추가';
+  }
+
+  function getJnlData() {
+    return {
+      id: currentJnlEditId || uid(),
+      category: $('#jnl-category').value.trim(),
+      item: $('#jnl-item').value.trim(),
+      subitem: $('#jnl-subitem').value.trim(),
+      date: $('#jnl-date').value,
+      feedback: $('#jnl-feedback').value.trim(),
+      note: $('#jnl-note').value.trim(),
+      ref: $('#jnl-ref').value.trim(),
+      createdAt: new Date().toISOString()
+    };
+  }
+
+  function loadJnlToForm(entry) {
+    currentJnlEditId = entry.id;
+    showJnlForm();
+    $('#jnl-category').value = entry.category || '';
+    $('#jnl-item').value = entry.item || '';
+    $('#jnl-subitem').value = entry.subitem || '';
+    $('#jnl-date').value = entry.date || '';
+    $('#jnl-feedback').value = entry.feedback || '';
+    $('#jnl-note').value = entry.note || '';
+    $('#jnl-ref').value = entry.ref || '';
+    $('#jnl-form-title-label').textContent = '항목 수정';
+  }
+
+  function getJnlCategories() {
+    var items = load(JNL_KEY);
+    var cats = {};
+    items.forEach(function (e) {
+      if (e.category) cats[e.category] = true;
+    });
+    return Object.keys(cats).sort();
+  }
+
+  function populateJnlCategoryFilter() {
+    var sel = $('#jnl-filter-category');
+    var cats = getJnlCategories();
+    var current = sel.value;
+    var html = '<option value="">전체 구분</option>';
+    cats.forEach(function (c) {
+      html += '<option value="' + escapeHtml(c) + '"' + (c === current ? ' selected' : '') + '>' + escapeHtml(c) + '</option>';
+    });
+    sel.innerHTML = html;
+  }
+
+  function renderJnlTable() {
+    var items = load(JNL_KEY);
+    var search = ($('#jnl-search').value || '').toLowerCase();
+    var filterCat = $('#jnl-filter-category').value;
+
+    if (filterCat) {
+      items = items.filter(function (e) { return e.category === filterCat; });
+    }
+
+    if (search) {
+      items = items.filter(function (e) {
+        return (e.category || '').toLowerCase().includes(search) ||
+          (e.item || '').toLowerCase().includes(search) ||
+          (e.subitem || '').toLowerCase().includes(search) ||
+          (e.feedback || '').toLowerCase().includes(search) ||
+          (e.note || '').toLowerCase().includes(search) ||
+          (e.ref || '').toLowerCase().includes(search);
+      });
+    }
+
+    var tbody = $('#jnl-tbody');
+
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="jnl-empty">' +
+        (load(JNL_KEY).length === 0 ? '업무일지 항목이 없습니다. 새 항목을 추가하거나 Excel/CSV 파일을 업로드하세요.' : '검색 결과가 없습니다.') +
+        '</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = items.map(function (e) {
+      return '<tr data-id="' + e.id + '">' +
+        '<td><span class="jnl-category-badge">' + escapeHtml(e.category || '-') + '</span></td>' +
+        '<td>' + escapeHtml(e.item || '-') + '</td>' +
+        '<td>' + escapeHtml(e.subitem || '-') + '</td>' +
+        '<td>' + escapeHtml(e.date || '-') + '</td>' +
+        '<td><div class="jnl-cell-text">' + escapeHtml(e.feedback || '') + '</div></td>' +
+        '<td><div class="jnl-cell-text">' + escapeHtml(e.note || '') + '</div></td>' +
+        '<td><div class="jnl-cell-ref">' + escapeHtml(e.ref || '') + '</div></td>' +
+        '<td class="jnl-td-actions">' +
+          '<button class="btn btn-small btn-secondary" data-action="edit" title="수정">✎</button> ' +
+          '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  // -- Event listeners --
+  $('#jnl-new').addEventListener('click', function () {
+    clearJnlForm();
+    showJnlForm();
+  });
+
+  $('#jnl-back').addEventListener('click', function () {
+    showJnlList();
+  });
+
+  $('#jnl-form-clear').addEventListener('click', function () {
+    clearJnlForm();
+    toast('초기화되었습니다');
+  });
+
+  $('#jnl-save').addEventListener('click', function () {
+    var data = getJnlData();
+    if (!data.category && !data.item && !data.subitem) {
+      toast('구분, 항목, 세부 항목 중 하나 이상 입력해주세요');
+      return;
+    }
+    var items = load(JNL_KEY);
+    if (currentJnlEditId) {
+      items = items.filter(function (i) { return i.id !== currentJnlEditId; });
+    }
+    items.unshift(data);
+    save(JNL_KEY, items);
+    currentJnlEditId = null;
+    renderJnlTable();
+    populateJnlCategoryFilter();
+    showJnlList();
+    toast('업무일지가 저장되었습니다');
+  });
+
+  $('#jnl-search').addEventListener('input', function () { renderJnlTable(); });
+  $('#jnl-filter-category').addEventListener('change', function () { renderJnlTable(); });
+
+  $('#jnl-tbody').addEventListener('click', function (e) {
+    var tr = e.target.closest('tr[data-id]');
+    if (!tr) return;
+    var id = tr.dataset.id;
+    var items = load(JNL_KEY);
+    if (e.target.closest('[data-action="delete"]')) {
+      save(JNL_KEY, items.filter(function (i) { return i.id !== id; }));
+      renderJnlTable();
+      populateJnlCategoryFilter();
+      toast('삭제되었습니다');
+    } else if (e.target.closest('[data-action="edit"]')) {
+      var entry = items.find(function (i) { return i.id === id; });
+      if (entry) {
+        loadJnlToForm(entry);
+        toast('편집 모드');
+      }
+    }
+  });
+
+  // -- Excel Export --
+  $('#jnl-export-excel').addEventListener('click', function () {
+    var items = load(JNL_KEY);
+    if (items.length === 0) { toast('내보낼 데이터가 없습니다'); return; }
+    var sheetData = [['구분', '항목', '세부 항목', '날짜', '피드백 및 결정', '느낀 점 및 수행해야 할 사항', '레퍼런스']];
+    items.forEach(function (e) {
+      sheetData.push([
+        e.category || '',
+        e.item || '',
+        e.subitem || '',
+        e.date || '',
+        e.feedback || '',
+        e.note || '',
+        e.ref || ''
+      ]);
+    });
+    exportAsExcel('업무일지_전략기획팀', sheetData);
+  });
+
+  // -- CSV Export --
+  $('#jnl-export-csv').addEventListener('click', function () {
+    var items = load(JNL_KEY);
+    if (items.length === 0) { toast('내보낼 데이터가 없습니다'); return; }
+    var headers = ['구분', '항목', '세부 항목', '날짜', '피드백 및 결정', '느낀 점 및 수행해야 할 사항', '레퍼런스'];
+    var rows = [headers.join(',')];
+    items.forEach(function (e) {
+      var row = [
+        e.category || '',
+        e.item || '',
+        e.subitem || '',
+        e.date || '',
+        e.feedback || '',
+        e.note || '',
+        e.ref || ''
+      ].map(function (cell) {
+        // CSV escape: wrap in quotes if contains comma, quote, or newline
+        if (cell.indexOf(',') !== -1 || cell.indexOf('"') !== -1 || cell.indexOf('\n') !== -1) {
+          return '"' + cell.replace(/"/g, '""') + '"';
+        }
+        return cell;
+      });
+      rows.push(row.join(','));
+    });
+    var csvContent = '\uFEFF' + rows.join('\r\n'); // BOM for Korean encoding
+    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = '업무일지_전략기획팀.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast('CSV 파일이 다운로드되었습니다');
+  });
+
+  // -- Excel/CSV Import --
+  $('#jnl-import-excel').addEventListener('click', function () {
+    $('#jnl-file-input').click();
+  });
+
+  $('#jnl-file-input').addEventListener('change', function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    e.target.value = ''; // reset for re-upload
+
+    var isCSV = file.name.toLowerCase().endsWith('.csv');
+
+    if (typeof XLSX === 'undefined') {
+      toast('Excel 라이브러리를 로드하지 못했습니다');
+      return;
+    }
+
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      try {
+        var workbook;
+        if (isCSV) {
+          workbook = XLSX.read(ev.target.result, { type: 'string' });
+        } else {
+          var data = new Uint8Array(ev.target.result);
+          workbook = XLSX.read(data, { type: 'array' });
+        }
+        var sheet = workbook.Sheets[workbook.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        if (rows.length < 2) {
+          toast('데이터가 없거나 형식이 올바르지 않습니다');
+          return;
+        }
+
+        // Try to find header row
+        var headerRow = rows[0].map(function (h) { return (h || '').toString().trim(); });
+        var colMap = {};
+        var knownHeaders = {
+          '구분': 'category',
+          '항목': 'item',
+          '세부 항목': 'subitem',
+          '세부항목': 'subitem',
+          '날짜': 'date',
+          '피드백 및 결정': 'feedback',
+          '피드백': 'feedback',
+          '느낀 점 및 수행해야 할 사항': 'note',
+          '느낀 점': 'note',
+          '수행해야 할 사항': 'note',
+          '레퍼런스': 'ref',
+          '참고': 'ref'
+        };
+
+        headerRow.forEach(function (h, i) {
+          if (knownHeaders[h]) colMap[knownHeaders[h]] = i;
+        });
+
+        // Fallback: if no known headers found, use positional mapping
+        var useFallback = Object.keys(colMap).length === 0;
+        if (useFallback) {
+          colMap = { category: 0, item: 1, subitem: 2, date: 3, feedback: 4, note: 5, ref: 6 };
+        }
+
+        var startRow = useFallback ? 0 : 1;
+        var items = load(JNL_KEY);
+        var importCount = 0;
+
+        for (var r = startRow; r < rows.length; r++) {
+          var row = rows[r];
+          if (!row || row.length === 0) continue;
+          // Skip entirely empty rows
+          var hasData = row.some(function (cell) { return cell !== undefined && cell !== null && cell.toString().trim() !== ''; });
+          if (!hasData) continue;
+
+          var entry = {
+            id: uid(),
+            category: (row[colMap.category] || '').toString().trim(),
+            item: (row[colMap.item] || '').toString().trim(),
+            subitem: colMap.subitem !== undefined ? (row[colMap.subitem] || '').toString().trim() : '',
+            date: colMap.date !== undefined ? formatExcelDate(row[colMap.date]) : '',
+            feedback: colMap.feedback !== undefined ? (row[colMap.feedback] || '').toString().trim() : '',
+            note: colMap.note !== undefined ? (row[colMap.note] || '').toString().trim() : '',
+            ref: colMap.ref !== undefined ? (row[colMap.ref] || '').toString().trim() : '',
+            createdAt: new Date().toISOString()
+          };
+
+          if (entry.category || entry.item || entry.subitem) {
+            items.push(entry);
+            importCount++;
+          }
+        }
+
+        save(JNL_KEY, items);
+        renderJnlTable();
+        populateJnlCategoryFilter();
+        toast(importCount + '개 항목을 업로드했습니다');
+      } catch (err) {
+        toast('파일 읽기 실패: ' + err.message);
+      }
+    };
+
+    if (isCSV) {
+      reader.readAsText(file, 'UTF-8');
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
+  });
+
+  function formatExcelDate(value) {
+    if (!value) return '';
+    // If it's a number (Excel serial date), convert
+    if (typeof value === 'number') {
+      var d = new Date((value - 25569) * 86400000);
+      return d.toISOString().slice(0, 10);
+    }
+    // If it's a string, try to parse it
+    var str = value.toString().trim();
+    // Try ISO format
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+    // Try Korean format 2024년 3월 15일
+    var koMatch = str.match(/(\d{4})\s*[년./-]\s*(\d{1,2})\s*[월./-]\s*(\d{1,2})/);
+    if (koMatch) {
+      return koMatch[1] + '-' + koMatch[2].padStart(2, '0') + '-' + koMatch[3].padStart(2, '0');
+    }
+    return str;
+  }
+
   // ── Init ──
   function init() {
     renderContextList();
@@ -1525,6 +1882,8 @@
     renderAgendaList();
     renderProposalList();
     populateFolderFilter();
+    renderJnlTable();
+    populateJnlCategoryFilter();
   }
 
   init();
