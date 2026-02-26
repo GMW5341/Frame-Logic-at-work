@@ -1218,7 +1218,7 @@
     if (slide.type === 'title') {
       stage.innerHTML = '<div class="pres-slide pres-slide-title"><h1>' + escapeHtml(slide.title) + '</h1><div class="pres-subtitle">' + escapeHtml(slide.subtitle) + '</div></div>';
     } else {
-      stage.innerHTML = '<div class="pres-slide pres-slide-content">' + (slide.heading ? '<h2>' + escapeHtml(slide.heading) + '</h2>' : '') + '<div class="pres-body">' + escapeHtml(slide.body) + '</div></div>';
+      stage.innerHTML = '<div class="pres-slide pres-slide-content">' + (slide.heading ? '<h2>' + escapeHtml(slide.heading) + '</h2>' : '') + '<div class="pres-body">' + slide.body + '</div></div>';
     }
     $('#pres-page-info').textContent = (presIndex + 1) + ' / ' + presSlides.length;
     $('#pres-prev').disabled = presIndex === 0;
@@ -1411,7 +1411,10 @@
     var re = {
       editor: editor,
       getHTML: function () { return editor.innerHTML === '<br>' ? '' : editor.innerHTML; },
-      setHTML: function (html) { editor.innerHTML = html || ''; },
+      setHTML: function (html) {
+        editor.innerHTML = html || '';
+        wrapBareImages(editor);
+      },
       getText: function () { return editor.innerText || ''; }
     };
     richEditors[id] = re;
@@ -1677,14 +1680,210 @@
     });
   }
 
+  // 저장된 HTML 로드 시 bare <img>를 re-img-wrap으로 감싸기
+  function wrapBareImages(editor) {
+    editor.querySelectorAll('img').forEach(function (img) {
+      if (img.closest('.re-img-wrap')) return; // 이미 래핑됨
+      img.className = 're-img';
+      var wrapper = document.createElement('span');
+      wrapper.className = 're-img-wrap';
+      wrapper.contentEditable = 'false';
+      wrapper.setAttribute('draggable', 'true');
+      img.parentNode.insertBefore(wrapper, img);
+      wrapper.appendChild(img);
+      var handles = ['nw','ne','sw','se'];
+      handles.forEach(function (pos) {
+        var h = document.createElement('span');
+        h.className = 're-img-handle re-img-handle-' + pos;
+        h.dataset.handle = pos;
+        wrapper.appendChild(h);
+      });
+      var del = document.createElement('button');
+      del.className = 're-img-delete';
+      del.textContent = '✕';
+      del.title = '이미지 삭제';
+      wrapper.appendChild(del);
+    });
+  }
+
   function insertImageFile(editor, file) {
     var reader = new FileReader();
     reader.onload = function (ev) {
       editor.focus();
-      document.execCommand('insertImage', false, ev.target.result);
+      var wrapper = document.createElement('span');
+      wrapper.className = 're-img-wrap';
+      wrapper.contentEditable = 'false';
+      wrapper.setAttribute('draggable', 'true');
+      var img = document.createElement('img');
+      img.src = ev.target.result;
+      img.className = 're-img';
+      wrapper.appendChild(img);
+      // 리사이즈 핸들
+      var handles = ['nw','ne','sw','se'];
+      handles.forEach(function (pos) {
+        var h = document.createElement('span');
+        h.className = 're-img-handle re-img-handle-' + pos;
+        h.dataset.handle = pos;
+        wrapper.appendChild(h);
+      });
+      // 삭제 버튼
+      var del = document.createElement('button');
+      del.className = 're-img-delete';
+      del.textContent = '✕';
+      del.title = '이미지 삭제';
+      wrapper.appendChild(del);
+
+      var sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        var range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(wrapper);
+        range.setStartAfter(wrapper);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        editor.appendChild(wrapper);
+      }
     };
     reader.readAsDataURL(file);
   }
+
+  // ── 이미지 리사이즈 & 드래그 ──
+  (function () {
+    var resizing = null; // { wrapper, startX, startY, startW, startH, handle }
+    var dragging = null; // { wrapper, editor, ghost, offsetX, offsetY }
+
+    // 이미지 선택 토글
+    document.addEventListener('click', function (e) {
+      var wrap = e.target.closest('.re-img-wrap');
+      // 이전 선택 해제
+      document.querySelectorAll('.re-img-wrap.selected').forEach(function (w) {
+        if (w !== wrap) w.classList.remove('selected');
+      });
+      if (wrap) {
+        wrap.classList.add('selected');
+      }
+    });
+
+    // 삭제 버튼
+    document.addEventListener('click', function (e) {
+      if (e.target.classList.contains('re-img-delete')) {
+        e.preventDefault();
+        e.stopPropagation();
+        var wrap = e.target.closest('.re-img-wrap');
+        if (wrap) wrap.remove();
+      }
+    });
+
+    // 리사이즈 시작
+    document.addEventListener('mousedown', function (e) {
+      var handle = e.target.closest('.re-img-handle');
+      if (!handle) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var wrapper = handle.closest('.re-img-wrap');
+      var img = wrapper.querySelector('.re-img');
+      resizing = {
+        wrapper: wrapper,
+        img: img,
+        startX: e.clientX,
+        startY: e.clientY,
+        startW: img.offsetWidth,
+        startH: img.offsetHeight,
+        handle: handle.dataset.handle,
+        ratio: img.offsetWidth / img.offsetHeight
+      };
+      wrapper.classList.add('resizing');
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!resizing) return;
+      e.preventDefault();
+      var dx = e.clientX - resizing.startX;
+      var dy = e.clientY - resizing.startY;
+      var newW, newH;
+      var h = resizing.handle;
+
+      if (h === 'se') { newW = resizing.startW + dx; }
+      else if (h === 'sw') { newW = resizing.startW - dx; }
+      else if (h === 'ne') { newW = resizing.startW + dx; }
+      else if (h === 'nw') { newW = resizing.startW - dx; }
+
+      newW = Math.max(40, newW);
+      newH = newW / resizing.ratio;
+
+      resizing.img.style.width = newW + 'px';
+      resizing.img.style.height = newH + 'px';
+    });
+
+    document.addEventListener('mouseup', function () {
+      if (resizing) {
+        resizing.wrapper.classList.remove('resizing');
+        resizing = null;
+      }
+    });
+
+    // 드래그 이동 (에디터 내 위치 변경)
+    document.addEventListener('dragstart', function (e) {
+      var wrap = e.target.closest('.re-img-wrap');
+      if (!wrap) return;
+      var editor = wrap.closest('.rich-editable');
+      if (!editor) return;
+
+      dragging = { wrapper: wrap, editor: editor };
+      wrap.classList.add('dragging-img');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', 're-img-drag');
+    });
+
+    document.addEventListener('dragover', function (e) {
+      if (!dragging) return;
+      var editor = dragging.editor;
+      if (!editor.contains(e.target) && e.target !== editor) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    document.addEventListener('drop', function (e) {
+      if (!dragging) return;
+      e.preventDefault();
+      var editor = dragging.editor;
+      var wrap = dragging.wrapper;
+
+      // 캐럿 위치에 삽입
+      var caretRange = null;
+      if (document.caretRangeFromPoint) {
+        caretRange = document.caretRangeFromPoint(e.clientX, e.clientY);
+      } else if (document.caretPositionFromPoint) {
+        var pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+        if (pos) {
+          caretRange = document.createRange();
+          caretRange.setStart(pos.offsetNode, pos.offset);
+          caretRange.collapse(true);
+        }
+      }
+
+      // 먼저 기존 위치에서 제거
+      wrap.remove();
+
+      if (caretRange && editor.contains(caretRange.startContainer)) {
+        caretRange.insertNode(wrap);
+      } else {
+        editor.appendChild(wrap);
+      }
+
+      wrap.classList.remove('dragging-img');
+      dragging = null;
+    });
+
+    document.addEventListener('dragend', function () {
+      if (dragging) {
+        dragging.wrapper.classList.remove('dragging-img');
+        dragging = null;
+      }
+    });
+  })();
 
   // 그리기 캔버스
   function openDrawCanvas() {
