@@ -8,31 +8,36 @@
 </head>
 <body>
   <div class="app">
-    <header class="app-header">
-      <h1 class="logo">Frame Logic</h1>
-      <p class="tagline">생각을 구조화하는 업무 워크스페이스</p>
-    </header>
+    <div class="app-body">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h1 class="logo">Frame Logic</h1>
+          <p class="tagline">업무 워크스페이스</p>
+        </div>
+        <nav class="tab-nav" role="tablist">
+          <button class="tab-btn active" data-tab="context" role="tab" aria-selected="true">
+            <span class="tab-icon">🧠</span>
+            <span class="tab-label">AI 컨텍스트</span>
+          </button>
+          <button class="tab-btn" data-tab="ideas" role="tab" aria-selected="false">
+            <span class="tab-icon">💡</span>
+            <span class="tab-label">아이디어</span>
+          </button>
+          <button class="tab-btn" data-tab="meeting" role="tab" aria-selected="false">
+            <span class="tab-icon">📋</span>
+            <span class="tab-label">회의 메모</span>
+          </button>
+          <button class="tab-btn" data-tab="proposal" role="tab" aria-selected="false">
+            <span class="tab-icon">📨</span>
+            <span class="tab-label">제언 템플릿</span>
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <p>데이터는 브라우저에 저장됩니다</p>
+        </div>
+      </aside>
 
-    <nav class="tab-nav" role="tablist">
-      <button class="tab-btn active" data-tab="context" role="tab" aria-selected="true">
-        <span class="tab-icon">🧠</span>
-        <span class="tab-label">AI 컨텍스트</span>
-      </button>
-      <button class="tab-btn" data-tab="ideas" role="tab" aria-selected="false">
-        <span class="tab-icon">💡</span>
-        <span class="tab-label">아이디어</span>
-      </button>
-      <button class="tab-btn" data-tab="meeting" role="tab" aria-selected="false">
-        <span class="tab-icon">📋</span>
-        <span class="tab-label">회의 메모</span>
-      </button>
-      <button class="tab-btn" data-tab="proposal" role="tab" aria-selected="false">
-        <span class="tab-icon">📨</span>
-        <span class="tab-label">제언 템플릿</span>
-      </button>
-    </nav>
-
-    <main class="tab-content">
+      <main class="tab-content">
 
       <!-- AI 컨텍스트 탭 -->
       <section id="tab-context" class="tab-panel active" role="tabpanel">
@@ -47,19 +52,19 @@
           </div>
           <div class="form-group">
             <label for="ctx-background">배경 설명</label>
-            <textarea id="ctx-background" rows="3" placeholder="현재 상황과 배경을 설명하세요"></textarea>
+            <textarea id="ctx-background" rows="6" placeholder="현재 상황과 배경을 설명하세요"></textarea>
           </div>
           <div class="form-group">
             <label for="ctx-goal">목표</label>
-            <textarea id="ctx-goal" rows="2" placeholder="AI에게 요청하고 싶은 결과물"></textarea>
+            <textarea id="ctx-goal" rows="5" placeholder="AI에게 요청하고 싶은 결과물"></textarea>
           </div>
           <div class="form-group">
             <label for="ctx-constraints">제약 조건 / 참고 사항</label>
-            <textarea id="ctx-constraints" rows="2" placeholder="톤, 분량, 형식 등 제약 조건"></textarea>
+            <textarea id="ctx-constraints" rows="4" placeholder="톤, 분량, 형식 등 제약 조건"></textarea>
           </div>
           <div class="form-group">
             <label for="ctx-reference">참고 자료</label>
-            <textarea id="ctx-reference" rows="2" placeholder="링크, 인용, 관련 문서 등"></textarea>
+            <textarea id="ctx-reference" rows="4" placeholder="링크, 인용, 관련 문서 등"></textarea>
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" id="ctx-copy">📋 프롬프트 복사</button>
@@ -84,7 +89,7 @@
             <input type="text" id="idea-title" placeholder="아이디어 한 줄 요약">
           </div>
           <div class="form-group">
-            <textarea id="idea-detail" rows="3" placeholder="상세 내용 (선택)"></textarea>
+            <textarea id="idea-detail" rows="6" placeholder="상세 내용 (선택)"></textarea>
           </div>
           <div class="form-group">
             <input type="text" id="idea-tags" placeholder="태그 (쉼표로 구분, 예: UX, 마케팅, 기술)">
@@ -122,19 +127,19 @@
           </div>
           <div class="form-group">
             <label for="mtg-agenda">안건</label>
-            <textarea id="mtg-agenda" rows="3" placeholder="논의할 주제들"></textarea>
+            <textarea id="mtg-agenda" rows="5" placeholder="논의할 주제들"></textarea>
           </div>
           <div class="form-group">
             <label for="mtg-notes">회의 내용</label>
-            <textarea id="mtg-notes" rows="5" placeholder="회의 중 기록"></textarea>
+            <textarea id="mtg-notes" rows="10" placeholder="회의 중 기록"></textarea>
           </div>
           <div class="form-group">
             <label for="mtg-decisions">결정 사항</label>
-            <textarea id="mtg-decisions" rows="2" placeholder="합의된 내용"></textarea>
+            <textarea id="mtg-decisions" rows="4" placeholder="합의된 내용"></textarea>
           </div>
           <div class="form-group">
             <label for="mtg-actions">액션 아이템</label>
-            <textarea id="mtg-actions" rows="2" placeholder="누가 무엇을 언제까지 (한 줄에 하나씩)"></textarea>
+            <textarea id="mtg-actions" rows="4" placeholder="누가 무엇을 언제까지 (한 줄에 하나씩)"></textarea>
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" id="mtg-save">저장</button>
@@ -175,11 +180,8 @@
         </div>
       </section>
 
-    </main>
-
-    <footer class="app-footer">
-      <p>Frame Logic — 데이터는 브라우저 로컬에 저장됩니다</p>
-    </footer>
+      </main>
+    </div>
   </div>
 
   <div class="toast" id="toast"></div>
