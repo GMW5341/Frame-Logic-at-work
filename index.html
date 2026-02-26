@@ -338,35 +338,36 @@
             <div class="jnl-ai-panel-body" id="jnl-ai-panel-body"></div>
           </div>
           <div class="jnl-filter-row">
-            <input type="text" id="jnl-search" placeholder="검색 (구분, 항목, 세부 항목...)">
+            <input type="text" id="jnl-search" placeholder="검색...">
             <select id="jnl-filter-category">
               <option value="">전체 구분</option>
             </select>
+            <button class="btn btn-secondary btn-small" id="jnl-col-manage" title="칼럼 관리">⚙ 칼럼</button>
+          </div>
+          <!-- 칼럼 관리 패널 -->
+          <div class="jnl-col-panel" id="jnl-col-panel" style="display:none">
+            <div class="jnl-col-panel-header">
+              <span>칼럼 관리</span>
+              <button class="btn btn-small btn-ghost" id="jnl-col-panel-close">✕</button>
+            </div>
+            <div class="jnl-col-panel-body" id="jnl-col-list"></div>
+            <div class="jnl-col-panel-add">
+              <input type="text" id="jnl-col-new-label" placeholder="새 칼럼 이름">
+              <select id="jnl-col-new-type">
+                <option value="text">짧은 텍스트</option>
+                <option value="longtext">긴 텍스트</option>
+                <option value="date">날짜</option>
+                <option value="select">선택형</option>
+              </select>
+              <button class="btn btn-small btn-primary" id="jnl-col-add">+ 추가</button>
+            </div>
+            <div class="jnl-col-panel-footer">
+              <button class="btn btn-small btn-ghost" id="jnl-col-reset">기본값 복원</button>
+            </div>
           </div>
           <div class="jnl-table-wrap">
             <table class="jnl-table" id="jnl-table">
-              <thead>
-                <tr>
-                  <th class="jnl-th-category">구분</th>
-                  <th class="jnl-th-item">항목</th>
-                  <th class="jnl-th-subitem">세부 항목</th>
-                  <th class="jnl-th-date">날짜</th>
-                  <th class="jnl-th-feedback">피드백 및 결정</th>
-                  <th class="jnl-th-note">느낀 점 및 수행해야 할 사항</th>
-                  <th class="jnl-th-ref">레퍼런스</th>
-                  <th class="jnl-th-actions">관리</th>
-                </tr>
-                <tr class="jnl-filter-header">
-                  <th><select class="jnl-col-filter" data-field="category"><option value="">전체</option></select></th>
-                  <th><select class="jnl-col-filter" data-field="item"><option value="">전체</option></select></th>
-                  <th><select class="jnl-col-filter" data-field="subitem"><option value="">전체</option></select></th>
-                  <th><input type="text" class="jnl-col-filter-input" data-field="date" placeholder="날짜 검색"></th>
-                  <th><input type="text" class="jnl-col-filter-input" data-field="feedback" placeholder="검색"></th>
-                  <th><input type="text" class="jnl-col-filter-input" data-field="note" placeholder="검색"></th>
-                  <th><input type="text" class="jnl-col-filter-input" data-field="ref" placeholder="검색"></th>
-                  <th></th>
-                </tr>
-              </thead>
+              <thead id="jnl-thead"></thead>
               <tbody id="jnl-tbody"></tbody>
             </table>
           </div>

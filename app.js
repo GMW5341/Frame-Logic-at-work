@@ -3530,11 +3530,37 @@
     $('#jnl-form-view').style.display = '';
   }
 
+  // ── 칼럼 설정 시스템 ──
+  var JNL_COLS_KEY = 'fl_journal_cols';
+  var DEFAULT_JNL_COLUMNS = [
+    { key: 'category', label: '구분', type: 'text', filterable: 'select' },
+    { key: 'item', label: '항목', type: 'text', filterable: 'select' },
+    { key: 'subitem', label: '세부 항목', type: 'text', filterable: 'select' },
+    { key: 'date', label: '날짜', type: 'date', filterable: 'input' },
+    { key: 'feedback', label: '피드백 및 결정', type: 'longtext', filterable: 'input' },
+    { key: 'note', label: '느낀 점 및 수행해야 할 사항', type: 'longtext', filterable: 'input' },
+    { key: 'ref', label: '레퍼런스', type: 'longtext', filterable: 'input' }
+  ];
+
+  function loadJnlColumns() {
+    try {
+      var cols = JSON.parse(localStorage.getItem(JNL_COLS_KEY));
+      return (cols && cols.length > 0) ? cols : DEFAULT_JNL_COLUMNS.map(function (c) { return JSON.parse(JSON.stringify(c)); });
+    } catch (e) { return DEFAULT_JNL_COLUMNS.map(function (c) { return JSON.parse(JSON.stringify(c)); }); }
+  }
+
+  function saveJnlColumns(cols) {
+    localStorage.setItem(JNL_COLS_KEY, JSON.stringify(cols));
+  }
+
   function getNextJnlNumber() {
     var items = load(JNL_KEY);
+    var cols = loadJnlColumns();
+    // 첫 번째 칼럼을 자동 번호로 사용
+    var firstKey = cols[0] ? cols[0].key : 'category';
     var maxNum = 0;
     items.forEach(function (e) {
-      var n = parseInt(e.category, 10);
+      var n = parseInt(e[firstKey], 10);
       if (!isNaN(n) && n > maxNum) maxNum = n;
     });
     return maxNum + 1;
@@ -3542,20 +3568,21 @@
 
   function clearJnlForm() {
     currentJnlEditId = null;
-    $('#jnl-category').value = getNextJnlNumber();
-    $('#jnl-item').value = '';
-    $('#jnl-subitem').value = '';
-    $('#jnl-date').value = new Date().toISOString().slice(0, 10);
-    $('#jnl-feedback').value = '';
-    $('#jnl-note').value = '';
-    $('#jnl-ref').value = '';
+    var cols = loadJnlColumns();
+    cols.forEach(function (col) {
+      var el = $('#jnl-' + col.key);
+      if (!el) return;
+      if (col.key === cols[0].key) el.value = getNextJnlNumber();
+      else if (col.type === 'date') el.value = new Date().toISOString().slice(0, 10);
+      else el.value = '';
+    });
     $('#jnl-form-title-label').textContent = '새 항목 추가';
     jnlAttachments = [];
     renderJnlAttachList();
   }
 
   function getJnlData() {
-    // Save attachments to separate storage keyed by file ID
+    var cols = loadJnlColumns();
     var fileStore = loadJnlFiles();
     var attachIds = jnlAttachments.map(function (f) {
       fileStore[f.id] = { name: f.name, size: f.size, type: f.type, dataUrl: f.dataUrl };
@@ -3563,33 +3590,28 @@
     });
     saveJnlFiles(fileStore);
 
-    return {
+    var data = {
       id: currentJnlEditId || uid(),
-      category: $('#jnl-category').value.trim(),
-      item: $('#jnl-item').value.trim(),
-      subitem: $('#jnl-subitem').value.trim(),
-      date: $('#jnl-date').value,
-      feedback: $('#jnl-feedback').value.trim(),
-      note: $('#jnl-note').value.trim(),
-      ref: $('#jnl-ref').value.trim(),
       attachments: attachIds,
       createdAt: new Date().toISOString()
     };
+    cols.forEach(function (col) {
+      var el = $('#jnl-' + col.key);
+      data[col.key] = el ? el.value.trim() : '';
+    });
+    return data;
   }
 
   function loadJnlToForm(entry) {
+    var cols = loadJnlColumns();
     currentJnlEditId = entry.id;
     showJnlForm();
-    $('#jnl-category').value = entry.category || '';
-    $('#jnl-item').value = entry.item || '';
-    $('#jnl-subitem').value = entry.subitem || '';
-    $('#jnl-date').value = entry.date || '';
-    $('#jnl-feedback').value = entry.feedback || '';
-    $('#jnl-note').value = entry.note || '';
-    $('#jnl-ref').value = entry.ref || '';
+    cols.forEach(function (col) {
+      var el = $('#jnl-' + col.key);
+      if (el) el.value = entry[col.key] || '';
+    });
     $('#jnl-form-title-label').textContent = '항목 수정';
 
-    // Restore attachments
     jnlAttachments = [];
     if (entry.attachments && entry.attachments.length > 0) {
       var fileStore = loadJnlFiles();
@@ -3605,9 +3627,11 @@
 
   function getJnlCategories() {
     var items = load(JNL_KEY);
+    var cols = loadJnlColumns();
+    var firstKey = cols[0] ? cols[0].key : 'category';
     var cats = {};
     items.forEach(function (e) {
-      if (e.category) cats[e.category] = true;
+      if (e[firstKey]) cats[e[firstKey]] = true;
     });
     return Object.keys(cats).sort(function (a, b) {
       return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
@@ -3616,17 +3640,19 @@
 
   function populateJnlCategoryFilter() {
     var sel = $('#jnl-filter-category');
+    var cols = loadJnlColumns();
+    var firstLabel = cols[0] ? cols[0].label : '구분';
     var cats = getJnlCategories();
     var current = sel.value;
-    var html = '<option value="">전체 구분</option>';
+    var html = '<option value="">전체 ' + escapeHtml(firstLabel) + '</option>';
     cats.forEach(function (c) {
       html += '<option value="' + escapeHtml(c) + '"' + (c === current ? ' selected' : '') + '>' + escapeHtml(c) + '</option>';
     });
     sel.innerHTML = html;
   }
 
-  // 칼럼 필터 상태
-  var jnlColFilters = { category: '', item: '', subitem: '', date: '', feedback: '', note: '', ref: '' };
+  // 칼럼 필터 상태 (동적)
+  var jnlColFilters = {};
 
   function naturalSort(a, b) {
     return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
@@ -3634,83 +3660,140 @@
 
   function populateJnlColFilters() {
     var items = load(JNL_KEY);
-    var fields = ['category', 'item', 'subitem'];
-    fields.forEach(function (field) {
-      var vals = {};
-      items.forEach(function (e) { if (e[field]) vals[e[field]] = true; });
-      var sel = document.querySelector('.jnl-col-filter[data-field="' + field + '"]');
-      if (!sel) return;
-      var current = sel.value;
-      var html = '<option value="">전체</option>';
-      Object.keys(vals).sort(naturalSort).forEach(function (v) {
-        html += '<option value="' + escapeHtml(v) + '"' + (v === current ? ' selected' : '') + '>' + escapeHtml(v) + '</option>';
-      });
-      sel.innerHTML = html;
+    var cols = loadJnlColumns();
+    cols.forEach(function (col) {
+      if (col.filterable === 'select') {
+        var vals = {};
+        items.forEach(function (e) { if (e[col.key]) vals[e[col.key]] = true; });
+        var sel = document.querySelector('.jnl-col-filter[data-field="' + col.key + '"]');
+        if (!sel) return;
+        var current = sel.value;
+        var html = '<option value="">전체</option>';
+        Object.keys(vals).sort(naturalSort).forEach(function (v) {
+          html += '<option value="' + escapeHtml(v) + '"' + (v === current ? ' selected' : '') + '>' + escapeHtml(v) + '</option>';
+        });
+        sel.innerHTML = html;
+      }
     });
   }
 
   function getFilteredJnlItems() {
     var items = load(JNL_KEY);
+    var cols = loadJnlColumns();
     var search = ($('#jnl-search').value || '').toLowerCase();
+    var firstKey = cols[0] ? cols[0].key : 'category';
     var filterCat = $('#jnl-filter-category').value;
 
     if (filterCat) {
-      items = items.filter(function (e) { return e.category === filterCat; });
+      items = items.filter(function (e) { return e[firstKey] === filterCat; });
     }
 
-    ['category', 'item', 'subitem'].forEach(function (field) {
-      if (jnlColFilters[field]) {
-        items = items.filter(function (e) { return (e[field] || '') === jnlColFilters[field]; });
-      }
-    });
-    ['date', 'feedback', 'note', 'ref'].forEach(function (field) {
-      if (jnlColFilters[field]) {
-        var kw = jnlColFilters[field].toLowerCase();
+    // 칼럼별 필터 적용
+    cols.forEach(function (col) {
+      if (!jnlColFilters[col.key]) return;
+      if (col.filterable === 'select') {
+        items = items.filter(function (e) { return (e[col.key] || '') === jnlColFilters[col.key]; });
+      } else if (col.filterable === 'input') {
+        var kw = jnlColFilters[col.key].toLowerCase();
         items = items.filter(function (e) {
-          var val = field === 'date' ? formatJnlDate(e[field]) : (e[field] || '');
-          return val.toLowerCase().includes(kw);
+          var val = col.type === 'date' ? formatJnlDate(e[col.key]) : (e[col.key] || '');
+          return val.toLowerCase().indexOf(kw) !== -1;
         });
       }
     });
 
     if (search) {
       items = items.filter(function (e) {
-        return (e.category || '').toLowerCase().includes(search) ||
-          (e.item || '').toLowerCase().includes(search) ||
-          (e.subitem || '').toLowerCase().includes(search) ||
-          (e.feedback || '').toLowerCase().includes(search) ||
-          (e.note || '').toLowerCase().includes(search) ||
-          (e.ref || '').toLowerCase().includes(search);
+        return cols.some(function (col) {
+          return (e[col.key] || '').toLowerCase().indexOf(search) !== -1;
+        });
       });
     }
 
-    // 구분(숫자) 내림차순 정렬
+    // 첫 번째 칼럼(숫자) 내림차순 정렬
     items.sort(function (a, b) {
-      var na = parseInt(a.category, 10);
-      var nb = parseInt(b.category, 10);
+      var na = parseInt(a[firstKey], 10);
+      var nb = parseInt(b[firstKey], 10);
       var aIsNum = !isNaN(na);
       var bIsNum = !isNaN(nb);
-      if (aIsNum && bIsNum) return nb - na; // 숫자 내림차순
+      if (aIsNum && bIsNum) return nb - na;
       if (aIsNum) return -1;
       if (bIsNum) return 1;
-      return (b.category || '').localeCompare(a.category || '', 'ko');
+      return (b[firstKey] || '').localeCompare(a[firstKey] || '', 'ko');
     });
 
     return items;
   }
 
+  // 동적 thead 렌더링 (칼럼 헤더 + 필터 행)
+  function renderJnlHeader() {
+    var cols = loadJnlColumns();
+    var thead = $('#jnl-thead');
+    // 헤더 행
+    var headerHtml = '<tr class="jnl-header-row">';
+    cols.forEach(function (col) {
+      headerHtml += '<th>' + escapeHtml(col.label) + '</th>';
+    });
+    headerHtml += '<th style="width:80px">작업</th></tr>';
+    // 필터 행
+    var filterHtml = '<tr class="jnl-filter-header">';
+    cols.forEach(function (col) {
+      if (col.filterable === 'select') {
+        filterHtml += '<th><select class="jnl-col-filter" data-field="' + col.key + '"><option value="">전체</option></select></th>';
+      } else if (col.filterable === 'input') {
+        filterHtml += '<th><input class="jnl-col-filter-input" data-field="' + col.key + '" placeholder="검색..." type="text"></th>';
+      } else {
+        filterHtml += '<th></th>';
+      }
+    });
+    filterHtml += '<th></th></tr>';
+    thead.innerHTML = headerHtml + filterHtml;
+
+    // 필터 이벤트 바인딩
+    thead.querySelectorAll('.jnl-col-filter').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        jnlColFilters[sel.dataset.field] = sel.value;
+        renderJnlTable();
+      });
+    });
+    thead.querySelectorAll('.jnl-col-filter-input').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        jnlColFilters[inp.dataset.field] = inp.value.trim();
+        renderJnlTable();
+      });
+    });
+
+    // 기존 필터 값 복원
+    Object.keys(jnlColFilters).forEach(function (key) {
+      if (!jnlColFilters[key]) return;
+      var el = thead.querySelector('[data-field="' + key + '"]');
+      if (el) el.value = jnlColFilters[key];
+    });
+  }
+
+  function renderJnlCellContent(col, entry, isFirst) {
+    var val = entry[col.key] || '';
+    if (isFirst) return '<span class="jnl-category-badge">' + escapeHtml(val || '-') + '</span>';
+    if (col.type === 'date') return escapeHtml(formatJnlDate(val));
+    if (col.type === 'longtext') return '<div class="jnl-cell-text">' + escapeHtml(val) + '</div>';
+    return escapeHtml(val);
+  }
+
   function renderJnlTable() {
+    var cols = loadJnlColumns();
     var items = getFilteredJnlItems();
     var tbody = $('#jnl-tbody');
+    var colCount = cols.length + 1; // +1 for actions column
 
     if (items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" class="jnl-empty">' +
+      tbody.innerHTML = '<tr><td colspan="' + colCount + '" class="jnl-empty">' +
         (load(JNL_KEY).length === 0 ? '업무일지 항목이 없습니다. 새 항목을 추가하거나 Excel/CSV 파일을 업로드하세요.' : '검색 결과가 없습니다.') +
         '</td></tr>';
       return;
     }
 
     var fileStore = loadJnlFiles();
+    var firstKey = cols[0] ? cols[0].key : '';
     tbody.innerHTML = items.map(function (e) {
       var attachHtml = '';
       if (e.attachments && e.attachments.length > 0) {
@@ -3723,14 +3806,19 @@
           }).join('') +
         '</div>';
       }
-      return '<tr data-id="' + e.id + '">' +
-        '<td class="jnl-editable" data-field="category"><span class="jnl-category-badge">' + escapeHtml(e.category || '-') + '</span></td>' +
-        '<td class="jnl-editable" data-field="item">' + escapeHtml(e.item || '') + '</td>' +
-        '<td class="jnl-editable" data-field="subitem">' + escapeHtml(e.subitem || '') + '</td>' +
-        '<td class="jnl-editable" data-field="date" data-raw="' + escapeHtml(e.date || '') + '">' + escapeHtml(formatJnlDate(e.date)) + '</td>' +
-        '<td class="jnl-editable" data-field="feedback"><div class="jnl-cell-text">' + escapeHtml(e.feedback || '') + '</div></td>' +
-        '<td class="jnl-editable" data-field="note"><div class="jnl-cell-text">' + escapeHtml(e.note || '') + '</div></td>' +
-        '<td class="jnl-editable" data-field="ref"><div class="jnl-cell-ref">' + escapeHtml(e.ref || '') + '</div>' + attachHtml + '</td>' +
+      var cells = cols.map(function (col, idx) {
+        var val = e[col.key] || '';
+        var extra = '';
+        if (col.type === 'date') extra = ' data-raw="' + escapeHtml(val) + '"';
+        var isFirst = (idx === 0);
+        // 마지막 칼럼에 첨부파일 표시
+        if (idx === cols.length - 1) {
+          var content = renderJnlCellContent(col, e, isFirst);
+          return '<td class="jnl-editable" data-field="' + col.key + '"' + extra + '>' + content + attachHtml + '</td>';
+        }
+        return '<td class="jnl-editable" data-field="' + col.key + '"' + extra + '>' + renderJnlCellContent(col, e, isFirst) + '</td>';
+      }).join('');
+      return '<tr data-id="' + e.id + '">' + cells +
         '<td class="jnl-td-actions">' +
           '<button class="btn btn-small btn-accent jnl-ai-row-btn" data-action="ai-row" title="AI 도우미">🤖</button>' +
           '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
@@ -3741,20 +3829,18 @@
 
   // -- Event listeners --
   $('#jnl-new').addEventListener('click', function () {
-    // 새 항목: 구분에 자동 번호 부여하고 바로 테이블에 추가
+    var cols = loadJnlColumns();
     var items = load(JNL_KEY);
     var newEntry = {
       id: uid(),
-      category: String(getNextJnlNumber()),
-      item: '',
-      subitem: '',
-      date: new Date().toISOString().slice(0, 10),
-      feedback: '',
-      note: '',
-      ref: '',
       attachments: [],
       createdAt: new Date().toISOString()
     };
+    cols.forEach(function (col, idx) {
+      if (idx === 0) newEntry[col.key] = String(getNextJnlNumber());
+      else if (col.type === 'date') newEntry[col.key] = new Date().toISOString().slice(0, 10);
+      else newEntry[col.key] = '';
+    });
     items.unshift(newEntry);
     save(JNL_KEY, items);
     renderJnlTable();
@@ -3774,8 +3860,10 @@
 
   $('#jnl-save').addEventListener('click', function () {
     var data = getJnlData();
-    if (!data.category && !data.item && !data.subitem) {
-      toast('구분, 항목, 세부 항목 중 하나 이상 입력해주세요');
+    var cols = loadJnlColumns();
+    var hasValue = cols.some(function (col) { return !!data[col.key]; });
+    if (!hasValue) {
+      toast('하나 이상의 값을 입력해주세요');
       return;
     }
     var items = load(JNL_KEY);
@@ -3795,31 +3883,16 @@
   $('#jnl-search').addEventListener('input', function () { renderJnlTable(); });
   $('#jnl-filter-category').addEventListener('change', function () { renderJnlTable(); });
 
-  // 칼럼 필터 이벤트
-  document.querySelectorAll('.jnl-col-filter').forEach(function (sel) {
-    sel.addEventListener('change', function () {
-      jnlColFilters[sel.dataset.field] = sel.value;
-      renderJnlTable();
-    });
-  });
-  document.querySelectorAll('.jnl-col-filter-input').forEach(function (inp) {
-    inp.addEventListener('input', function () {
-      jnlColFilters[inp.dataset.field] = inp.value.trim();
-      renderJnlTable();
-    });
-  });
-
   // 인라인 편집 상태: { id, field } 또는 null
   var jnlEditing = null;
   var jnlSaving = false;
 
-  function renderJnlCellContent(field, entry) {
-    var val = entry[field] || '';
-    if (field === 'category') return '<span class="jnl-category-badge">' + escapeHtml(val || '-') + '</span>';
-    if (field === 'date') return escapeHtml(formatJnlDate(val));
-    if (field === 'feedback' || field === 'note') return '<div class="jnl-cell-text">' + escapeHtml(val) + '</div>';
-    if (field === 'ref') return '<div class="jnl-cell-ref">' + escapeHtml(val) + '</div>';
-    return escapeHtml(val);
+  function renderJnlCellContentByField(field, entry) {
+    var cols = loadJnlColumns();
+    var col = cols.find(function (c) { return c.key === field; });
+    if (!col) return escapeHtml(entry[field] || '');
+    var isFirst = cols[0] && cols[0].key === field;
+    return renderJnlCellContent(col, entry, isFirst);
   }
 
   function commitJnlEdit(skipRender) {
@@ -3849,13 +3922,16 @@
         populateJnlColFilters();
       }
       // 셀 내용만 교체 (전체 테이블 리렌더 안 함)
-      td.innerHTML = renderJnlCellContent(editField, entry);
-      if (editField === 'date') td.dataset.raw = newVal;
+      td.innerHTML = renderJnlCellContentByField(editField, entry);
+      var cols = loadJnlColumns();
+      var col = cols.find(function (c) { return c.key === editField; });
+      if (col && col.type === 'date') td.dataset.raw = newVal;
     }
 
     jnlSaving = false;
-    // 구분 변경 시 정렬이 바뀔 수 있으므로 전체 리렌더
-    if (!skipRender && editField === 'category') {
+    // 첫 번째 칼럼 변경 시 정렬이 바뀔 수 있으므로 전체 리렌더
+    var cols2 = loadJnlColumns();
+    if (!skipRender && cols2[0] && editField === cols2[0].key) {
       renderJnlTable();
     }
   }
@@ -3865,13 +3941,16 @@
     var entry = items.find(function (i) { return i.id === id; });
     if (!entry) return;
 
+    var cols = loadJnlColumns();
+    var col = cols.find(function (c) { return c.key === field; });
+
     jnlEditing = { id: id, field: field };
     td.classList.add('jnl-editing');
     var currentVal = entry[field] || '';
 
-    if (field === 'date') {
+    if (col && col.type === 'date') {
       td.innerHTML = '<input type="date" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">';
-    } else if (field === 'feedback' || field === 'note' || field === 'ref') {
+    } else if (col && col.type === 'longtext') {
       td.innerHTML = '<textarea class="jnl-cell-textarea" rows="3">' + escapeHtml(currentVal) + '</textarea>';
     } else {
       td.innerHTML = '<input type="text" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">';
@@ -3888,8 +3967,8 @@
       } else if (ev.key === 'Escape') {
         jnlEditing = null;
         td.classList.remove('jnl-editing');
-        td.innerHTML = renderJnlCellContent(field, entry);
-        if (field === 'date') td.dataset.raw = currentVal;
+        td.innerHTML = renderJnlCellContentByField(field, entry);
+        if (col && col.type === 'date') td.dataset.raw = currentVal;
       } else if (ev.key === 'Tab') {
         ev.preventDefault();
         commitJnlEdit(true);
@@ -4024,54 +4103,44 @@
     toast(f.name + ' 다운로드');
   }
 
-  // -- Excel Export --
+  // -- Excel Export (동적 칼럼) --
   $('#jnl-export-excel').addEventListener('click', function () {
     var items = load(JNL_KEY);
     if (items.length === 0) { toast('내보낼 데이터가 없습니다'); return; }
+    var cols = loadJnlColumns();
     var fileStore = loadJnlFiles();
-    var sheetData = [['구분', '항목', '세부 항목', '날짜', '피드백 및 결정', '느낀 점 및 수행해야 할 사항', '레퍼런스', '첨부파일']];
+    var headers = cols.map(function (c) { return c.label; });
+    headers.push('첨부파일');
+    var sheetData = [headers];
     items.forEach(function (e) {
       var attachNames = (e.attachments || []).map(function (fid) {
         var f = fileStore[fid];
         return f ? f.name : '';
       }).filter(Boolean).join(', ');
-      sheetData.push([
-        e.category || '',
-        e.item || '',
-        e.subitem || '',
-        e.date || '',
-        e.feedback || '',
-        e.note || '',
-        e.ref || '',
-        attachNames
-      ]);
+      var row = cols.map(function (c) { return e[c.key] || ''; });
+      row.push(attachNames);
+      sheetData.push(row);
     });
     exportAsExcel('업무일지_전략기획팀', sheetData);
   });
 
-  // -- CSV Export --
+  // -- CSV Export (동적 칼럼) --
   $('#jnl-export-csv').addEventListener('click', function () {
     var items = load(JNL_KEY);
     if (items.length === 0) { toast('내보낼 데이터가 없습니다'); return; }
+    var cols = loadJnlColumns();
     var fileStore = loadJnlFiles();
-    var headers = ['구분', '항목', '세부 항목', '날짜', '피드백 및 결정', '느낀 점 및 수행해야 할 사항', '레퍼런스', '첨부파일'];
+    var headers = cols.map(function (c) { return c.label; });
+    headers.push('첨부파일');
     var rows = [headers.join(',')];
     items.forEach(function (e) {
       var attachNames = (e.attachments || []).map(function (fid) {
         var f = fileStore[fid];
         return f ? f.name : '';
       }).filter(Boolean).join('; ');
-      var row = [
-        e.category || '',
-        e.item || '',
-        e.subitem || '',
-        e.date || '',
-        e.feedback || '',
-        e.note || '',
-        e.ref || '',
-        attachNames
-      ].map(function (cell) {
-        // CSV escape: wrap in quotes if contains comma, quote, or newline
+      var row = cols.map(function (c) { return e[c.key] || ''; });
+      row.push(attachNames);
+      row = row.map(function (cell) {
         if (cell.indexOf(',') !== -1 || cell.indexOf('"') !== -1 || cell.indexOf('\n') !== -1) {
           return '"' + cell.replace(/"/g, '""') + '"';
         }
@@ -4079,7 +4148,7 @@
       });
       rows.push(row.join(','));
     });
-    var csvContent = '\uFEFF' + rows.join('\r\n'); // BOM for Korean encoding
+    var csvContent = '\uFEFF' + rows.join('\r\n');
     var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     var link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -4124,32 +4193,36 @@
           return;
         }
 
-        // Try to find header row
+        // 동적 칼럼 기반 임포트
+        var cols = loadJnlColumns();
         var headerRow = rows[0].map(function (h) { return (h || '').toString().trim(); });
         var colMap = {};
-        var knownHeaders = {
-          '구분': 'category',
-          '항목': 'item',
-          '세부 항목': 'subitem',
-          '세부항목': 'subitem',
-          '날짜': 'date',
-          '피드백 및 결정': 'feedback',
-          '피드백': 'feedback',
-          '느낀 점 및 수행해야 할 사항': 'note',
-          '느낀 점': 'note',
-          '수행해야 할 사항': 'note',
-          '레퍼런스': 'ref',
-          '참고': 'ref'
-        };
 
-        headerRow.forEach(function (h, i) {
-          if (knownHeaders[h]) colMap[knownHeaders[h]] = i;
+        // 현재 칼럼의 label로 매핑 시도
+        cols.forEach(function (col) {
+          headerRow.forEach(function (h, i) {
+            if (h === col.label || h === col.key) colMap[col.key] = i;
+          });
         });
 
-        // Fallback: if no known headers found, use positional mapping
+        // 기존 한글 헤더 호환
+        var knownAliases = {
+          '세부항목': 'subitem', '피드백': 'feedback', '느낀 점': 'note',
+          '수행해야 할 사항': 'note', '참고': 'ref'
+        };
+        headerRow.forEach(function (h, i) {
+          if (knownAliases[h]) {
+            var key = knownAliases[h];
+            if (colMap[key] === undefined) colMap[key] = i;
+          }
+        });
+
+        // Fallback: 위치 기반 매핑
         var useFallback = Object.keys(colMap).length === 0;
         if (useFallback) {
-          colMap = { category: 0, item: 1, subitem: 2, date: 3, feedback: 4, note: 5, ref: 6 };
+          cols.forEach(function (col, idx) {
+            colMap[col.key] = idx;
+          });
         }
 
         var startRow = useFallback ? 0 : 1;
@@ -4159,23 +4232,23 @@
         for (var r = startRow; r < rows.length; r++) {
           var row = rows[r];
           if (!row || row.length === 0) continue;
-          // Skip entirely empty rows
           var hasData = row.some(function (cell) { return cell !== undefined && cell !== null && cell.toString().trim() !== ''; });
           if (!hasData) continue;
 
-          var entry = {
-            id: uid(),
-            category: (row[colMap.category] || '').toString().trim(),
-            item: (row[colMap.item] || '').toString().trim(),
-            subitem: colMap.subitem !== undefined ? (row[colMap.subitem] || '').toString().trim() : '',
-            date: colMap.date !== undefined ? formatExcelDate(row[colMap.date]) : '',
-            feedback: colMap.feedback !== undefined ? (row[colMap.feedback] || '').toString().trim() : '',
-            note: colMap.note !== undefined ? (row[colMap.note] || '').toString().trim() : '',
-            ref: colMap.ref !== undefined ? (row[colMap.ref] || '').toString().trim() : '',
-            createdAt: new Date().toISOString()
-          };
+          var entry = { id: uid(), createdAt: new Date().toISOString() };
+          cols.forEach(function (col) {
+            var idx = colMap[col.key];
+            var rawVal = idx !== undefined ? row[idx] : undefined;
+            if (col.type === 'date') {
+              entry[col.key] = rawVal !== undefined ? formatExcelDate(rawVal) : '';
+            } else {
+              entry[col.key] = rawVal !== undefined ? (rawVal || '').toString().trim() : '';
+            }
+          });
 
-          if (entry.category || entry.item || entry.subitem) {
+          // 최소 하나의 값이 있는 경우에만 추가
+          var hasValue = cols.some(function (col) { return !!entry[col.key]; });
+          if (hasValue) {
             items.push(entry);
             importCount++;
           }
@@ -4258,14 +4331,14 @@
   }
 
   function jnlEntryToText(e) {
+    var cols = loadJnlColumns();
     var parts = [];
-    if (e.category) parts.push('구분: ' + e.category);
-    if (e.item) parts.push('항목: ' + e.item);
-    if (e.subitem) parts.push('세부 항목: ' + e.subitem);
-    if (e.date) parts.push('날짜: ' + formatJnlDate(e.date));
-    if (e.feedback) parts.push('피드백 및 결정: ' + e.feedback);
-    if (e.note) parts.push('느낀 점 및 수행 사항: ' + e.note);
-    if (e.ref) parts.push('레퍼런스: ' + e.ref);
+    cols.forEach(function (col) {
+      var val = e[col.key];
+      if (!val) return;
+      if (col.type === 'date') val = formatJnlDate(val);
+      parts.push(col.label + ': ' + val);
+    });
     return parts.join('\n');
   }
 
@@ -4344,18 +4417,22 @@
       var userMsg = '';
 
       if (action === 'fill') {
+        var fillCols = loadJnlColumns();
         var emptyFields = [];
-        if (!entry.item) emptyFields.push('항목');
-        if (!entry.subitem) emptyFields.push('세부 항목');
-        if (!entry.feedback) emptyFields.push('피드백 및 결정');
-        if (!entry.note) emptyFields.push('느낀 점 및 수행해야 할 사항');
-        if (!entry.ref) emptyFields.push('레퍼런스');
+        var jsonExample = {};
+        fillCols.forEach(function (col, idx) {
+          if (idx === 0) return; // 첫 번째 칼럼(번호)은 건너뜀
+          if (!entry[col.key]) {
+            emptyFields.push(col.label);
+            jsonExample[col.key] = '...';
+          }
+        });
         if (emptyFields.length === 0) { toast('채울 빈 칸이 없습니다'); return; }
         userMsg = '아래 업무일지 항목의 비어있는 필드를 채워주세요.\n\n현재 항목:\n' + entryText +
           '\n\n비어있는 필드: ' + emptyFields.join(', ') +
           '\n\n다른 항목 참고:\n' + contextText +
           '\n\n반드시 아래 JSON 형식으로만 응답하세요 (비어있는 필드만 포함):\n' +
-          '{"item": "...", "subitem": "...", "feedback": "...", "note": "...", "ref": "..."}';
+          JSON.stringify(jsonExample);
       } else if (action === 'feedback') {
         userMsg = '아래 업무 항목에 대한 피드백과 결정 사항을 작성해주세요.\n\n' + entryText +
           '\n\n참고 항목:\n' + contextText +
@@ -4384,8 +4461,10 @@
             var target = reloadItems.find(function (i) { return i.id === id; });
             if (target) {
               var changed = false;
-              ['item', 'subitem', 'feedback', 'note', 'ref'].forEach(function (f) {
-                if (result[f] && !target[f]) { target[f] = result[f]; changed = true; }
+              var fillCols2 = loadJnlColumns();
+              fillCols2.forEach(function (col, idx) {
+                if (idx === 0) return;
+                if (result[col.key] && !target[col.key]) { target[col.key] = result[col.key]; changed = true; }
               });
               if (changed) {
                 save(JNL_KEY, reloadItems);
@@ -4401,11 +4480,14 @@
             showJnlAiPanel('AI 자동 채우기 결과', formatAiResponse(text));
           }
         } else if (action === 'feedback') {
-          // 피드백 셀에 직접 적용
           var reloadItems = load(JNL_KEY);
           var target = reloadItems.find(function (i) { return i.id === id; });
           if (target) {
-            target.feedback = text.trim();
+            // 'feedback' 키 또는 첫 번째 longtext 칼럼에 적용
+            var fbCols = loadJnlColumns();
+            var fbKey = fbCols.find(function (c) { return c.key === 'feedback'; }) ? 'feedback'
+              : (fbCols.filter(function (c) { return c.type === 'longtext'; })[0] || {}).key;
+            if (fbKey) { target[fbKey] = text.trim(); }
             save(JNL_KEY, reloadItems);
             renderJnlTable();
             toast('피드백이 생성되었습니다');
@@ -4414,13 +4496,18 @@
           var reloadItems = load(JNL_KEY);
           var target = reloadItems.find(function (i) { return i.id === id; });
           if (target) {
-            target.note = text.trim();
+            var actCols = loadJnlColumns();
+            var actKey = actCols.find(function (c) { return c.key === 'note'; }) ? 'note'
+              : (actCols.filter(function (c) { return c.type === 'longtext'; })[1] || actCols.filter(function (c) { return c.type === 'longtext'; })[0] || {}).key;
+            if (actKey) { target[actKey] = text.trim(); }
             save(JNL_KEY, reloadItems);
             renderJnlTable();
             toast('수행 사항이 생성되었습니다');
           }
         } else {
-          showJnlAiPanel('AI 개선 제안 — ' + (entry.item || entry.category || ''), formatAiResponse(text));
+          var improveCols = loadJnlColumns();
+          var nameKey = improveCols[1] ? improveCols[1].key : (improveCols[0] ? improveCols[0].key : '');
+          showJnlAiPanel('AI 개선 제안 — ' + (entry[nameKey] || entry[improveCols[0].key] || ''), formatAiResponse(text));
         }
       }).catch(function (err) {
         toast('AI 오류: ' + err.message);
@@ -4499,6 +4586,132 @@
     });
   });
 
+  // ══════════════════════════════════════
+  // 10. 칼럼 관리 패널 UI
+  // ══════════════════════════════════════
+
+  function renderJnlColList() {
+    var cols = loadJnlColumns();
+    var list = $('#jnl-col-list');
+    list.innerHTML = cols.map(function (col, idx) {
+      var typeLabels = { text: '텍스트', longtext: '긴 텍스트', date: '날짜', select: '선택형' };
+      return '<div class="jnl-col-item" data-idx="' + idx + '" draggable="true">' +
+        '<span class="jnl-col-drag" title="드래그하여 순서 변경">⠿</span>' +
+        '<div class="jnl-col-label"><input type="text" value="' + escapeHtml(col.label) + '" data-col-idx="' + idx + '" class="jnl-col-rename"></div>' +
+        '<span class="jnl-col-type">' + (typeLabels[col.type] || col.type) + '</span>' +
+        '<button class="jnl-col-del" data-col-idx="' + idx + '" title="삭제">✕</button>' +
+      '</div>';
+    }).join('');
+
+    // 이름 변경 이벤트
+    list.querySelectorAll('.jnl-col-rename').forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        var idx = parseInt(inp.dataset.colIdx, 10);
+        var cols = loadJnlColumns();
+        var newLabel = inp.value.trim();
+        if (!newLabel) { inp.value = cols[idx].label; return; }
+        cols[idx].label = newLabel;
+        saveJnlColumns(cols);
+        refreshJnlView();
+      });
+    });
+
+    // 삭제 이벤트
+    list.querySelectorAll('.jnl-col-del').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = parseInt(btn.dataset.colIdx, 10);
+        var cols = loadJnlColumns();
+        if (cols.length <= 1) { toast('최소 1개의 칼럼이 필요합니다'); return; }
+        cols.splice(idx, 1);
+        saveJnlColumns(cols);
+        renderJnlColList();
+        refreshJnlView();
+      });
+    });
+
+    // 드래그 앤 드롭 순서 변경
+    var dragIdx = null;
+    list.querySelectorAll('.jnl-col-item').forEach(function (item) {
+      item.addEventListener('dragstart', function (e) {
+        dragIdx = parseInt(item.dataset.idx, 10);
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      item.addEventListener('dragend', function () {
+        item.classList.remove('dragging');
+        list.querySelectorAll('.jnl-col-item').forEach(function (el) { el.classList.remove('drag-over'); });
+        dragIdx = null;
+      });
+      item.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        list.querySelectorAll('.jnl-col-item').forEach(function (el) { el.classList.remove('drag-over'); });
+        item.classList.add('drag-over');
+      });
+      item.addEventListener('drop', function (e) {
+        e.preventDefault();
+        var dropIdx = parseInt(item.dataset.idx, 10);
+        if (dragIdx === null || dragIdx === dropIdx) return;
+        var cols = loadJnlColumns();
+        var moved = cols.splice(dragIdx, 1)[0];
+        cols.splice(dropIdx, 0, moved);
+        saveJnlColumns(cols);
+        renderJnlColList();
+        refreshJnlView();
+      });
+    });
+  }
+
+  function refreshJnlView() {
+    renderJnlHeader();
+    populateJnlCategoryFilter();
+    populateJnlColFilters();
+    renderJnlTable();
+  }
+
+  // 칼럼 관리 패널 열기/닫기
+  $('#jnl-col-manage').addEventListener('click', function () {
+    var panel = $('#jnl-col-panel');
+    var visible = panel.style.display !== 'none';
+    panel.style.display = visible ? 'none' : '';
+    if (!visible) renderJnlColList();
+  });
+
+  $('#jnl-col-panel-close').addEventListener('click', function () {
+    $('#jnl-col-panel').style.display = 'none';
+  });
+
+  // 새 칼럼 추가
+  $('#jnl-col-add').addEventListener('click', function () {
+    var labelInput = $('#jnl-col-new-label');
+    var typeSelect = $('#jnl-col-new-type');
+    var label = labelInput.value.trim();
+    if (!label) { toast('칼럼 이름을 입력해주세요'); return; }
+
+    var cols = loadJnlColumns();
+    // key 생성: label을 간단한 영문 키로 변환
+    var key = 'col_' + Date.now();
+    var type = typeSelect.value;
+    var filterable = (type === 'text' || type === 'select') ? 'select' : 'input';
+
+    cols.push({ key: key, label: label, type: type, filterable: filterable });
+    saveJnlColumns(cols);
+
+    labelInput.value = '';
+    renderJnlColList();
+    refreshJnlView();
+    toast('"' + label + '" 칼럼이 추가되었습니다');
+  });
+
+  // 기본값 복원
+  $('#jnl-col-reset').addEventListener('click', function () {
+    if (!confirm('칼럼 설정을 기본값으로 복원하시겠습니까?')) return;
+    localStorage.removeItem(JNL_COLS_KEY);
+    renderJnlColList();
+    refreshJnlView();
+    toast('칼럼이 기본값으로 복원되었습니다');
+  });
+
   // ── Init ──
   function init() {
     renderContextList();
@@ -4507,6 +4720,7 @@
     renderAgendaList();
     renderProposalList();
     populateFolderFilter();
+    renderJnlHeader();
     renderJnlTable();
     populateJnlCategoryFilter();
     populateJnlColFilters();
