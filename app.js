@@ -581,10 +581,11 @@
 
   function populateFolderFilter() {
     var sel = $('#mtg-folder-filter');
+    var current = sel.value;
     var folders = getMeetingFolders();
     var html = '<option value="">전체 회의</option>';
     Object.keys(folders).sort().forEach(function (f) {
-      html += '<option value="' + escapeHtml(f) + '">' + escapeHtml(f) + ' (' + folders[f] + ')</option>';
+      html += '<option value="' + escapeHtml(f) + '"' + (f === current ? ' selected' : '') + '>' + escapeHtml(f) + ' (' + folders[f] + ')</option>';
     });
     sel.innerHTML = html;
   }
@@ -1012,7 +1013,8 @@
       });
 
       save(MTG_KEY, meetings);
-      renderMeetingList();
+      populateFolderFilter();
+      renderMeetingList($('#mtg-folder-filter').value);
       toast('AI 분류가 완료되었습니다!');
     })
     .catch(function (err) {
