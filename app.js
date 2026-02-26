@@ -982,6 +982,8 @@
     container.addEventListener('dragstart', function (e) {
       var item = e.target.closest('.prop-field-item');
       if (!item) return;
+      // 표 셀 내부에서 시작된 드래그는 무시 (셀 다중 선택과 충돌 방지)
+      if (e.target.closest('.re-table')) { e.preventDefault(); return; }
       dragEl = item;
       item.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
@@ -1510,6 +1512,7 @@
 
   function initTableCellSelection(editor) {
     var selecting = false;
+    var disabledDraggable = null; // 임시 비활성화한 draggable 요소
 
     editor.addEventListener('mousedown', function (e) {
       var cell = e.target.closest('td, th');
@@ -1530,6 +1533,13 @@
                      Math.abs(e.clientX - rect.left) <= 6 || Math.abs(e.clientY - rect.top) <= 6;
       if (nearEdge) return;
 
+      // 상위 draggable 일시 비활성화 (항목 드래그 충돌 방지)
+      var draggableParent = cell.closest('[draggable="true"]');
+      if (draggableParent && draggableParent !== table) {
+        draggableParent.setAttribute('draggable', 'false');
+        disabledDraggable = draggableParent;
+      }
+
       hideTableContextMenu();
       clearCellSelection();
       tableSel.active = true;
@@ -1548,7 +1558,14 @@
       selectCellRange(tableSel.table, tableSel.startCell, cell);
     });
 
-    var stopSelecting = function () { selecting = false; };
+    var stopSelecting = function () {
+      selecting = false;
+      // draggable 복원
+      if (disabledDraggable) {
+        disabledDraggable.setAttribute('draggable', 'true');
+        disabledDraggable = null;
+      }
+    };
     editor.addEventListener('mouseup', stopSelecting);
     document.addEventListener('mouseup', stopSelecting);
   }
@@ -2287,6 +2304,8 @@
 
     // 드래그 이동 (에디터 내 위치 변경)
     document.addEventListener('dragstart', function (e) {
+      // 표 셀 드래그 중이면 이미지 드래그 무시
+      if (e.target.closest('.re-table')) { e.preventDefault(); return; }
       var wrap = e.target.closest('.re-img-wrap');
       if (!wrap) return;
       var editor = wrap.closest('.rich-editable');
