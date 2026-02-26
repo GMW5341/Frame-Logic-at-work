@@ -443,7 +443,7 @@
     currentPropSource = { ideaId: ideaData.id, ideaTitle: title };
     showPropSourceLink(title);
 
-    toast('제언서 작성 화면으로 이동했습니다');
+    toast('문서 작성 화면으로 이동했습니다');
   });
 
   // ══════════════════════════════════════
@@ -1099,7 +1099,7 @@
     var items = load(PROP_KEY);
     var ul = $('#prop-items');
     if (items.length === 0) {
-      ul.innerHTML = '<li class="empty-state">저장된 제언서가 없습니다</li>';
+      ul.innerHTML = '<li class="empty-state">저장된 문서가 없습니다</li>';
       return;
     }
     ul.innerHTML = items.map(function (item) {
@@ -1145,7 +1145,7 @@
     currentPropEditId = null;
     renderProposalList();
     showPropList();
-    toast('제언서가 저장되었습니다');
+    toast('문서가 저장되었습니다');
   });
 
   $('#prop-clear').addEventListener('click', function () { clearProposalForm(); toast('초기화되었습니다'); });
@@ -1169,7 +1169,7 @@
   $('#prop-export-excel').addEventListener('click', function () {
     var data = getProposalData();
     if (!data.title && data.fields.length === 0) { toast('내용을 입력해주세요'); return; }
-    var sheetData = [['제언서'], [], ['제목', data.title || '']];
+    var sheetData = [['문서'], [], ['제목', data.title || '']];
     if (data.fields) {
       data.fields.forEach(function (f) {
         sheetData.push([]);
@@ -1177,7 +1177,7 @@
         sheetData.push([htmlToText(f.value) || '']);
       });
     }
-    exportAsExcel(data.title || '제언서', sheetData);
+    exportAsExcel(data.title || '문서', sheetData);
   });
 
   // Proposal → PDF
@@ -1192,7 +1192,7 @@
         if (f.value) html += '<div>' + f.value + '</div>';
       });
     }
-    exportAsPDF(data.title || '제언서', html);
+    exportAsPDF(data.title || '문서', html);
   });
 
   // ══════════════════════════════════════
@@ -1241,7 +1241,7 @@
 
   $('#prop-present').addEventListener('click', function () {
     var data = getProposalData();
-    if (!data.title && data.fields.length === 0) { toast('제언서 내용을 입력해주세요'); return; }
+    if (!data.title && data.fields.length === 0) { toast('문서 내용을 입력해주세요'); return; }
     openPresentation(data);
   });
 
