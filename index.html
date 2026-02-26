@@ -152,36 +152,16 @@
       <section id="tab-proposal" class="tab-panel" role="tabpanel">
         <div class="panel-header">
           <h2>제언 템플릿</h2>
-          <p class="panel-desc">동료나 상사에게 아이디어를 꺼내기 위한 제언서를 작성하세요. 논리적 구조로 설득력을 높입니다.</p>
+          <p class="panel-desc">자유롭게 항목을 추가하여 나만의 제언서를 작성하세요. 항목명과 내용을 직접 지정할 수 있습니다.</p>
         </div>
         <div class="proposal-form">
           <div class="form-group">
             <label for="prop-title">제언 제목</label>
             <input type="text" id="prop-title" placeholder="예: 고객 피드백 자동 분류 시스템 도입 제안">
           </div>
-          <div class="form-group">
-            <label for="prop-to">대상</label>
-            <input type="text" id="prop-to" placeholder="누구에게 전달할 것인지">
-          </div>
-          <div class="form-group">
-            <label for="prop-problem">현재 문제 / 배경</label>
-            <textarea id="prop-problem" rows="3" placeholder="왜 이 제언이 필요한지 배경을 설명하세요"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="prop-suggestion">제안 내용</label>
-            <textarea id="prop-suggestion" rows="4" placeholder="구체적인 제안 사항"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="prop-benefit">기대 효과</label>
-            <textarea id="prop-benefit" rows="2" placeholder="이 제안이 실현되면 어떤 효과가 있는지"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="prop-risk">리스크 / 고려 사항</label>
-            <textarea id="prop-risk" rows="2" placeholder="예상되는 리스크나 추가 고려 사항"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="prop-next">다음 단계</label>
-            <textarea id="prop-next" rows="2" placeholder="제안이 수락되면 다음에 할 일"></textarea>
+          <div id="prop-fields"></div>
+          <div class="btn-row" style="margin-top:8px">
+            <button class="btn btn-secondary" id="prop-add-field">+ 항목 추가</button>
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" id="prop-copy">📋 제언서 복사</button>

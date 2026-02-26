@@ -352,54 +352,72 @@
   });
 
   // ══════════════════════════════════════
-  // 4. 제언 템플릿 탭
+  // 4. 제언 템플릿 탭 (동적 항목)
   // ══════════════════════════════════════
   const PROP_KEY = 'fl_proposals';
 
+  function addProposalField(label, value) {
+    const container = $('#prop-fields');
+    const fieldId = 'pf-' + uid();
+    const div = document.createElement('div');
+    div.className = 'prop-field-item';
+    div.dataset.fieldId = fieldId;
+    div.innerHTML =
+      '<div class="prop-field-header">' +
+        '<input type="text" class="prop-field-label" placeholder="항목명 (예: 배경, 대상, 기대효과...)" value="' + escapeHtml(label || '') + '">' +
+        '<button class="btn btn-small btn-danger prop-field-remove" title="삭제">✕</button>' +
+      '</div>' +
+      '<textarea class="prop-field-value" rows="3" placeholder="내용을 입력하세요">' + escapeHtml(value || '') + '</textarea>';
+    container.appendChild(div);
+  }
+
   function getProposalData() {
+    const fields = [];
+    $$('.prop-field-item').forEach(function (el) {
+      const label = el.querySelector('.prop-field-label').value.trim();
+      const value = el.querySelector('.prop-field-value').value.trim();
+      if (label || value) {
+        fields.push({ label: label, value: value });
+      }
+    });
     return {
       id: uid(),
       title: $('#prop-title').value.trim(),
-      to: $('#prop-to').value.trim(),
-      problem: $('#prop-problem').value.trim(),
-      suggestion: $('#prop-suggestion').value.trim(),
-      benefit: $('#prop-benefit').value.trim(),
-      risk: $('#prop-risk').value.trim(),
-      next: $('#prop-next').value.trim(),
+      fields: fields,
       createdAt: new Date().toISOString()
     };
   }
 
   function buildProposalText(item) {
     let text = '';
-    if (item.title) text += `# ${item.title}\n\n`;
-    if (item.to) text += `대상: ${item.to}\n\n`;
-    if (item.problem) text += `## 현재 문제 / 배경\n${item.problem}\n\n`;
-    if (item.suggestion) text += `## 제안 내용\n${item.suggestion}\n\n`;
-    if (item.benefit) text += `## 기대 효과\n${item.benefit}\n\n`;
-    if (item.risk) text += `## 리스크 / 고려 사항\n${item.risk}\n\n`;
-    if (item.next) text += `## 다음 단계\n${item.next}\n`;
+    if (item.title) text += '# ' + item.title + '\n\n';
+    if (item.fields) {
+      item.fields.forEach(function (f) {
+        if (f.label && f.value) {
+          text += '## ' + f.label + '\n' + f.value + '\n\n';
+        } else if (f.value) {
+          text += f.value + '\n\n';
+        } else if (f.label) {
+          text += '## ' + f.label + '\n\n';
+        }
+      });
+    }
     return text.trim();
   }
 
   function loadProposalToForm(item) {
     $('#prop-title').value = item.title || '';
-    $('#prop-to').value = item.to || '';
-    $('#prop-problem').value = item.problem || '';
-    $('#prop-suggestion').value = item.suggestion || '';
-    $('#prop-benefit').value = item.benefit || '';
-    $('#prop-risk').value = item.risk || '';
-    $('#prop-next').value = item.next || '';
+    $('#prop-fields').innerHTML = '';
+    if (item.fields && item.fields.length > 0) {
+      item.fields.forEach(function (f) {
+        addProposalField(f.label, f.value);
+      });
+    }
   }
 
   function clearProposalForm() {
     $('#prop-title').value = '';
-    $('#prop-to').value = '';
-    $('#prop-problem').value = '';
-    $('#prop-suggestion').value = '';
-    $('#prop-benefit').value = '';
-    $('#prop-risk').value = '';
-    $('#prop-next').value = '';
+    $('#prop-fields').innerHTML = '';
   }
 
   function renderProposalList() {
@@ -422,6 +440,16 @@
     `).join('');
   }
 
+  $('#prop-add-field').addEventListener('click', () => {
+    addProposalField('', '');
+  });
+
+  $('#prop-fields').addEventListener('click', (e) => {
+    if (e.target.closest('.prop-field-remove')) {
+      e.target.closest('.prop-field-item').remove();
+    }
+  });
+
   $('#prop-copy').addEventListener('click', () => {
     const data = getProposalData();
     const text = buildProposalText(data);
@@ -431,7 +459,7 @@
 
   $('#prop-save').addEventListener('click', () => {
     const data = getProposalData();
-    if (!data.title && !data.suggestion) { toast('제목 또는 제안 내용을 입력해주세요'); return; }
+    if (!data.title && data.fields.length === 0) { toast('제목 또는 항목을 입력해주세요'); return; }
     const items = load(PROP_KEY);
     items.unshift(data);
     save(PROP_KEY, items);
