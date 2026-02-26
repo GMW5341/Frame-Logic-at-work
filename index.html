@@ -456,13 +456,47 @@
         <p class="form-hint">Anthropic Console에서 발급받으세요: console.anthropic.com</p>
       </div>
       <div class="form-group" style="margin-top:20px">
-        <label for="setting-ai-prompt">AI 분류 로직 (프롬프트)</label>
-        <textarea id="setting-ai-prompt" rows="10" class="settings-input" style="resize:vertical" placeholder="AI에게 보낼 분류 지시사항을 작성하세요..."></textarea>
-        <p class="form-hint">아래 변수를 사용할 수 있습니다:</p>
+        <label for="setting-ai-prompt">🗂 회의 분류 AI 프롬프트</label>
+        <textarea id="setting-ai-prompt" rows="8" class="settings-input" style="resize:vertical" placeholder="AI에게 보낼 분류 지시사항을 작성하세요..."></textarea>
         <p class="form-hint"><code>{{meetings}}</code> — 회의 목록이 자동 삽입됩니다</p>
-        <p class="form-hint" style="margin-top:8px">
+        <p class="form-hint" style="margin-top:4px">
           <button class="btn btn-ghost btn-small" id="settings-reset-prompt" type="button">기본 프롬프트로 되돌리기</button>
         </p>
+      </div>
+      <div class="form-group" style="margin-top:16px">
+        <label for="setting-jnl-prompt">📝 업무일지 AI 프롬프트 (시스템)</label>
+        <textarea id="setting-jnl-prompt" rows="5" class="settings-input" style="resize:vertical" placeholder="업무일지 AI 도우미의 시스템 프롬프트..."></textarea>
+        <p class="form-hint">업무일지 행 AI 도우미, AI 요약, AI 리포트에 공통 적용됩니다.</p>
+        <p class="form-hint" style="margin-top:4px">
+          <button class="btn btn-ghost btn-small" id="settings-reset-jnl-prompt" type="button">기본 프롬프트로 되돌리기</button>
+        </p>
+      </div>
+      <div class="form-group" style="margin-top:20px">
+        <label>💰 API 사용량</label>
+        <div class="api-cost-display" id="api-cost-display">
+          <div class="api-cost-row">
+            <span>이번 세션</span>
+            <span id="api-cost-session">$0.00</span>
+          </div>
+          <div class="api-cost-row">
+            <span>누적 합계</span>
+            <span id="api-cost-total">$0.00</span>
+          </div>
+          <div class="api-cost-row api-cost-detail">
+            <span>입력 토큰</span>
+            <span id="api-cost-input-tokens">0</span>
+          </div>
+          <div class="api-cost-row api-cost-detail">
+            <span>출력 토큰</span>
+            <span id="api-cost-output-tokens">0</span>
+          </div>
+          <div class="api-cost-row api-cost-detail">
+            <span>API 호출 수</span>
+            <span id="api-cost-calls">0</span>
+          </div>
+          <p class="form-hint" style="margin-top:6px">Opus: 입력 $15/M, 출력 $75/M · Sonnet: 입력 $3/M, 출력 $15/M</p>
+          <button class="btn btn-ghost btn-small" id="api-cost-reset" type="button" style="margin-top:4px">누적 초기화</button>
+        </div>
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="settings-save">저장</button>

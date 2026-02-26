@@ -1022,6 +1022,38 @@ body {
   color: var(--success);
 }
 
+/* -- API Cost Display -- */
+.api-cost-display {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.api-cost-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.api-cost-row span:last-child {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.api-cost-row.api-cost-detail {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+.api-cost-row.api-cost-detail span:last-child {
+  font-weight: 500;
+}
+
 /* ===== Source Link Badge ===== */
 .source-link {
   background: var(--accent-subtle);

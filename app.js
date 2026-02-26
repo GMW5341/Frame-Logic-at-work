@@ -77,6 +77,59 @@
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
   }
 
+  // ── API Cost Tracking ──
+  var API_COST_KEY = 'fl_api_cost';
+  var COST_RATES = {
+    'claude-opus-4-20250514': { input: 15, output: 75 },    // $/M tokens
+    'claude-sonnet-4-20250514': { input: 3, output: 15 }
+  };
+  var sessionCost = { inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 };
+
+  function loadApiCost() {
+    try { return JSON.parse(localStorage.getItem(API_COST_KEY)) || { inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 }; }
+    catch { return { inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 }; }
+  }
+
+  function saveApiCost(data) {
+    localStorage.setItem(API_COST_KEY, JSON.stringify(data));
+  }
+
+  function trackApiUsage(modelId, usage) {
+    if (!usage) return;
+    var rates = COST_RATES[modelId] || COST_RATES['claude-sonnet-4-20250514'];
+    var costDelta = (usage.input_tokens * rates.input + usage.output_tokens * rates.output) / 1000000;
+
+    // 세션
+    sessionCost.inputTokens += usage.input_tokens;
+    sessionCost.outputTokens += usage.output_tokens;
+    sessionCost.calls += 1;
+    sessionCost.cost += costDelta;
+
+    // 누적
+    var total = loadApiCost();
+    total.inputTokens += usage.input_tokens;
+    total.outputTokens += usage.output_tokens;
+    total.calls += 1;
+    total.cost += costDelta;
+    saveApiCost(total);
+
+    updateCostDisplay();
+  }
+
+  function updateCostDisplay() {
+    var total = loadApiCost();
+    var sessionEl = $('#api-cost-session');
+    var totalEl = $('#api-cost-total');
+    var inputEl = $('#api-cost-input-tokens');
+    var outputEl = $('#api-cost-output-tokens');
+    var callsEl = $('#api-cost-calls');
+    if (sessionEl) sessionEl.textContent = '$' + sessionCost.cost.toFixed(4);
+    if (totalEl) totalEl.textContent = '$' + total.cost.toFixed(4);
+    if (inputEl) inputEl.textContent = total.inputTokens.toLocaleString();
+    if (outputEl) outputEl.textContent = total.outputTokens.toLocaleString();
+    if (callsEl) callsEl.textContent = total.calls.toLocaleString();
+  }
+
   // ── Live Clock ──
   function updateClocks() {
     var now = new Date();
@@ -941,6 +994,12 @@
     exportAsPDF(data.title || '회의메모', html);
   });
 
+  // ── AI 프롬프트 기본값 ──
+  var DEFAULT_JNL_PROMPT =
+    '당신은 전략기획팀의 업무일지 작성을 돕는 AI 어시스턴트입니다.\n' +
+    '간결하고 실무적인 한국어로 답변하세요.\n' +
+    '구체적인 액션 아이템과 인사이트를 중심으로 작성하세요.';
+
   // ── AI 자동 분류 ──
   var DEFAULT_AI_PROMPT =
     '아래 회의 목록을 분석하여 주제별 폴더로 분류해주세요.\n\n' +
@@ -1001,6 +1060,7 @@
       return res.json();
     })
     .then(function (data) {
+      trackApiUsage('claude-opus-4-20250514', data.usage);
       var text = data.content[0].text;
       var jsonMatch = text.match(/\[[\s\S]*\]/);
       if (!jsonMatch) throw new Error('AI 응답 파싱 실패');
@@ -1364,7 +1424,9 @@
     var settings = loadSettings();
     $('#setting-api-key').value = settings.apiKey || '';
     $('#setting-ai-prompt').value = settings.aiPrompt || DEFAULT_AI_PROMPT;
+    $('#setting-jnl-prompt').value = settings.jnlPrompt || DEFAULT_JNL_PROMPT;
     $('#api-key-status').textContent = settings.apiKey ? '키가 설정되어 있습니다' : '';
+    updateCostDisplay();
     $('#settings-overlay').classList.add('active');
   });
 
@@ -1379,9 +1441,11 @@
   $('#settings-save').addEventListener('click', function () {
     var key = $('#setting-api-key').value.trim();
     var prompt = $('#setting-ai-prompt').value.trim();
+    var jnlPrompt = $('#setting-jnl-prompt').value.trim();
     var settings = loadSettings();
     settings.apiKey = key;
     settings.aiPrompt = prompt || '';
+    settings.jnlPrompt = jnlPrompt || '';
     saveSettingsData(settings);
     $('#api-key-status').textContent = key ? '키가 저장되었습니다' : '';
     toast('설정이 저장되었습니다');
@@ -1389,7 +1453,18 @@
 
   $('#settings-reset-prompt').addEventListener('click', function () {
     $('#setting-ai-prompt').value = DEFAULT_AI_PROMPT;
-    toast('기본 프롬프트로 되돌렸습니다');
+    toast('회의 분류 프롬프트를 기본값으로 되돌렸습니다');
+  });
+
+  $('#settings-reset-jnl-prompt').addEventListener('click', function () {
+    $('#setting-jnl-prompt').value = DEFAULT_JNL_PROMPT;
+    toast('업무일지 프롬프트를 기본값으로 되돌렸습니다');
+  });
+
+  $('#api-cost-reset').addEventListener('click', function () {
+    saveApiCost({ inputTokens: 0, outputTokens: 0, calls: 0, cost: 0 });
+    updateCostDisplay();
+    toast('누적 사용량이 초기화되었습니다');
   });
 
   $('#settings-clear-key').addEventListener('click', function () {
@@ -4154,6 +4229,11 @@
       return Promise.reject(new Error('API 키 없음'));
     }
     var modelId = useOpus ? 'claude-opus-4-20250514' : 'claude-sonnet-4-20250514';
+    // 업무일지 커스텀 시스템 프롬프트 적용
+    var finalSystem = systemPrompt;
+    if (settings.jnlPrompt) {
+      finalSystem = settings.jnlPrompt + '\n\n' + systemPrompt;
+    }
     return fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -4165,13 +4245,14 @@
       body: JSON.stringify({
         model: modelId,
         max_tokens: 2048,
-        system: systemPrompt,
+        system: finalSystem,
         messages: [{ role: 'user', content: userMessage }]
       })
     }).then(function (res) {
       if (!res.ok) return res.json().then(function (d) { throw new Error(d.error && d.error.message || 'API 오류'); });
       return res.json();
     }).then(function (data) {
+      trackApiUsage(modelId, data.usage);
       return data.content[0].text;
     });
   }
