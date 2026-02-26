@@ -1658,10 +1658,23 @@
 
     var re = {
       editor: editor,
-      getHTML: function () { return editor.innerHTML === '<br>' ? '' : editor.innerHTML; },
+      getHTML: function () {
+        // 저장 전에 하이라이트 캔버스를 img data URL로 변환
+        editor.querySelectorAll('canvas.re-img-hl-data').forEach(function (c) {
+          try {
+            var dataUrl = c.toDataURL('image/png');
+            var img = document.createElement('img');
+            img.src = dataUrl;
+            img.className = 're-img-hl-data';
+            c.parentNode.replaceChild(img, c);
+          } catch (ex) { c.remove(); }
+        });
+        return editor.innerHTML === '<br>' ? '' : editor.innerHTML;
+      },
       setHTML: function (html) {
         editor.innerHTML = html || '';
         wrapBareImages(editor);
+        restoreHighlightCanvases(editor);
         // 초기 콘텐츠를 undo 스택 시작점으로 저장
         var state = getUndoState(editor);
         state.stack = [editor.innerHTML];
@@ -2715,6 +2728,28 @@
     });
   }
 
+  // 저장된 하이라이트 img를 다시 canvas로 복원 (편집 가능하게)
+  function restoreHighlightCanvases(editor) {
+    editor.querySelectorAll('img.re-img-hl-data').forEach(function (img) {
+      var wrapper = img.closest('.re-img-wrap');
+      if (!wrapper) { img.remove(); return; }
+      var canvas = document.createElement('canvas');
+      canvas.className = 're-img-hl-data';
+      var srcImg = new Image();
+      srcImg.onload = function () {
+        canvas.width = srcImg.naturalWidth;
+        canvas.height = srcImg.naturalHeight;
+        canvas.getContext('2d').drawImage(srcImg, 0, 0);
+      };
+      srcImg.src = img.src;
+      img.parentNode.replaceChild(canvas, img);
+    });
+    // 기존 이미지에도 버튼 보장
+    editor.querySelectorAll('.re-img-wrap').forEach(function (wrap) {
+      buildImgButtons(wrap);
+    });
+  }
+
   function insertImageFile(editor, file) {
     var reader = new FileReader();
     reader.onload = function (ev) {
@@ -2887,6 +2922,8 @@
     if (!activeImgHighlight) return;
     var canvas = activeImgHighlight.canvas;
     var wrapper = activeImgHighlight.wrapper;
+    var editor = wrapper.closest('.rich-editable');
+    if (editor) saveSnapshot(editor);
 
     // 캔버스에 그려진 내용이 있는지 확인
     var ctx = canvas.getContext('2d');
@@ -2910,6 +2947,7 @@
       wrapper.appendChild(savedCanvas);
     }
 
+    if (editor) saveSnapshotAndNotify(editor);
     closeImgHighlight();
   }
 
