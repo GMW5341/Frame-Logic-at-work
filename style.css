@@ -129,6 +129,26 @@ body {
   color: var(--text-dim);
 }
 
+.settings-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  margin-bottom: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--transition);
+}
+
+.settings-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ===== Tab Content (Main Area) ===== */
 .tab-content {
   flex: 1;
@@ -830,6 +850,168 @@ body {
 .toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* ===== Settings Modal ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(0, 0, 0, 0.4);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal-content {
+  background: var(--bg);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  width: 90%;
+  max-width: 440px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.modal-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.settings-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.form-hint {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.api-key-status {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: var(--success);
+}
+
+/* ===== Source Link Badge ===== */
+.source-link {
+  background: var(--accent-subtle);
+  border: 1px solid rgba(59, 111, 219, 0.15);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  margin-bottom: 16px;
+  font-size: 0.82rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ===== Meeting List Toolbar ===== */
+.mtg-list-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 20px;
+  margin-bottom: 12px;
+}
+
+.folder-filter-select {
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ===== Folder Selector (in form) ===== */
+.folder-selector {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.folder-select {
+  padding: 5px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-family: inherit;
+}
+
+.folder-new-input {
+  padding: 5px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-family: inherit;
+  width: 100px;
+}
+
+.folder-new-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+/* ===== Folder Groups ===== */
+.folder-group {
+  margin-bottom: 16px;
+}
+
+.folder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--accent-subtle);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.folder-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.folder-count {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: 100px;
 }
 
 /* ===== Empty State ===== */
