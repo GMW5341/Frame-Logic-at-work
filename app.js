@@ -1571,6 +1571,18 @@
     }).join('');
   }
 
+  var DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+
+  function formatJnlDate(dateStr) {
+    if (!dateStr) return '-';
+    var d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d.getTime())) return dateStr;
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var dd = String(d.getDate()).padStart(2, '0');
+    var day = DAY_NAMES[d.getDay()];
+    return mm + '.' + dd + '(' + day + ')';
+  }
+
   function showJnlList() {
     $('#jnl-list-view').style.display = '';
     $('#jnl-form-view').style.display = 'none';
@@ -1710,7 +1722,7 @@
         '<td><span class="jnl-category-badge">' + escapeHtml(e.category || '-') + '</span></td>' +
         '<td>' + escapeHtml(e.item || '-') + '</td>' +
         '<td>' + escapeHtml(e.subitem || '-') + '</td>' +
-        '<td>' + escapeHtml(e.date || '-') + '</td>' +
+        '<td>' + escapeHtml(formatJnlDate(e.date)) + '</td>' +
         '<td><div class="jnl-cell-text">' + escapeHtml(e.feedback || '') + '</div></td>' +
         '<td><div class="jnl-cell-text">' + escapeHtml(e.note || '') + '</div></td>' +
         '<td><div class="jnl-cell-ref">' + escapeHtml(e.ref || '') + '</div>' + attachHtml + '</td>' +
