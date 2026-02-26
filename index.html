@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frame Logic — AI 워크스페이스</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1 class="logo">Frame Logic</h1>
+      <p class="tagline">생각을 구조화하는 업무 워크스페이스</p>
+    </header>
+
+    <nav class="tab-nav" role="tablist">
+      <button class="tab-btn active" data-tab="context" role="tab" aria-selected="true">
+        <span class="tab-icon">🧠</span>
+        <span class="tab-label">AI 컨텍스트</span>
+      </button>
+      <button class="tab-btn" data-tab="ideas" role="tab" aria-selected="false">
+        <span class="tab-icon">💡</span>
+        <span class="tab-label">아이디어</span>
+      </button>
+      <button class="tab-btn" data-tab="meeting" role="tab" aria-selected="false">
+        <span class="tab-icon">📋</span>
+        <span class="tab-label">회의 메모</span>
+      </button>
+      <button class="tab-btn" data-tab="proposal" role="tab" aria-selected="false">
+        <span class="tab-icon">📨</span>
+        <span class="tab-label">제언 템플릿</span>
+      </button>
+    </nav>
+
+    <main class="tab-content">
+
+      <!-- AI 컨텍스트 탭 -->
+      <section id="tab-context" class="tab-panel active" role="tabpanel">
+        <div class="panel-header">
+          <h2>AI 컨텍스트</h2>
+          <p class="panel-desc">AI에게 전달할 배경, 목표, 제약 조건을 구조화하세요. 복사 버튼으로 바로 AI 대화에 붙여넣을 수 있습니다.</p>
+        </div>
+        <div class="context-form">
+          <div class="form-group">
+            <label for="ctx-project">프로젝트 / 주제</label>
+            <input type="text" id="ctx-project" placeholder="예: 신규 온보딩 플로우 개선">
+          </div>
+          <div class="form-group">
+            <label for="ctx-background">배경 설명</label>
+            <textarea id="ctx-background" rows="3" placeholder="현재 상황과 배경을 설명하세요"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="ctx-goal">목표</label>
+            <textarea id="ctx-goal" rows="2" placeholder="AI에게 요청하고 싶은 결과물"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="ctx-constraints">제약 조건 / 참고 사항</label>
+            <textarea id="ctx-constraints" rows="2" placeholder="톤, 분량, 형식 등 제약 조건"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="ctx-reference">참고 자료</label>
+            <textarea id="ctx-reference" rows="2" placeholder="링크, 인용, 관련 문서 등"></textarea>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="ctx-copy">📋 프롬프트 복사</button>
+            <button class="btn btn-secondary" id="ctx-save">저장</button>
+            <button class="btn btn-ghost" id="ctx-clear">초기화</button>
+          </div>
+          <div class="saved-list" id="ctx-saved-list">
+            <h3>저장된 컨텍스트</h3>
+            <ul id="ctx-items"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 아이디어 탭 -->
+      <section id="tab-ideas" class="tab-panel" role="tabpanel">
+        <div class="panel-header">
+          <h2>아이디어 보드</h2>
+          <p class="panel-desc">떠오르는 아이디어를 빠르게 캡처하세요. 태그로 분류하고 나중에 찾기 쉽게 정리합니다.</p>
+        </div>
+        <div class="idea-input">
+          <div class="form-group">
+            <input type="text" id="idea-title" placeholder="아이디어 한 줄 요약">
+          </div>
+          <div class="form-group">
+            <textarea id="idea-detail" rows="3" placeholder="상세 내용 (선택)"></textarea>
+          </div>
+          <div class="form-group">
+            <input type="text" id="idea-tags" placeholder="태그 (쉼표로 구분, 예: UX, 마케팅, 기술)">
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="idea-add">+ 아이디어 추가</button>
+          </div>
+        </div>
+        <div class="idea-filter">
+          <input type="text" id="idea-search" placeholder="🔍 아이디어 검색...">
+        </div>
+        <div class="idea-board" id="idea-board"></div>
+      </section>
+
+      <!-- 회의 메모 탭 -->
+      <section id="tab-meeting" class="tab-panel" role="tabpanel">
+        <div class="panel-header">
+          <h2>회의 메모</h2>
+          <p class="panel-desc">회의 내용을 구조적으로 기록하세요. 안건, 결정 사항, 액션 아이템을 분리하여 관리합니다.</p>
+        </div>
+        <div class="meeting-form">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="mtg-title">회의명</label>
+              <input type="text" id="mtg-title" placeholder="예: 주간 스프린트 리뷰">
+            </div>
+            <div class="form-group">
+              <label for="mtg-date">일시</label>
+              <input type="datetime-local" id="mtg-date">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="mtg-attendees">참석자</label>
+            <input type="text" id="mtg-attendees" placeholder="쉼표로 구분">
+          </div>
+          <div class="form-group">
+            <label for="mtg-agenda">안건</label>
+            <textarea id="mtg-agenda" rows="3" placeholder="논의할 주제들"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="mtg-notes">회의 내용</label>
+            <textarea id="mtg-notes" rows="5" placeholder="회의 중 기록"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="mtg-decisions">결정 사항</label>
+            <textarea id="mtg-decisions" rows="2" placeholder="합의된 내용"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="mtg-actions">액션 아이템</label>
+            <textarea id="mtg-actions" rows="2" placeholder="누가 무엇을 언제까지 (한 줄에 하나씩)"></textarea>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="mtg-save">저장</button>
+            <button class="btn btn-secondary" id="mtg-copy">📋 복사</button>
+            <button class="btn btn-ghost" id="mtg-clear">초기화</button>
+          </div>
+        </div>
+        <div class="saved-list" id="mtg-saved-list">
+          <h3>저장된 회의 메모</h3>
+          <ul id="mtg-items"></ul>
+        </div>
+      </section>
+
+      <!-- 제언 템플릿 탭 -->
+      <section id="tab-proposal" class="tab-panel" role="tabpanel">
+        <div class="panel-header">
+          <h2>제언 템플릿</h2>
+          <p class="panel-desc">동료나 상사에게 아이디어를 꺼내기 위한 제언서를 작성하세요. 논리적 구조로 설득력을 높입니다.</p>
+        </div>
+        <div class="proposal-form">
+          <div class="form-group">
+            <label for="prop-title">제언 제목</label>
+            <input type="text" id="prop-title" placeholder="예: 고객 피드백 자동 분류 시스템 도입 제안">
+          </div>
+          <div class="form-group">
+            <label for="prop-to">대상</label>
+            <input type="text" id="prop-to" placeholder="누구에게 전달할 것인지">
+          </div>
+          <div class="form-group">
+            <label for="prop-problem">현재 문제 / 배경</label>
+            <textarea id="prop-problem" rows="3" placeholder="왜 이 제언이 필요한지 배경을 설명하세요"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="prop-suggestion">제안 내용</label>
+            <textarea id="prop-suggestion" rows="4" placeholder="구체적인 제안 사항"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="prop-benefit">기대 효과</label>
+            <textarea id="prop-benefit" rows="2" placeholder="이 제안이 실현되면 어떤 효과가 있는지"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="prop-risk">리스크 / 고려 사항</label>
+            <textarea id="prop-risk" rows="2" placeholder="예상되는 리스크나 추가 고려 사항"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="prop-next">다음 단계</label>
+            <textarea id="prop-next" rows="2" placeholder="제안이 수락되면 다음에 할 일"></textarea>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="prop-copy">📋 제언서 복사</button>
+            <button class="btn btn-secondary" id="prop-save">저장</button>
+            <button class="btn btn-ghost" id="prop-clear">초기화</button>
+          </div>
+        </div>
+        <div class="saved-list" id="prop-saved-list">
+          <h3>저장된 제언서</h3>
+          <ul id="prop-items"></ul>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="app-footer">
+      <p>Frame Logic — 데이터는 브라우저 로컬에 저장됩니다</p>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
