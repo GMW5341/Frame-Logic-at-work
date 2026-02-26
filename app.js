@@ -3189,32 +3189,53 @@
       e.dataTransfer.setData('text/plain', 're-img-drag');
     });
 
+    // 드래그 중 삽입 위치 커서 표시
+    var dropCaret = document.createElement('span');
+    dropCaret.className = 're-img-drop-caret';
+
+    function removeDropCaret() { if (dropCaret.parentNode) dropCaret.remove(); }
+
+    function getCaretRange(x, y) {
+      if (document.caretRangeFromPoint) return document.caretRangeFromPoint(x, y);
+      if (document.caretPositionFromPoint) {
+        var pos = document.caretPositionFromPoint(x, y);
+        if (pos) { var r = document.createRange(); r.setStart(pos.offsetNode, pos.offset); r.collapse(true); return r; }
+      }
+      return null;
+    }
+
     document.addEventListener('dragover', function (e) {
       if (!dragging) return;
       var editor = dragging.editor;
-      if (!editor.contains(e.target) && e.target !== editor) return;
+      if (!editor.contains(e.target) && e.target !== editor) { removeDropCaret(); return; }
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
+
+      // 삽입 위치에 캐럿 바 표시
+      var range = getCaretRange(e.clientX, e.clientY);
+      if (range && editor.contains(range.startContainer)) {
+        removeDropCaret();
+        range.insertNode(dropCaret);
+      }
+    });
+
+    document.addEventListener('dragleave', function (e) {
+      if (!dragging) return;
+      if (e.target === dragging.editor || !dragging.editor.contains(e.relatedTarget)) {
+        removeDropCaret();
+      }
     });
 
     document.addEventListener('drop', function (e) {
       if (!dragging) return;
       e.preventDefault();
+      removeDropCaret();
       var editor = dragging.editor;
       var wrap = dragging.wrapper;
+      saveSnapshot(editor);
 
       // 캐럿 위치에 삽입
-      var caretRange = null;
-      if (document.caretRangeFromPoint) {
-        caretRange = document.caretRangeFromPoint(e.clientX, e.clientY);
-      } else if (document.caretPositionFromPoint) {
-        var pos = document.caretPositionFromPoint(e.clientX, e.clientY);
-        if (pos) {
-          caretRange = document.createRange();
-          caretRange.setStart(pos.offsetNode, pos.offset);
-          caretRange.collapse(true);
-        }
-      }
+      var caretRange = getCaretRange(e.clientX, e.clientY);
 
       // 먼저 기존 위치에서 제거
       wrap.remove();
@@ -3226,10 +3247,12 @@
       }
 
       wrap.classList.remove('dragging-img');
+      saveSnapshotAndNotify(editor);
       dragging = null;
     });
 
     document.addEventListener('dragend', function () {
+      removeDropCaret();
       if (dragging) {
         dragging.wrapper.classList.remove('dragging-img');
         dragging = null;

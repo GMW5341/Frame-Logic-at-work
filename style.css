@@ -1316,13 +1316,29 @@ body {
 .re-img-wrap {
   display: inline-block;
   position: relative;
-  margin: 6px 4px;
-  vertical-align: top;
+  margin: 2px 3px;
+  vertical-align: middle;
   cursor: grab;
   border: 2px solid transparent;
   border-radius: 6px;
   transition: border-color 0.15s;
   max-width: 100%;
+}
+
+/* 드래그 중 삽입 위치 커서 */
+.re-img-drop-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  background: var(--accent);
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  animation: re-drop-blink 0.8s step-end infinite;
+  pointer-events: none;
+  margin: 0 -1px;
+}
+@keyframes re-drop-blink {
+  50% { opacity: 0; }
 }
 
 .re-img-wrap:hover,
