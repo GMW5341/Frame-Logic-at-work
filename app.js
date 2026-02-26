@@ -1329,7 +1329,9 @@
       '<button type="button" class="rich-btn" data-cmd="outdent" title="내어쓰기 (Shift+Tab)">←</button>' +
       '<span class="rich-sep"></span>' +
       '<button type="button" class="rich-btn" data-action="image" title="이미지 첨부">🖼</button>' +
-      '<button type="button" class="rich-btn" data-action="draw" title="그리기">✏</button>';
+      '<button type="button" class="rich-btn" data-action="draw" title="그리기">✏</button>' +
+      '<span class="rich-sep"></span>' +
+      '<button type="button" class="rich-btn" data-action="table" title="표 삽입">▦</button>';
 
     // Editable area
     var editor = document.createElement('div');
@@ -1366,6 +1368,18 @@
       } else if (action === 'draw') {
         activeRichEditor = editor;
         openDrawCanvas();
+      } else if (action === 'table') {
+        openTablePicker(btn, editor);
+      }
+    });
+
+    // 표 컨텍스트 메뉴
+    editor.addEventListener('click', function (e) {
+      var td = e.target.closest('td, th');
+      if (td && td.closest('.re-table')) {
+        showTableContextMenu(td, editor);
+      } else {
+        hideTableContextMenu();
       }
     });
 
@@ -1402,6 +1416,265 @@
     };
     richEditors[id] = re;
     return re;
+  }
+
+  // ── 표 삽입 그리드 피커 ──
+  var activeTablePicker = null;
+
+  function openTablePicker(anchorBtn, editor) {
+    closeTablePicker();
+    var picker = document.createElement('div');
+    picker.className = 'table-picker';
+    var maxR = 8, maxC = 8;
+    var label = document.createElement('div');
+    label.className = 'table-picker-label';
+    label.textContent = '행 × 열 선택';
+    picker.appendChild(label);
+
+    var grid = document.createElement('div');
+    grid.className = 'table-picker-grid';
+    grid.style.gridTemplateColumns = 'repeat(' + maxC + ', 1fr)';
+
+    for (var r = 1; r <= maxR; r++) {
+      for (var c = 1; c <= maxC; c++) {
+        var cell = document.createElement('div');
+        cell.className = 'table-picker-cell';
+        cell.dataset.row = r;
+        cell.dataset.col = c;
+        grid.appendChild(cell);
+      }
+    }
+    picker.appendChild(grid);
+
+    grid.addEventListener('mouseover', function (e) {
+      var t = e.target.closest('.table-picker-cell');
+      if (!t) return;
+      var hr = +t.dataset.row, hc = +t.dataset.col;
+      label.textContent = hr + ' × ' + hc;
+      grid.querySelectorAll('.table-picker-cell').forEach(function (c) {
+        c.classList.toggle('highlight', +c.dataset.row <= hr && +c.dataset.col <= hc);
+      });
+    });
+
+    grid.addEventListener('click', function (e) {
+      var t = e.target.closest('.table-picker-cell');
+      if (!t) return;
+      insertTable(editor, +t.dataset.row, +t.dataset.col);
+      closeTablePicker();
+    });
+
+    // 위치 지정
+    var rect = anchorBtn.getBoundingClientRect();
+    picker.style.position = 'fixed';
+    picker.style.top = (rect.bottom + 4) + 'px';
+    picker.style.left = rect.left + 'px';
+    picker.style.zIndex = '9999';
+    document.body.appendChild(picker);
+    activeTablePicker = picker;
+
+    // 바깥 클릭 닫기
+    setTimeout(function () {
+      document.addEventListener('mousedown', closePickerOutside);
+    }, 0);
+  }
+
+  function closePickerOutside(e) {
+    if (activeTablePicker && !activeTablePicker.contains(e.target)) {
+      closeTablePicker();
+    }
+  }
+
+  function closeTablePicker() {
+    if (activeTablePicker) {
+      activeTablePicker.remove();
+      activeTablePicker = null;
+      document.removeEventListener('mousedown', closePickerOutside);
+    }
+  }
+
+  function insertTable(editor, rows, cols) {
+    var html = '<table class="re-table" contenteditable="false">';
+    html += '<thead><tr>';
+    for (var c = 0; c < cols; c++) {
+      html += '<th contenteditable="true">제목</th>';
+    }
+    html += '</tr></thead><tbody>';
+    for (var r = 0; r < rows - 1; r++) {
+      html += '<tr>';
+      for (var c2 = 0; c2 < cols; c2++) {
+        html += '<td contenteditable="true"></td>';
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table><p><br></p>';
+    editor.focus();
+    document.execCommand('insertHTML', false, html);
+  }
+
+  // ── 표 컨텍스트 메뉴 ──
+  var tableCtx = null;
+
+  function showTableContextMenu(cell, editor) {
+    hideTableContextMenu();
+    var table = cell.closest('.re-table');
+    if (!table) return;
+
+    var menu = document.createElement('div');
+    menu.className = 'table-ctx-menu';
+    menu.innerHTML =
+      '<div class="table-ctx-section">' +
+        '<span class="table-ctx-title">행</span>' +
+        '<button class="table-ctx-btn" data-act="add-row-above">↑ 위에 추가</button>' +
+        '<button class="table-ctx-btn" data-act="add-row-below">↓ 아래에 추가</button>' +
+        '<button class="table-ctx-btn table-ctx-danger" data-act="del-row">삭제</button>' +
+      '</div>' +
+      '<div class="table-ctx-section">' +
+        '<span class="table-ctx-title">열</span>' +
+        '<button class="table-ctx-btn" data-act="add-col-left">← 왼쪽에 추가</button>' +
+        '<button class="table-ctx-btn" data-act="add-col-right">→ 오른쪽에 추가</button>' +
+        '<button class="table-ctx-btn table-ctx-danger" data-act="del-col">삭제</button>' +
+      '</div>' +
+      '<div class="table-ctx-section">' +
+        '<span class="table-ctx-title">셀 배경색</span>' +
+        '<div class="table-ctx-colors">' +
+          '<button class="table-ctx-color" data-color="" title="없음" style="background:#fff;border:1px solid #ccc"></button>' +
+          '<button class="table-ctx-color" data-color="#e8f0fe" title="파랑" style="background:#e8f0fe"></button>' +
+          '<button class="table-ctx-color" data-color="#fce8e6" title="빨강" style="background:#fce8e6"></button>' +
+          '<button class="table-ctx-color" data-color="#e6f4ea" title="초록" style="background:#e6f4ea"></button>' +
+          '<button class="table-ctx-color" data-color="#fef7e0" title="노랑" style="background:#fef7e0"></button>' +
+          '<button class="table-ctx-color" data-color="#f3e8fd" title="보라" style="background:#f3e8fd"></button>' +
+          '<button class="table-ctx-color" data-color="#e8eaed" title="회색" style="background:#e8eaed"></button>' +
+          '<button class="table-ctx-color" data-color="#1a1a2e" title="어두운" style="background:#1a1a2e"></button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="table-ctx-section">' +
+        '<button class="table-ctx-btn table-ctx-danger" data-act="del-table">표 전체 삭제</button>' +
+      '</div>';
+
+    menu.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-act]');
+      var colorBtn = e.target.closest('[data-color]');
+      if (btn) {
+        handleTableAction(btn.dataset.act, cell, table, editor);
+        hideTableContextMenu();
+      } else if (colorBtn) {
+        cell.style.backgroundColor = colorBtn.dataset.color || '';
+        hideTableContextMenu();
+      }
+    });
+
+    var rect = cell.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.left = rect.left + 'px';
+    menu.style.zIndex = '9999';
+    document.body.appendChild(menu);
+    tableCtx = menu;
+
+    // 뷰포트 밖으로 나가면 조정
+    requestAnimationFrame(function () {
+      var mr = menu.getBoundingClientRect();
+      if (mr.right > window.innerWidth) {
+        menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
+      }
+      if (mr.bottom > window.innerHeight) {
+        menu.style.top = (rect.top - mr.height - 4) + 'px';
+      }
+    });
+
+    setTimeout(function () {
+      document.addEventListener('mousedown', closeCtxOutside);
+    }, 0);
+  }
+
+  function closeCtxOutside(e) {
+    if (tableCtx && !tableCtx.contains(e.target) && !e.target.closest('.re-table')) {
+      hideTableContextMenu();
+    }
+  }
+
+  function hideTableContextMenu() {
+    if (tableCtx) {
+      tableCtx.remove();
+      tableCtx = null;
+      document.removeEventListener('mousedown', closeCtxOutside);
+    }
+  }
+
+  function handleTableAction(act, cell, table, editor) {
+    var row = cell.parentElement;
+    var tbody = table.querySelector('tbody');
+    var thead = table.querySelector('thead');
+    var colIndex = Array.prototype.indexOf.call(row.children, cell);
+    var colCount = row.children.length;
+
+    switch (act) {
+      case 'add-row-above': {
+        var newRow = createTableRow(colCount, 'td');
+        row.parentElement.insertBefore(newRow, row);
+        // thead 안에 삽입됐으면 tbody로 이동
+        if (row.parentElement === thead && tbody) {
+          tbody.insertBefore(newRow, tbody.firstChild);
+        }
+        break;
+      }
+      case 'add-row-below': {
+        var newRow2 = createTableRow(colCount, 'td');
+        if (row.parentElement === thead) {
+          if (tbody) tbody.insertBefore(newRow2, tbody.firstChild);
+          else { var nb = document.createElement('tbody'); nb.appendChild(newRow2); table.appendChild(nb); }
+        } else {
+          row.parentElement.insertBefore(newRow2, row.nextSibling);
+        }
+        break;
+      }
+      case 'del-row': {
+        var allRows = table.querySelectorAll('tr');
+        if (allRows.length <= 1) { table.remove(); break; }
+        row.remove();
+        break;
+      }
+      case 'add-col-left':
+        addColumn(table, colIndex);
+        break;
+      case 'add-col-right':
+        addColumn(table, colIndex + 1);
+        break;
+      case 'del-col': {
+        if (colCount <= 1) { table.remove(); break; }
+        table.querySelectorAll('tr').forEach(function (tr) {
+          if (tr.children[colIndex]) tr.children[colIndex].remove();
+        });
+        break;
+      }
+      case 'del-table':
+        table.remove();
+        break;
+    }
+  }
+
+  function createTableRow(colCount, tag) {
+    var tr = document.createElement('tr');
+    for (var i = 0; i < colCount; i++) {
+      var cell = document.createElement(tag || 'td');
+      cell.contentEditable = 'true';
+      tr.appendChild(cell);
+    }
+    return tr;
+  }
+
+  function addColumn(table, atIndex) {
+    table.querySelectorAll('tr').forEach(function (tr) {
+      var isHead = tr.parentElement.tagName === 'THEAD';
+      var cell = document.createElement(isHead ? 'th' : 'td');
+      cell.contentEditable = 'true';
+      if (isHead) cell.textContent = '제목';
+      if (atIndex >= tr.children.length) {
+        tr.appendChild(cell);
+      } else {
+        tr.insertBefore(cell, tr.children[atIndex]);
+      }
+    });
   }
 
   function insertImageFile(editor, file) {
