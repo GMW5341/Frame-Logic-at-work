@@ -325,6 +325,17 @@
             <button class="btn btn-secondary" id="jnl-export-excel">📊 Excel 내보내기</button>
             <button class="btn btn-secondary" id="jnl-export-csv">📄 CSV 내보내기</button>
             <input type="file" id="jnl-file-input" accept=".xlsx,.xls,.csv" style="display:none">
+            <span class="jnl-toolbar-sep"></span>
+            <button class="btn btn-accent" id="jnl-ai-summary">🤖 AI 요약</button>
+            <button class="btn btn-accent" id="jnl-ai-report">📋 AI 리포트</button>
+          </div>
+          <!-- AI 결과 패널 -->
+          <div class="jnl-ai-panel" id="jnl-ai-panel" style="display:none">
+            <div class="jnl-ai-panel-header">
+              <span class="jnl-ai-panel-title" id="jnl-ai-panel-title">AI 분석 결과</span>
+              <button class="btn btn-small btn-ghost" id="jnl-ai-panel-close">✕</button>
+            </div>
+            <div class="jnl-ai-panel-body" id="jnl-ai-panel-body"></div>
           </div>
           <div class="jnl-filter-row">
             <input type="text" id="jnl-search" placeholder="검색 (구분, 항목, 세부 항목...)">

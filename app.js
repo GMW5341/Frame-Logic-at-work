@@ -3657,6 +3657,7 @@
         '<td class="jnl-editable" data-field="note"><div class="jnl-cell-text">' + escapeHtml(e.note || '') + '</div></td>' +
         '<td class="jnl-editable" data-field="ref"><div class="jnl-cell-ref">' + escapeHtml(e.ref || '') + '</div>' + attachHtml + '</td>' +
         '<td class="jnl-td-actions">' +
+          '<button class="btn btn-small btn-accent jnl-ai-row-btn" data-action="ai-row" title="AI 도우미">🤖</button>' +
           '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
         '</td>' +
       '</tr>';
@@ -4140,6 +4141,281 @@
     }
     return str;
   }
+
+  // ══════════════════════════════════════
+  // 9. 업무일지 AI 기능
+  // ══════════════════════════════════════
+
+  function callClaudeAPI(systemPrompt, userMessage) {
+    var settings = loadSettings();
+    if (!settings.apiKey) {
+      toast('설정에서 API 키를 입력해주세요');
+      $('#settings-overlay').classList.add('active');
+      return Promise.reject(new Error('API 키 없음'));
+    }
+    return fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': settings.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }]
+      })
+    }).then(function (res) {
+      if (!res.ok) return res.json().then(function (d) { throw new Error(d.error && d.error.message || 'API 오류'); });
+      return res.json();
+    }).then(function (data) {
+      return data.content[0].text;
+    });
+  }
+
+  function jnlEntryToText(e) {
+    var parts = [];
+    if (e.category) parts.push('구분: ' + e.category);
+    if (e.item) parts.push('항목: ' + e.item);
+    if (e.subitem) parts.push('세부 항목: ' + e.subitem);
+    if (e.date) parts.push('날짜: ' + formatJnlDate(e.date));
+    if (e.feedback) parts.push('피드백 및 결정: ' + e.feedback);
+    if (e.note) parts.push('느낀 점 및 수행 사항: ' + e.note);
+    if (e.ref) parts.push('레퍼런스: ' + e.ref);
+    return parts.join('\n');
+  }
+
+  function showJnlAiPanel(title, content) {
+    var panel = $('#jnl-ai-panel');
+    $('#jnl-ai-panel-title').textContent = title;
+    $('#jnl-ai-panel-body').innerHTML = content;
+    panel.style.display = '';
+  }
+
+  function formatAiResponse(text) {
+    // 간단한 마크다운 변환
+    return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n## (.+)/g, '\n<h3 class="jnl-ai-h3">$1</h3>')
+      .replace(/\n### (.+)/g, '\n<h4 class="jnl-ai-h4">$1</h4>')
+      .replace(/\n- /g, '\n• ')
+      .replace(/\n\d+\. /g, function (m) { return '\n' + m.trim() + ' '; })
+      .replace(/\n/g, '<br>');
+  }
+
+  // AI 패널 닫기
+  $('#jnl-ai-panel-close').addEventListener('click', function () {
+    $('#jnl-ai-panel').style.display = 'none';
+  });
+
+  // ── 행 단위 AI 도우미 (🤖 버튼) ──
+  $('#jnl-tbody').addEventListener('click', function (e) {
+    var aiBtn = e.target.closest('[data-action="ai-row"]');
+    if (!aiBtn) return;
+    e.stopPropagation();
+
+    var tr = aiBtn.closest('tr[data-id]');
+    if (!tr) return;
+    var id = tr.dataset.id;
+    var items = load(JNL_KEY);
+    var entry = items.find(function (i) { return i.id === id; });
+    if (!entry) return;
+
+    // 메뉴 팝업 표시
+    var existing = document.querySelector('.jnl-ai-menu');
+    if (existing) existing.remove();
+
+    var menu = document.createElement('div');
+    menu.className = 'jnl-ai-menu';
+    menu.innerHTML =
+      '<button data-ai-action="fill">✨ 빈 칸 채우기</button>' +
+      '<button data-ai-action="feedback">💬 피드백 생성</button>' +
+      '<button data-ai-action="action">📋 수행 사항 제안</button>' +
+      '<button data-ai-action="improve">🔍 내용 개선 제안</button>';
+
+    var rect = aiBtn.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.left = rect.left + 'px';
+    document.body.appendChild(menu);
+
+    function closeMenu() {
+      if (menu.parentNode) menu.remove();
+      document.removeEventListener('click', closeMenu);
+    }
+    setTimeout(function () { document.addEventListener('click', closeMenu); }, 50);
+
+    menu.addEventListener('click', function (ev) {
+      var action = ev.target.dataset.aiAction;
+      if (!action) return;
+      closeMenu();
+
+      var entryText = jnlEntryToText(entry);
+      // 주변 항목도 맥락으로 전달
+      var contextItems = items.slice(0, 10).filter(function (i) { return i.id !== id; }).slice(0, 5);
+      var contextText = contextItems.map(function (c) { return jnlEntryToText(c); }).join('\n---\n');
+
+      var systemPrompt = '당신은 전략기획팀의 업무일지 작성을 돕는 AI 어시스턴트입니다. 간결하고 실무적인 한국어로 답변하세요.';
+      var userMsg = '';
+
+      if (action === 'fill') {
+        var emptyFields = [];
+        if (!entry.item) emptyFields.push('항목');
+        if (!entry.subitem) emptyFields.push('세부 항목');
+        if (!entry.feedback) emptyFields.push('피드백 및 결정');
+        if (!entry.note) emptyFields.push('느낀 점 및 수행해야 할 사항');
+        if (!entry.ref) emptyFields.push('레퍼런스');
+        if (emptyFields.length === 0) { toast('채울 빈 칸이 없습니다'); return; }
+        userMsg = '아래 업무일지 항목의 비어있는 필드를 채워주세요.\n\n현재 항목:\n' + entryText +
+          '\n\n비어있는 필드: ' + emptyFields.join(', ') +
+          '\n\n다른 항목 참고:\n' + contextText +
+          '\n\n반드시 아래 JSON 형식으로만 응답하세요 (비어있는 필드만 포함):\n' +
+          '{"item": "...", "subitem": "...", "feedback": "...", "note": "...", "ref": "..."}';
+      } else if (action === 'feedback') {
+        userMsg = '아래 업무 항목에 대한 피드백과 결정 사항을 작성해주세요.\n\n' + entryText +
+          '\n\n참고 항목:\n' + contextText +
+          '\n\n3-5줄로 구체적인 피드백을 작성하세요.';
+      } else if (action === 'action') {
+        userMsg = '아래 업무 항목을 바탕으로 수행해야 할 사항과 느낀 점을 작성해주세요.\n\n' + entryText +
+          '\n\n참고 항목:\n' + contextText +
+          '\n\n구체적인 액션 아이템 3-5개를 포함해서 작성하세요.';
+      } else if (action === 'improve') {
+        userMsg = '아래 업무일지 항목의 내용을 검토하고 개선 제안을 해주세요.\n\n' + entryText +
+          '\n\n- 내용이 부족한 부분\n- 더 구체적으로 작성할 수 있는 부분\n- 추가하면 좋을 정보\n등을 제안해주세요.';
+      }
+
+      aiBtn.disabled = true;
+      aiBtn.textContent = '⏳';
+      toast('AI 처리 중...');
+
+      callClaudeAPI(systemPrompt, userMsg).then(function (text) {
+        if (action === 'fill') {
+          // JSON 파싱해서 직접 셀에 적용
+          try {
+            var jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) throw new Error('JSON 파싱 실패');
+            var result = JSON.parse(jsonMatch[0]);
+            var reloadItems = load(JNL_KEY);
+            var target = reloadItems.find(function (i) { return i.id === id; });
+            if (target) {
+              var changed = false;
+              ['item', 'subitem', 'feedback', 'note', 'ref'].forEach(function (f) {
+                if (result[f] && !target[f]) { target[f] = result[f]; changed = true; }
+              });
+              if (changed) {
+                save(JNL_KEY, reloadItems);
+                renderJnlTable();
+                populateJnlCategoryFilter();
+                populateJnlColFilters();
+                toast('AI가 빈 칸을 채웠습니다');
+              } else {
+                toast('채울 내용이 없습니다');
+              }
+            }
+          } catch (err) {
+            showJnlAiPanel('AI 자동 채우기 결과', formatAiResponse(text));
+          }
+        } else if (action === 'feedback') {
+          // 피드백 셀에 직접 적용
+          var reloadItems = load(JNL_KEY);
+          var target = reloadItems.find(function (i) { return i.id === id; });
+          if (target) {
+            target.feedback = text.trim();
+            save(JNL_KEY, reloadItems);
+            renderJnlTable();
+            toast('피드백이 생성되었습니다');
+          }
+        } else if (action === 'action') {
+          var reloadItems = load(JNL_KEY);
+          var target = reloadItems.find(function (i) { return i.id === id; });
+          if (target) {
+            target.note = text.trim();
+            save(JNL_KEY, reloadItems);
+            renderJnlTable();
+            toast('수행 사항이 생성되었습니다');
+          }
+        } else {
+          showJnlAiPanel('AI 개선 제안 — ' + (entry.item || entry.category || ''), formatAiResponse(text));
+        }
+      }).catch(function (err) {
+        toast('AI 오류: ' + err.message);
+      }).finally(function () {
+        aiBtn.disabled = false;
+        aiBtn.textContent = '🤖';
+      });
+    });
+  });
+
+  // ── 전체 데이터 AI 요약 ──
+  $('#jnl-ai-summary').addEventListener('click', function () {
+    var items = getFilteredJnlItems();
+    if (items.length === 0) { toast('분석할 데이터가 없습니다'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '⏳ 분석 중...';
+
+    var allText = items.map(function (e, i) {
+      return (i + 1) + '. ' + jnlEntryToText(e);
+    }).join('\n\n');
+
+    var systemPrompt = '당신은 전략기획팀의 업무 분석 전문가입니다. 한국어로 간결하게 답변하세요.';
+    var userMsg = '아래 업무일지 데이터(' + items.length + '건)를 분석하여 종합 요약을 작성해주세요.\n\n' +
+      '포함할 내용:\n' +
+      '1. **전체 요약**: 주요 업무 흐름과 핵심 성과\n' +
+      '2. **주요 업무 카테고리**: 분야별 정리\n' +
+      '3. **미해결 사항**: 아직 완료되지 않은 것들\n' +
+      '4. **핵심 인사이트**: 패턴이나 주목할 점\n\n' +
+      '데이터:\n' + allText;
+
+    callClaudeAPI(systemPrompt, userMsg).then(function (text) {
+      showJnlAiPanel('🤖 AI 업무 요약 (' + items.length + '건 분석)', formatAiResponse(text));
+    }).catch(function (err) {
+      toast('AI 오류: ' + err.message);
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = '🤖 AI 요약';
+    });
+  });
+
+  // ── 전체 데이터 AI 리포트 ──
+  $('#jnl-ai-report').addEventListener('click', function () {
+    var items = getFilteredJnlItems();
+    if (items.length === 0) { toast('분석할 데이터가 없습니다'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '⏳ 생성 중...';
+
+    var allText = items.map(function (e, i) {
+      return (i + 1) + '. ' + jnlEntryToText(e);
+    }).join('\n\n');
+
+    var today = new Date().toISOString().slice(0, 10);
+    var systemPrompt = '당신은 전략기획팀의 업무 보고서 작성 전문가입니다. 한국어로 공식적이고 간결한 보고서를 작성하세요.';
+    var userMsg = '아래 업무일지 데이터를 기반으로 업무 리포트를 작성해주세요.\n' +
+      '작성일: ' + today + '\n\n' +
+      '포함할 섹션:\n' +
+      '1. **기간 및 개요**: 데이터 기간, 총 업무 건수\n' +
+      '2. **주요 성과**: 완료된 핵심 업무\n' +
+      '3. **진행 중인 업무**: 현재 진행 상황\n' +
+      '4. **피드백 및 결정사항 요약**: 중요 의사결정\n' +
+      '5. **다음 주기 과제**: 향후 수행해야 할 사항\n' +
+      '6. **리스크 및 제안**: 주의점과 개선 제안\n\n' +
+      '데이터:\n' + allText;
+
+    callClaudeAPI(systemPrompt, userMsg).then(function (text) {
+      showJnlAiPanel('📋 AI 업무 리포트 (' + today + ')', formatAiResponse(text));
+    }).catch(function (err) {
+      toast('AI 오류: ' + err.message);
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = '📋 AI 리포트';
+    });
+  });
 
   // ── Init ──
   function init() {
