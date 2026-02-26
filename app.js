@@ -1408,8 +1408,8 @@
       var cmd = btn.dataset.cmd;
       var action = btn.dataset.action;
       if (cmd) {
-        // 표 셀 다중 선택 상태에서 서식 적용
-        if (tableSel.cells.length > 0 && tableSel.table && editor.contains(tableSel.table)) {
+        // 표 셀 2개 이상 다중 선택 시에만 일괄 적용 (1개면 브라우저 텍스트 선택 존중)
+        if (tableSel.cells.length > 1 && tableSel.table && editor.contains(tableSel.table)) {
           applyFormatToSelectedCells(cmd, editor);
         } else {
           editor.focus();
@@ -1486,8 +1486,8 @@
         return;
       }
 
-      // 셀 다중 선택 시 서식 단축키 가로채기
-      if (tableSel.cells.length > 0 && tableSel.table && editor.contains(tableSel.table)) {
+      // 셀 2개 이상 다중 선택 시에만 서식 단축키 가로채기
+      if (tableSel.cells.length > 1 && tableSel.table && editor.contains(tableSel.table)) {
         var formatMap = { b: 'bold', u: 'underline', i: 'italic' };
         var fmt = formatMap[e.key.toLowerCase()];
         if (fmt) {
