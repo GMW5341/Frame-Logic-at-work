@@ -1680,6 +1680,180 @@
     });
   }
 
+  // ── 표 열 너비 / 행 높이 드래그 리사이즈 ──
+  (function () {
+    var EDGE = 6; // 경계 감지 거리 (px)
+    var resizeState = null;
+
+    // 표가 삽입될 때 table-layout: fixed + 초기 너비 설정
+    function initTableLayout(table) {
+      if (table.dataset.layoutInit) return;
+      table.dataset.layoutInit = '1';
+      table.style.tableLayout = 'fixed';
+      var firstRow = table.querySelector('tr');
+      if (!firstRow) return;
+      var cells = firstRow.children;
+      var totalW = table.offsetWidth;
+      var colW = Math.floor(totalW / cells.length);
+      for (var i = 0; i < cells.length; i++) {
+        cells[i].style.width = colW + 'px';
+      }
+    }
+
+    // 셀 경계 감지: 오른쪽 경계 → col-resize, 아래쪽 경계 → row-resize
+    function detectEdge(cell, e) {
+      var rect = cell.getBoundingClientRect();
+      var nearRight = Math.abs(e.clientX - rect.right) <= EDGE;
+      var nearBottom = Math.abs(e.clientY - rect.bottom) <= EDGE;
+      var nearLeft = Math.abs(e.clientX - rect.left) <= EDGE;
+      var nearTop = Math.abs(e.clientY - rect.top) <= EDGE;
+
+      // 오른쪽 경계
+      if (nearRight) return { type: 'col', side: 'right', cell: cell };
+      // 왼쪽 경계 (첫 열이 아닌 경우 → 왼쪽 셀의 오른쪽 경계)
+      if (nearLeft) {
+        var idx = Array.prototype.indexOf.call(cell.parentElement.children, cell);
+        if (idx > 0) {
+          return { type: 'col', side: 'right', cell: cell.parentElement.children[idx - 1] };
+        }
+      }
+      // 아래쪽 경계
+      if (nearBottom) return { type: 'row', side: 'bottom', cell: cell };
+      // 위쪽 경계 (첫 행이 아닌 경우 → 위 행의 같은 열)
+      if (nearTop) {
+        var row = cell.parentElement;
+        var prevRow = row.previousElementSibling;
+        if (!prevRow && row.parentElement.tagName === 'TBODY') {
+          var thead = row.closest('table').querySelector('thead');
+          if (thead) prevRow = thead.querySelector('tr:last-child');
+        }
+        if (prevRow) {
+          var ci = Array.prototype.indexOf.call(row.children, cell);
+          var prevCell = prevRow.children[ci];
+          if (prevCell) return { type: 'row', side: 'bottom', cell: prevCell };
+        }
+      }
+      return null;
+    }
+
+    // mousemove on document: 커서 모양 변경
+    document.addEventListener('mousemove', function (e) {
+      if (resizeState) {
+        handleDrag(e);
+        return;
+      }
+      var cell = e.target.closest && e.target.closest('td, th');
+      if (!cell || !cell.closest('.re-table')) {
+        return;
+      }
+      var edge = detectEdge(cell, e);
+      if (edge) {
+        cell.closest('.re-table').style.cursor = edge.type === 'col' ? 'col-resize' : 'row-resize';
+      } else {
+        cell.closest('.re-table').style.cursor = '';
+      }
+    });
+
+    // mousedown: 리사이즈 시작
+    document.addEventListener('mousedown', function (e) {
+      var cell = e.target.closest && e.target.closest('td, th');
+      if (!cell || !cell.closest('.re-table')) return;
+
+      var edge = detectEdge(cell, e);
+      if (!edge) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      var table = cell.closest('.re-table');
+      initTableLayout(table);
+
+      var targetCell = edge.cell;
+      var colIdx = Array.prototype.indexOf.call(targetCell.parentElement.children, targetCell);
+
+      if (edge.type === 'col') {
+        // 첫 행의 해당 열 셀에서 현재 너비 가져오기
+        var firstRow = table.querySelector('tr');
+        var refCell = firstRow.children[colIdx];
+        resizeState = {
+          type: 'col',
+          table: table,
+          colIdx: colIdx,
+          startX: e.clientX,
+          startW: refCell.offsetWidth
+        };
+      } else {
+        // row resize
+        var targetRow = targetCell.parentElement;
+        resizeState = {
+          type: 'row',
+          table: table,
+          row: targetRow,
+          startY: e.clientY,
+          startH: targetRow.offsetHeight
+        };
+      }
+
+      // 리사이즈 가이드라인 표시
+      var line = document.createElement('div');
+      line.className = 'table-resize-line table-resize-line-' + resizeState.type;
+      document.body.appendChild(line);
+      resizeState.line = line;
+      updateGuideLine(e);
+
+      document.body.style.cursor = resizeState.type === 'col' ? 'col-resize' : 'row-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    function updateGuideLine(e) {
+      if (!resizeState || !resizeState.line) return;
+      var line = resizeState.line;
+      var tableRect = resizeState.table.getBoundingClientRect();
+      if (resizeState.type === 'col') {
+        line.style.left = e.clientX + 'px';
+        line.style.top = tableRect.top + 'px';
+        line.style.height = tableRect.height + 'px';
+      } else {
+        line.style.top = e.clientY + 'px';
+        line.style.left = tableRect.left + 'px';
+        line.style.width = tableRect.width + 'px';
+      }
+    }
+
+    function handleDrag(e) {
+      if (!resizeState) return;
+      e.preventDefault();
+      updateGuideLine(e);
+
+      if (resizeState.type === 'col') {
+        var dx = e.clientX - resizeState.startX;
+        var newW = Math.max(30, resizeState.startW + dx);
+        // 해당 열의 모든 셀 너비 설정
+        resizeState.table.querySelectorAll('tr').forEach(function (tr) {
+          var cell = tr.children[resizeState.colIdx];
+          if (cell) cell.style.width = newW + 'px';
+        });
+      } else {
+        var dy = e.clientY - resizeState.startY;
+        var newH = Math.max(24, resizeState.startH + dy);
+        // 해당 행의 높이 설정
+        resizeState.row.style.height = newH + 'px';
+        Array.prototype.forEach.call(resizeState.row.children, function (cell) {
+          cell.style.height = newH + 'px';
+        });
+      }
+    }
+
+    // mouseup: 리사이즈 종료
+    document.addEventListener('mouseup', function () {
+      if (!resizeState) return;
+      if (resizeState.line) resizeState.line.remove();
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      resizeState = null;
+    });
+  })();
+
   // 저장된 HTML 로드 시 bare <img>를 re-img-wrap으로 감싸기
   function wrapBareImages(editor) {
     editor.querySelectorAll('img').forEach(function (img) {
