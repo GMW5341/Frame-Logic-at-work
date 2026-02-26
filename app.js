@@ -4146,13 +4146,14 @@
   // 9. 업무일지 AI 기능
   // ══════════════════════════════════════
 
-  function callClaudeAPI(systemPrompt, userMessage) {
+  function callClaudeAPI(systemPrompt, userMessage, useOpus) {
     var settings = loadSettings();
     if (!settings.apiKey) {
       toast('설정에서 API 키를 입력해주세요');
       $('#settings-overlay').classList.add('active');
       return Promise.reject(new Error('API 키 없음'));
     }
+    var modelId = useOpus ? 'claude-opus-4-20250514' : 'claude-sonnet-4-20250514';
     return fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -4162,7 +4163,7 @@
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-20250514',
+        model: modelId,
         max_tokens: 2048,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }]
@@ -4371,7 +4372,7 @@
       '4. **핵심 인사이트**: 패턴이나 주목할 점\n\n' +
       '데이터:\n' + allText;
 
-    callClaudeAPI(systemPrompt, userMsg).then(function (text) {
+    callClaudeAPI(systemPrompt, userMsg, true).then(function (text) {
       showJnlAiPanel('🤖 AI 업무 요약 (' + items.length + '건 분석)', formatAiResponse(text));
     }).catch(function (err) {
       toast('AI 오류: ' + err.message);
@@ -4407,7 +4408,7 @@
       '6. **리스크 및 제안**: 주의점과 개선 제안\n\n' +
       '데이터:\n' + allText;
 
-    callClaudeAPI(systemPrompt, userMsg).then(function (text) {
+    callClaudeAPI(systemPrompt, userMsg, true).then(function (text) {
       showJnlAiPanel('📋 AI 업무 리포트 (' + today + ')', formatAiResponse(text));
     }).catch(function (err) {
       toast('AI 오류: ' + err.message);
