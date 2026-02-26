@@ -127,10 +127,22 @@
     tmp.innerHTML = htmlContent;
 
     // 에디터 전용 요소 제거
-    tmp.querySelectorAll('.re-img-handle, .re-img-delete, .re-table-cell-selected').forEach(function (el) {
+    tmp.querySelectorAll('.re-table-cell-selected').forEach(function (el) {
       el.classList.remove('re-table-cell-selected');
     });
-    tmp.querySelectorAll('.re-img-handle, .re-img-delete').forEach(function (el) { el.remove(); });
+    tmp.querySelectorAll('.re-img-handle, .re-img-delete, .re-img-highlight-btn, .re-img-border-btn').forEach(function (el) { el.remove(); });
+
+    // 하이라이트 캔버스 → 이미지로 변환 (내보내기용)
+    tmp.querySelectorAll('.re-img-hl-data').forEach(function (canvas) {
+      try {
+        var dataUrl = canvas.toDataURL('image/png');
+        var hlImg = document.createElement('img');
+        hlImg.src = dataUrl;
+        hlImg.className = 're-img-hl-data';
+        hlImg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;';
+        canvas.parentNode.replaceChild(hlImg, canvas);
+      } catch (ex) { canvas.remove(); }
+    });
 
     // 표 열 너비 px → % 변환
     tmp.querySelectorAll('.re-table').forEach(function (table) {
@@ -197,8 +209,9 @@
       '.re-table.border-dashed th,.re-table.border-dashed td{border:1px dashed var(--tbc,#d1d5db)!important}' +
       '.re-table.custom-border-color th,.re-table.custom-border-color td{border-color:var(--table-border-color)!important}' +
       /* 이미지 */
-      '.re-img-wrap{display:inline-block}.re-img{max-width:100%;height:auto}' +
-      '.re-img-handle,.re-img-delete{display:none}' +
+      '.re-img-wrap{display:inline-block;position:relative}.re-img{max-width:100%;height:auto}' +
+      '.re-img-handle,.re-img-delete,.re-img-highlight-btn,.re-img-border-btn{display:none}' +
+      '.re-img-hl-data{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1}' +
       /* 링크 */
       'a{color:#3b6fdb;text-decoration:underline}' +
       '@media print{body{padding:20px}a{color:#3b6fdb!important}}' +
@@ -2653,9 +2666,36 @@
   })();
 
   // 저장된 HTML 로드 시 bare <img>를 re-img-wrap으로 감싸기
+  function buildImgButtons(wrapper) {
+    // 하이라이트 버튼
+    if (!wrapper.querySelector('.re-img-highlight-btn')) {
+      var hlBtn = document.createElement('button');
+      hlBtn.className = 're-img-highlight-btn';
+      hlBtn.textContent = '🖍';
+      hlBtn.title = '하이라이트 그리기';
+      wrapper.appendChild(hlBtn);
+    }
+    // 테두리 버튼
+    if (!wrapper.querySelector('.re-img-border-btn')) {
+      var brBtn = document.createElement('button');
+      brBtn.className = 're-img-border-btn';
+      brBtn.textContent = '▢';
+      brBtn.title = '테두리 설정';
+      wrapper.appendChild(brBtn);
+    }
+    // 삭제 버튼
+    if (!wrapper.querySelector('.re-img-delete')) {
+      var del = document.createElement('button');
+      del.className = 're-img-delete';
+      del.textContent = '✕';
+      del.title = '이미지 삭제';
+      wrapper.appendChild(del);
+    }
+  }
+
   function wrapBareImages(editor) {
     editor.querySelectorAll('img').forEach(function (img) {
-      if (img.closest('.re-img-wrap')) return; // 이미 래핑됨
+      if (img.closest('.re-img-wrap')) return;
       img.className = 're-img';
       var wrapper = document.createElement('span');
       wrapper.className = 're-img-wrap';
@@ -2670,11 +2710,8 @@
         h.dataset.handle = pos;
         wrapper.appendChild(h);
       });
-      var del = document.createElement('button');
-      del.className = 're-img-delete';
-      del.textContent = '✕';
-      del.title = '이미지 삭제';
-      wrapper.appendChild(del);
+      buildImgButtons(wrapper);
+      // 기존 하이라이트 캔버스가 있으면 보존
     });
   }
 
@@ -2698,12 +2735,7 @@
         h.dataset.handle = pos;
         wrapper.appendChild(h);
       });
-      // 삭제 버튼
-      var del = document.createElement('button');
-      del.className = 're-img-delete';
-      del.textContent = '✕';
-      del.title = '이미지 삭제';
-      wrapper.appendChild(del);
+      buildImgButtons(wrapper);
 
       var sel = window.getSelection();
       if (sel.rangeCount > 0) {
@@ -2720,6 +2752,314 @@
     };
     reader.readAsDataURL(file);
   }
+
+  // ── 이미지 하이라이트 (드로잉 오버레이) ──
+  var activeImgHighlight = null; // { overlay, canvas, ctx, wrapper }
+
+  function openImgHighlight(wrapper) {
+    closeImgHighlight();
+    var img = wrapper.querySelector('.re-img');
+    if (!img) return;
+
+    var overlay = document.createElement('div');
+    overlay.className = 're-img-hl-overlay';
+
+    var toolbar = document.createElement('div');
+    toolbar.className = 're-img-hl-toolbar';
+    toolbar.innerHTML =
+      '<span class="re-img-hl-title">하이라이트</span>' +
+      '<div class="re-img-hl-colors">' +
+        '<button class="re-img-hl-color active" data-hlc="rgba(255,235,59,0.4)" style="background:rgba(255,235,59,0.7)" title="노랑"></button>' +
+        '<button class="re-img-hl-color" data-hlc="rgba(76,175,80,0.35)" style="background:rgba(76,175,80,0.6)" title="초록"></button>' +
+        '<button class="re-img-hl-color" data-hlc="rgba(244,67,54,0.35)" style="background:rgba(244,67,54,0.6)" title="빨강"></button>' +
+        '<button class="re-img-hl-color" data-hlc="rgba(33,150,243,0.35)" style="background:rgba(33,150,243,0.6)" title="파랑"></button>' +
+        '<button class="re-img-hl-color" data-hlc="rgba(156,39,176,0.35)" style="background:rgba(156,39,176,0.6)" title="보라"></button>' +
+      '</div>' +
+      '<label class="re-img-hl-size-label">굵기</label>' +
+      '<input type="range" class="re-img-hl-size" min="5" max="40" value="18">' +
+      '<button class="re-img-hl-btn" data-hlact="clear" title="전체 지우기">🗑 지우기</button>' +
+      '<button class="re-img-hl-btn re-img-hl-done" data-hlact="done">✓ 완료</button>';
+
+    var canvasWrap = document.createElement('div');
+    canvasWrap.className = 're-img-hl-canvas-wrap';
+
+    var imgClone = document.createElement('img');
+    imgClone.src = img.src;
+    imgClone.className = 're-img-hl-preview';
+    canvasWrap.appendChild(imgClone);
+
+    var canvas = document.createElement('canvas');
+    canvas.className = 're-img-hl-canvas';
+    canvasWrap.appendChild(canvas);
+
+    overlay.appendChild(toolbar);
+    overlay.appendChild(canvasWrap);
+    document.body.appendChild(overlay);
+
+    // 기존 하이라이트 캔버스 데이터 로드
+    var existingCanvas = wrapper.querySelector('.re-img-hl-data');
+
+    imgClone.onload = function () {
+      canvas.width = imgClone.naturalWidth;
+      canvas.height = imgClone.naturalHeight;
+      var ctx = canvas.getContext('2d');
+
+      // 기존 하이라이트 복원
+      if (existingCanvas) {
+        var oldImg = new Image();
+        oldImg.onload = function () { ctx.drawImage(oldImg, 0, 0); };
+        oldImg.src = existingCanvas.toDataURL();
+      }
+
+      activeImgHighlight = { overlay: overlay, canvas: canvas, ctx: ctx, wrapper: wrapper, color: 'rgba(255,235,59,0.4)', size: 18 };
+      initHighlightDraw(canvas, ctx, canvasWrap);
+    };
+
+    // 색상 선택
+    toolbar.addEventListener('click', function (e) {
+      var colorBtn = e.target.closest('[data-hlc]');
+      var actBtn = e.target.closest('[data-hlact]');
+      if (colorBtn) {
+        toolbar.querySelectorAll('.re-img-hl-color').forEach(function (b) { b.classList.remove('active'); });
+        colorBtn.classList.add('active');
+        if (activeImgHighlight) activeImgHighlight.color = colorBtn.dataset.hlc;
+      } else if (actBtn) {
+        if (actBtn.dataset.hlact === 'clear') {
+          var ctx2 = canvas.getContext('2d');
+          ctx2.clearRect(0, 0, canvas.width, canvas.height);
+        } else if (actBtn.dataset.hlact === 'done') {
+          saveHighlightToImage();
+        }
+      }
+    });
+
+    // 굵기 슬라이더
+    toolbar.querySelector('.re-img-hl-size').addEventListener('input', function (e) {
+      if (activeImgHighlight) activeImgHighlight.size = parseInt(e.target.value, 10);
+    });
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) saveHighlightToImage();
+    });
+  }
+
+  function initHighlightDraw(canvas, ctx, wrap) {
+    var drawing = false;
+    var lastX, lastY;
+
+    function getPos(e) {
+      var rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (canvas.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas.height / rect.height)
+      };
+    }
+
+    canvas.addEventListener('mousedown', function (e) {
+      if (!activeImgHighlight) return;
+      drawing = true;
+      var p = getPos(e);
+      lastX = p.x;
+      lastY = p.y;
+    });
+
+    canvas.addEventListener('mousemove', function (e) {
+      if (!drawing || !activeImgHighlight) return;
+      var p = getPos(e);
+      ctx.beginPath();
+      ctx.strokeStyle = activeImgHighlight.color;
+      ctx.lineWidth = activeImgHighlight.size * (canvas.width / canvas.getBoundingClientRect().width);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      lastX = p.x;
+      lastY = p.y;
+    });
+
+    var stopDraw = function () { drawing = false; };
+    canvas.addEventListener('mouseup', stopDraw);
+    canvas.addEventListener('mouseleave', stopDraw);
+  }
+
+  function saveHighlightToImage() {
+    if (!activeImgHighlight) return;
+    var canvas = activeImgHighlight.canvas;
+    var wrapper = activeImgHighlight.wrapper;
+
+    // 캔버스에 그려진 내용이 있는지 확인
+    var ctx = canvas.getContext('2d');
+    var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    var hasContent = false;
+    for (var i = 3; i < data.length; i += 4) {
+      if (data[i] > 0) { hasContent = true; break; }
+    }
+
+    // 기존 하이라이트 캔버스 제거
+    var old = wrapper.querySelector('.re-img-hl-data');
+    if (old) old.remove();
+
+    if (hasContent) {
+      // 하이라이트 데이터를 wrapper 안에 캔버스로 저장
+      var savedCanvas = document.createElement('canvas');
+      savedCanvas.className = 're-img-hl-data';
+      savedCanvas.width = canvas.width;
+      savedCanvas.height = canvas.height;
+      savedCanvas.getContext('2d').drawImage(canvas, 0, 0);
+      wrapper.appendChild(savedCanvas);
+    }
+
+    closeImgHighlight();
+  }
+
+  function closeImgHighlight() {
+    if (activeImgHighlight) {
+      activeImgHighlight.overlay.remove();
+      activeImgHighlight = null;
+    }
+  }
+
+  // ── 이미지 테두리 설정 ──
+  var activeImgBorderPicker = null;
+
+  function openImgBorderPicker(wrapper) {
+    closeImgBorderPicker();
+    var img = wrapper.querySelector('.re-img');
+    if (!img) return;
+
+    var picker = document.createElement('div');
+    picker.className = 're-img-border-picker';
+
+    // 현재 상태 읽기
+    var curWidth = parseInt(wrapper.dataset.borderWidth, 10) || 0;
+    var curColor = wrapper.dataset.borderColor || '';
+    var curRadius = parseInt(wrapper.dataset.borderRadius, 10) || 0;
+    var curStyle = wrapper.dataset.borderStyle || 'solid';
+
+    picker.innerHTML =
+      '<div class="re-img-bp-title">이미지 테두리</div>' +
+      '<div class="re-img-bp-section">' +
+        '<label>두께</label>' +
+        '<div class="re-img-bp-row">' +
+          '<button class="re-img-bp-thick' + (curWidth === 0 ? ' active' : '') + '" data-bw="0">없음</button>' +
+          '<button class="re-img-bp-thick' + (curWidth === 2 ? ' active' : '') + '" data-bw="2">얇게</button>' +
+          '<button class="re-img-bp-thick' + (curWidth === 4 ? ' active' : '') + '" data-bw="4">보통</button>' +
+          '<button class="re-img-bp-thick' + (curWidth === 6 ? ' active' : '') + '" data-bw="6">굵게</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="re-img-bp-section">' +
+        '<label>스타일</label>' +
+        '<div class="re-img-bp-row">' +
+          '<button class="re-img-bp-style' + (curStyle === 'solid' ? ' active' : '') + '" data-bs="solid">실선</button>' +
+          '<button class="re-img-bp-style' + (curStyle === 'dashed' ? ' active' : '') + '" data-bs="dashed">점선</button>' +
+          '<button class="re-img-bp-style' + (curStyle === 'double' ? ' active' : '') + '" data-bs="double">이중선</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="re-img-bp-section">' +
+        '<label>색상</label>' +
+        '<div class="re-img-bp-colors">' +
+          '<button class="re-img-bp-color" data-bc="#333" style="background:#333"></button>' +
+          '<button class="re-img-bp-color" data-bc="#3b82f6" style="background:#3b82f6"></button>' +
+          '<button class="re-img-bp-color" data-bc="#ef4444" style="background:#ef4444"></button>' +
+          '<button class="re-img-bp-color" data-bc="#22c55e" style="background:#22c55e"></button>' +
+          '<button class="re-img-bp-color" data-bc="#f59e0b" style="background:#f59e0b"></button>' +
+          '<button class="re-img-bp-color" data-bc="#a855f7" style="background:#a855f7"></button>' +
+          '<button class="re-img-bp-color" data-bc="#fff" style="background:#fff;border:1px solid #ccc"></button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="re-img-bp-section">' +
+        '<label>둥글기</label>' +
+        '<input type="range" class="re-img-bp-radius" min="0" max="50" value="' + curRadius + '">' +
+      '</div>';
+
+    function applyBorder() {
+      var w = parseInt(wrapper.dataset.borderWidth, 10) || 0;
+      var c = wrapper.dataset.borderColor || '#333';
+      var r = parseInt(wrapper.dataset.borderRadius, 10) || 0;
+      var s = wrapper.dataset.borderStyle || 'solid';
+      if (w > 0) {
+        img.style.border = w + 'px ' + s + ' ' + c;
+      } else {
+        img.style.border = 'none';
+      }
+      img.style.borderRadius = r > 0 ? r + 'px' : '';
+    }
+
+    picker.addEventListener('click', function (e) {
+      var bw = e.target.closest('[data-bw]');
+      var bs = e.target.closest('[data-bs]');
+      var bc = e.target.closest('[data-bc]');
+      if (bw) {
+        wrapper.dataset.borderWidth = bw.dataset.bw;
+        picker.querySelectorAll('.re-img-bp-thick').forEach(function (b) { b.classList.remove('active'); });
+        bw.classList.add('active');
+        if (!wrapper.dataset.borderColor) wrapper.dataset.borderColor = '#333';
+        applyBorder();
+      } else if (bs) {
+        wrapper.dataset.borderStyle = bs.dataset.bs;
+        picker.querySelectorAll('.re-img-bp-style').forEach(function (b) { b.classList.remove('active'); });
+        bs.classList.add('active');
+        applyBorder();
+      } else if (bc) {
+        wrapper.dataset.borderColor = bc.dataset.bc;
+        applyBorder();
+      }
+    });
+
+    picker.querySelector('.re-img-bp-radius').addEventListener('input', function (e) {
+      wrapper.dataset.borderRadius = e.target.value;
+      applyBorder();
+    });
+
+    var rect = wrapper.getBoundingClientRect();
+    picker.style.position = 'fixed';
+    picker.style.top = (rect.bottom + 6) + 'px';
+    picker.style.left = rect.left + 'px';
+    picker.style.zIndex = '10000';
+    document.body.appendChild(picker);
+    activeImgBorderPicker = picker;
+
+    requestAnimationFrame(function () {
+      var pr = picker.getBoundingClientRect();
+      if (pr.right > window.innerWidth) picker.style.left = (window.innerWidth - pr.width - 8) + 'px';
+      if (pr.bottom > window.innerHeight) picker.style.top = (rect.top - pr.height - 6) + 'px';
+    });
+
+    setTimeout(function () {
+      document.addEventListener('mousedown', closeImgBorderPickerOutside);
+    }, 0);
+  }
+
+  function closeImgBorderPickerOutside(e) {
+    if (activeImgBorderPicker && !activeImgBorderPicker.contains(e.target) && !e.target.closest('.re-img-border-btn')) {
+      closeImgBorderPicker();
+    }
+  }
+
+  function closeImgBorderPicker() {
+    if (activeImgBorderPicker) {
+      activeImgBorderPicker.remove();
+      activeImgBorderPicker = null;
+      document.removeEventListener('mousedown', closeImgBorderPickerOutside);
+    }
+  }
+
+  // 이미지 버튼 클릭 핸들러 (전역 위임)
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('.re-img-highlight-btn')) {
+      e.preventDefault();
+      e.stopPropagation();
+      var wrap = e.target.closest('.re-img-wrap');
+      if (wrap) openImgHighlight(wrap);
+    }
+    if (e.target.closest('.re-img-border-btn')) {
+      e.preventDefault();
+      e.stopPropagation();
+      var wrap2 = e.target.closest('.re-img-wrap');
+      if (wrap2) openImgBorderPicker(wrap2);
+    }
+  });
 
   // ── 이미지 리사이즈 & 드래그 ──
   (function () {
