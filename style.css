@@ -567,6 +567,31 @@ body {
   color: var(--text-dim);
 }
 
+/* -- Proposal Field Drag Handle -- */
+.prop-field-drag {
+  cursor: grab;
+  color: var(--text-dim);
+  font-size: 1rem;
+  user-select: none;
+  padding: 0 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.prop-field-drag:active {
+  cursor: grabbing;
+}
+
+.prop-field-item.dragging {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+.prop-field-item.drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
 /* ===== Meeting Type Selection ===== */
 .mtg-type-grid {
   display: grid;
@@ -1012,6 +1037,129 @@ body {
   background: var(--bg);
   padding: 2px 8px;
   border-radius: 100px;
+}
+
+/* ===== Rich Editor ===== */
+.rich-editor {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+
+.rich-editor:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.rich-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.rich-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-family: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.rich-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.rich-btn.active {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.rich-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.rich-editable {
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  line-height: 1.6;
+  overflow-y: auto;
+  outline: none;
+  word-wrap: break-word;
+}
+
+.rich-editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.rich-editable img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 6px 0;
+  display: block;
+}
+
+.rich-editable ol,
+.rich-editable ul {
+  padding-left: 24px;
+  margin: 4px 0;
+}
+
+.rich-editable li {
+  margin-bottom: 2px;
+}
+
+/* ===== Drawing Canvas ===== */
+.draw-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.draw-toolbar input[type="color"] {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.draw-toolbar input[type="range"] {
+  width: 80px;
+}
+
+#draw-canvas {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  cursor: crosshair;
+  touch-action: none;
 }
 
 /* ===== Empty State ===== */

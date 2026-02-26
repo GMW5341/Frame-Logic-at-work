@@ -68,19 +68,19 @@
           </div>
           <div class="form-group">
             <label for="ctx-background">배경 설명</label>
-            <textarea id="ctx-background" rows="6" placeholder="현재 상황과 배경을 설명하세요"></textarea>
+            <textarea id="ctx-background" rows="6" placeholder="현재 상황과 배경을 설명하세요" data-rich></textarea>
           </div>
           <div class="form-group">
             <label for="ctx-goal">목표</label>
-            <textarea id="ctx-goal" rows="5" placeholder="AI에게 요청하고 싶은 결과물"></textarea>
+            <textarea id="ctx-goal" rows="5" placeholder="AI에게 요청하고 싶은 결과물" data-rich></textarea>
           </div>
           <div class="form-group">
             <label for="ctx-constraints">제약 조건 / 참고 사항</label>
-            <textarea id="ctx-constraints" rows="4" placeholder="톤, 분량, 형식 등 제약 조건"></textarea>
+            <textarea id="ctx-constraints" rows="4" placeholder="톤, 분량, 형식 등 제약 조건" data-rich></textarea>
           </div>
           <div class="form-group">
             <label for="ctx-reference">참고 자료</label>
-            <textarea id="ctx-reference" rows="4" placeholder="링크, 인용, 관련 문서 등"></textarea>
+            <textarea id="ctx-reference" rows="4" placeholder="링크, 인용, 관련 문서 등" data-rich></textarea>
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" id="ctx-copy">📋 프롬프트 복사</button>
@@ -121,7 +121,7 @@
           </div>
           <div class="form-group">
             <label for="idea-detail">상세 내용</label>
-            <textarea id="idea-detail" rows="10" placeholder="아이디어를 자세히 설명하세요"></textarea>
+            <textarea id="idea-detail" rows="10" placeholder="아이디어를 자세히 설명하세요" data-rich></textarea>
           </div>
           <div class="form-group">
             <label for="idea-tags">태그</label>
@@ -231,17 +231,17 @@
               </div>
               <div class="form-group">
                 <label for="mtg-notes">회의 내용</label>
-                <textarea id="mtg-notes" rows="20" placeholder="회의 중 기록"></textarea>
+                <textarea id="mtg-notes" rows="20" placeholder="회의 중 기록" data-rich></textarea>
               </div>
             </div>
             <div class="mtg-col-side">
               <div class="form-group">
                 <label for="mtg-decisions">결정 사항</label>
-                <textarea id="mtg-decisions" rows="10" placeholder="합의된 내용"></textarea>
+                <textarea id="mtg-decisions" rows="10" placeholder="합의된 내용" data-rich></textarea>
               </div>
               <div class="form-group">
                 <label for="mtg-actions">액션 플랜</label>
-                <textarea id="mtg-actions" rows="10" placeholder="누가 무엇을 언제까지&#10;(한 줄에 하나씩)"></textarea>
+                <textarea id="mtg-actions" rows="10" placeholder="누가 무엇을 언제까지&#10;(한 줄에 하나씩)" data-rich></textarea>
               </div>
               <div class="btn-row mtg-side-actions">
                 <button class="btn btn-primary" id="mtg-save" style="flex:1">저장</button>
@@ -338,11 +338,41 @@
         <p class="form-hint">키는 이 브라우저의 localStorage에만 저장됩니다. 서버로 전송되지 않습니다.</p>
         <p class="form-hint">Anthropic Console에서 발급받으세요: console.anthropic.com</p>
       </div>
+      <div class="form-group" style="margin-top:20px">
+        <label for="setting-ai-prompt">AI 분류 로직 (프롬프트)</label>
+        <textarea id="setting-ai-prompt" rows="10" class="settings-input" style="resize:vertical" placeholder="AI에게 보낼 분류 지시사항을 작성하세요..."></textarea>
+        <p class="form-hint">아래 변수를 사용할 수 있습니다:</p>
+        <p class="form-hint"><code>{{meetings}}</code> — 회의 목록이 자동 삽입됩니다</p>
+        <p class="form-hint" style="margin-top:8px">
+          <button class="btn btn-ghost btn-small" id="settings-reset-prompt" type="button">기본 프롬프트로 되돌리기</button>
+        </p>
+      </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="settings-save">저장</button>
         <button class="btn btn-ghost" id="settings-clear-key">키 삭제</button>
       </div>
       <div class="api-key-status" id="api-key-status"></div>
+    </div>
+  </div>
+
+  <!-- 그리기 캔버스 모달 -->
+  <div class="modal-overlay" id="draw-overlay">
+    <div class="modal-content" style="max-width:640px;width:95%">
+      <div class="modal-header">
+        <h2>그리기</h2>
+        <button class="btn btn-small btn-danger" id="draw-close">✕</button>
+      </div>
+      <div class="draw-toolbar">
+        <input type="color" id="draw-color" value="#1a1d27" title="색상">
+        <input type="range" id="draw-size" min="1" max="20" value="3" title="굵기">
+        <button class="btn btn-small btn-secondary" id="draw-eraser">지우개</button>
+        <button class="btn btn-small btn-ghost" id="draw-clear">전체 지우기</button>
+      </div>
+      <canvas id="draw-canvas" width="580" height="360"></canvas>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-primary" id="draw-insert">삽입</button>
+        <button class="btn btn-ghost" id="draw-cancel">취소</button>
+      </div>
     </div>
   </div>
 

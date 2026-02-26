@@ -50,6 +50,13 @@
     return div.innerHTML;
   }
 
+  function htmlToText(html) {
+    if (!html) return '';
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.innerText || tmp.textContent || '';
+  }
+
   function nowLocalISO() {
     var now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -140,6 +147,7 @@
   // 1. AI 컨텍스트 탭
   // ══════════════════════════════════════
   var CTX_KEY = 'fl_contexts';
+  var currentCtxEditId = null;
 
   function showCtxList() {
     $('#ctx-list-view').style.display = '';
@@ -152,20 +160,21 @@
   }
 
   function clearContextForm() {
+    currentCtxEditId = null;
     $('#ctx-project').value = '';
-    $('#ctx-background').value = '';
-    $('#ctx-goal').value = '';
-    $('#ctx-constraints').value = '';
-    $('#ctx-reference').value = '';
+    if (getRich('ctx-background')) getRich('ctx-background').setHTML('');
+    if (getRich('ctx-goal')) getRich('ctx-goal').setHTML('');
+    if (getRich('ctx-constraints')) getRich('ctx-constraints').setHTML('');
+    if (getRich('ctx-reference')) getRich('ctx-reference').setHTML('');
     setDatetimeNow('#ctx-datetime');
   }
 
   function buildContextPrompt() {
     var project = $('#ctx-project').value.trim();
-    var background = $('#ctx-background').value.trim();
-    var goal = $('#ctx-goal').value.trim();
-    var constraints = $('#ctx-constraints').value.trim();
-    var reference = $('#ctx-reference').value.trim();
+    var background = getRich('ctx-background') ? getRich('ctx-background').getText().trim() : '';
+    var goal = getRich('ctx-goal') ? getRich('ctx-goal').getText().trim() : '';
+    var constraints = getRich('ctx-constraints') ? getRich('ctx-constraints').getText().trim() : '';
+    var reference = getRich('ctx-reference') ? getRich('ctx-reference').getText().trim() : '';
     var prompt = '';
     if (project) prompt += '## 프로젝트: ' + project + '\n\n';
     if (background) prompt += '## 배경\n' + background + '\n\n';
@@ -177,23 +186,24 @@
 
   function getContextData() {
     return {
-      id: uid(),
+      id: currentCtxEditId || uid(),
       project: $('#ctx-project').value.trim(),
-      background: $('#ctx-background').value.trim(),
-      goal: $('#ctx-goal').value.trim(),
-      constraints: $('#ctx-constraints').value.trim(),
-      reference: $('#ctx-reference').value.trim(),
+      background: getRich('ctx-background') ? getRich('ctx-background').getHTML() : '',
+      goal: getRich('ctx-goal') ? getRich('ctx-goal').getHTML() : '',
+      constraints: getRich('ctx-constraints') ? getRich('ctx-constraints').getHTML() : '',
+      reference: getRich('ctx-reference') ? getRich('ctx-reference').getHTML() : '',
       createdAt: $('#ctx-datetime').value || new Date().toISOString()
     };
   }
 
   function loadContextToForm(item) {
+    currentCtxEditId = item.id;
     showCtxForm();
     $('#ctx-project').value = item.project || '';
-    $('#ctx-background').value = item.background || '';
-    $('#ctx-goal').value = item.goal || '';
-    $('#ctx-constraints').value = item.constraints || '';
-    $('#ctx-reference').value = item.reference || '';
+    if (getRich('ctx-background')) getRich('ctx-background').setHTML(item.background || '');
+    if (getRich('ctx-goal')) getRich('ctx-goal').setHTML(item.goal || '');
+    if (getRich('ctx-constraints')) getRich('ctx-constraints').setHTML(item.constraints || '');
+    if (getRich('ctx-reference')) getRich('ctx-reference').setHTML(item.reference || '');
     if (item.createdAt) {
       var d = new Date(item.createdAt);
       d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -232,12 +242,16 @@
 
   $('#ctx-save').addEventListener('click', function () {
     var data = getContextData();
-    if (!data.project && !data.background && !data.goal) {
+    if (!data.project && !htmlToText(data.background).trim() && !htmlToText(data.goal).trim()) {
       toast('최소 한 가지 항목을 입력해주세요'); return;
     }
     var items = load(CTX_KEY);
+    if (currentCtxEditId) {
+      items = items.filter(function (i) { return i.id !== currentCtxEditId; });
+    }
     items.unshift(data);
     save(CTX_KEY, items);
+    currentCtxEditId = null;
     renderContextList();
     showCtxList();
     toast('컨텍스트가 저장되었습니다');
@@ -264,6 +278,7 @@
   // 2. 아이디어 보드 탭
   // ══════════════════════════════════════
   var IDEA_KEY = 'fl_ideas';
+  var currentIdeaEditId = null;
   var currentIdeaSource = null; // { meetingId, meetingTitle }
 
   function showIdeaList() {
@@ -277,8 +292,9 @@
   }
 
   function clearIdeaForm() {
+    currentIdeaEditId = null;
     $('#idea-title').value = '';
-    $('#idea-detail').value = '';
+    if (getRich('idea-detail')) getRich('idea-detail').setHTML('');
     $('#idea-tags').value = '';
     setDatetimeNow('#idea-datetime');
     currentIdeaSource = null;
@@ -292,9 +308,9 @@
 
   function getIdeaData() {
     var data = {
-      id: uid(),
+      id: currentIdeaEditId || uid(),
       title: $('#idea-title').value.trim(),
-      detail: $('#idea-detail').value.trim(),
+      detail: getRich('idea-detail') ? getRich('idea-detail').getHTML() : '',
       tags: $('#idea-tags').value.split(',').map(function (t) { return t.trim(); }).filter(Boolean),
       createdAt: $('#idea-datetime').value || new Date().toISOString()
     };
@@ -306,9 +322,10 @@
   }
 
   function loadIdeaToForm(item) {
+    currentIdeaEditId = item.id;
     showIdeaForm();
     $('#idea-title').value = item.title || '';
-    $('#idea-detail').value = item.detail || '';
+    if (getRich('idea-detail')) getRich('idea-detail').setHTML(item.detail || '');
     $('#idea-tags').value = (item.tags || []).join(', ');
     if (item.createdAt) {
       var d = new Date(item.createdAt);
@@ -351,7 +368,7 @@
             '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
           '</div>' +
         '</div>' +
-        (item.detail ? '<div class="idea-card-detail">' + escapeHtml(item.detail) + '</div>' : '') +
+        (item.detail ? '<div class="idea-card-detail">' + escapeHtml(htmlToText(item.detail).slice(0, 200)) + '</div>' : '') +
         '<div class="idea-card-footer">' +
           '<div class="idea-tags">' +
             sourceTag +
@@ -370,6 +387,9 @@
     var data = getIdeaData();
     if (!data.title) { toast('아이디어 제목을 입력해주세요'); return; }
     var items = load(IDEA_KEY);
+    if (currentIdeaEditId) {
+      items = items.filter(function (i) { return i.id !== currentIdeaEditId; });
+    }
     items.unshift(data);
     save(IDEA_KEY, items);
     clearIdeaForm();
@@ -394,7 +414,6 @@
     } else if (e.target.closest('[data-action="edit"]')) {
       var item = load(IDEA_KEY).find(function (i) { return i.id === id; });
       if (item) {
-        save(IDEA_KEY, load(IDEA_KEY).filter(function (i) { return i.id !== id; }));
         loadIdeaToForm(item);
         toast('편집 모드');
       }
@@ -404,7 +423,7 @@
   // Idea → Proposal
   $('#idea-to-proposal').addEventListener('click', function () {
     var title = $('#idea-title').value.trim();
-    var detail = $('#idea-detail').value.trim();
+    var detail = getRich('idea-detail') ? getRich('idea-detail').getText().trim() : '';
     if (!title) { toast('아이디어 제목을 입력해주세요'); return; }
 
     // First save the idea if not empty
@@ -536,9 +555,9 @@
       date: $('#mtg-date').value,
       attendees: $('#mtg-attendees').value.trim(),
       agenda: mtgAgendaItems.slice(),
-      notes: $('#mtg-notes').value.trim(),
-      decisions: $('#mtg-decisions').value.trim(),
-      actions: $('#mtg-actions').value.trim(),
+      notes: getRich('mtg-notes') ? getRich('mtg-notes').getHTML() : '',
+      decisions: getRich('mtg-decisions') ? getRich('mtg-decisions').getHTML() : '',
+      actions: getRich('mtg-actions') ? getRich('mtg-actions').getHTML() : '',
       folder: $('#mtg-folder').value || '',
       createdAt: new Date().toISOString()
     };
@@ -558,9 +577,12 @@
       item.agenda.forEach(function (a, i) { text += (i + 1) + '. ' + a + '\n'; });
       text += '\n';
     }
-    if (item.notes) text += '## 회의 내용\n' + item.notes + '\n\n';
-    if (item.decisions) text += '## 결정 사항\n' + item.decisions + '\n\n';
-    if (item.actions) text += '## 액션 플랜\n' + item.actions + '\n';
+    var notes = htmlToText(item.notes);
+    var decisions = htmlToText(item.decisions);
+    var actions = htmlToText(item.actions);
+    if (notes) text += '## 회의 내용\n' + notes + '\n\n';
+    if (decisions) text += '## 결정 사항\n' + decisions + '\n\n';
+    if (actions) text += '## 액션 플랜\n' + actions + '\n';
     return text.trim();
   }
 
@@ -579,9 +601,9 @@
       mtgAgendaItems = [];
     }
     renderAgendaList();
-    $('#mtg-notes').value = item.notes || '';
-    $('#mtg-decisions').value = item.decisions || '';
-    $('#mtg-actions').value = item.actions || '';
+    if (getRich('mtg-notes')) getRich('mtg-notes').setHTML(item.notes || '');
+    if (getRich('mtg-decisions')) getRich('mtg-decisions').setHTML(item.decisions || '');
+    if (getRich('mtg-actions')) getRich('mtg-actions').setHTML(item.actions || '');
   }
 
   function clearMeetingForm() {
@@ -590,9 +612,9 @@
     $('#mtg-attendees').value = '';
     mtgAgendaItems = [];
     renderAgendaList();
-    $('#mtg-notes').value = '';
-    $('#mtg-decisions').value = '';
-    $('#mtg-actions').value = '';
+    if (getRich('mtg-notes')) getRich('mtg-notes').setHTML('');
+    if (getRich('mtg-decisions')) getRich('mtg-decisions').setHTML('');
+    if (getRich('mtg-actions')) getRich('mtg-actions').setHTML('');
     setDatetimeNow('#mtg-date');
     populateFolderSelect('#mtg-folder', '');
   }
@@ -700,7 +722,7 @@
 
   $('#mtg-save').addEventListener('click', function () {
     var data = getMeetingData();
-    if (!data.title && !data.notes) { toast('회의명 또는 내용을 입력해주세요'); return; }
+    if (!data.title && !htmlToText(data.notes).trim()) { toast('회의명 또는 내용을 입력해주세요'); return; }
     var items = load(MTG_KEY);
     // If editing existing, replace it
     if (currentMtgEditId) {
@@ -744,8 +766,8 @@
   // Meeting → Idea
   $('#mtg-to-idea').addEventListener('click', function () {
     var title = $('#mtg-title').value.trim();
-    var notes = $('#mtg-notes').value.trim();
-    var decisions = $('#mtg-decisions').value.trim();
+    var notes = getRich('mtg-notes') ? getRich('mtg-notes').getText().trim() : '';
+    var decisions = getRich('mtg-decisions') ? getRich('mtg-decisions').getText().trim() : '';
     if (!title && !notes) { toast('회의 내용을 입력해주세요'); return; }
 
     // Save meeting first if needed
@@ -763,9 +785,9 @@
     showIdeaForm();
     $('#idea-title').value = title + ' - 회의 아이디어';
     var detail = '';
-    if (notes) detail += '## 회의 내용\n' + notes + '\n\n';
-    if (decisions) detail += '## 결정 사항\n' + decisions;
-    $('#idea-detail').value = detail.trim();
+    if (notes) detail += '<b>회의 내용</b><br>' + escapeHtml(notes) + '<br><br>';
+    if (decisions) detail += '<b>결정 사항</b><br>' + escapeHtml(decisions);
+    if (getRich('idea-detail')) getRich('idea-detail').setHTML(detail);
     $('#idea-tags').value = MTG_TYPE_LABELS[currentMtgType] ? currentMtgType : '';
 
     currentIdeaSource = { meetingId: meetingData.id, meetingTitle: title };
@@ -794,13 +816,13 @@
       sheetData.push([]);
     }
     sheetData.push(['회의 내용']);
-    sheetData.push([data.notes || '']);
+    sheetData.push([htmlToText(data.notes) || '']);
     sheetData.push([]);
     sheetData.push(['결정 사항']);
-    sheetData.push([data.decisions || '']);
+    sheetData.push([htmlToText(data.decisions) || '']);
     sheetData.push([]);
     sheetData.push(['액션 플랜']);
-    sheetData.push([data.actions || '']);
+    sheetData.push([htmlToText(data.actions) || '']);
     exportAsExcel(data.title || '회의메모', sheetData);
   });
 
@@ -819,13 +841,22 @@
       data.agenda.forEach(function (a, i) { html += (i + 1) + '. ' + escapeHtml(a) + '<br>'; });
       html += '</div>';
     }
-    if (data.notes) html += '<h2>회의 내용</h2><pre>' + escapeHtml(data.notes) + '</pre>';
-    if (data.decisions) html += '<h2>결정 사항</h2><pre>' + escapeHtml(data.decisions) + '</pre>';
-    if (data.actions) html += '<h2>액션 플랜</h2><pre>' + escapeHtml(data.actions) + '</pre>';
+    if (data.notes) html += '<h2>회의 내용</h2><div>' + data.notes + '</div>';
+    if (data.decisions) html += '<h2>결정 사항</h2><div>' + data.decisions + '</div>';
+    if (data.actions) html += '<h2>액션 플랜</h2><div>' + data.actions + '</div>';
     exportAsPDF(data.title || '회의메모', html);
   });
 
   // ── AI 자동 분류 ──
+  var DEFAULT_AI_PROMPT =
+    '아래 회의 목록을 분석하여 주제별 폴더로 분류해주세요.\n\n' +
+    '규칙:\n' +
+    '- 2~5개의 의미 있는 폴더명을 만들어주세요\n' +
+    '- 폴더명은 간결하게 (2~4글자)\n' +
+    '- JSON 배열로만 응답: [{"index": 0, "folder": "폴더명"}, ...]\n' +
+    '- 다른 설명 없이 JSON만 출력\n\n' +
+    '회의 목록:\n{{meetings}}';
+
   $('#mtg-ai-classify').addEventListener('click', function () {
     var settings = loadSettings();
     if (!settings.apiKey) {
@@ -850,6 +881,10 @@
       });
     }).join('\n');
 
+    // 사용자 커스텀 프롬프트 또는 기본 프롬프트 사용
+    var promptTemplate = settings.aiPrompt || DEFAULT_AI_PROMPT;
+    var finalPrompt = promptTemplate.replace('{{meetings}}', meetingList);
+
     fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -863,7 +898,7 @@
         max_tokens: 1024,
         messages: [{
           role: 'user',
-          content: '아래 회의 목록을 분석하여 주제별 폴더로 분류해주세요.\n\n규칙:\n- 2~5개의 의미 있는 폴더명을 만들어주세요\n- 폴더명은 간결하게 (2~4글자)\n- JSON 배열로만 응답: [{"index": 0, "folder": "폴더명"}, ...]\n- 다른 설명 없이 JSON만 출력\n\n회의 목록:\n' + meetingList
+          content: finalPrompt
         }]
       })
     })
@@ -900,6 +935,7 @@
   // 4. 제언 템플릿 탭 (동적 항목)
   // ══════════════════════════════════════
   var PROP_KEY = 'fl_proposals';
+  var currentPropEditId = null;
   var currentPropSource = null; // { ideaId, ideaTitle }
 
   function showPropList() {
@@ -923,26 +959,86 @@
     var div = document.createElement('div');
     div.className = 'prop-field-item';
     div.dataset.fieldId = fieldId;
+    div.draggable = true;
     div.innerHTML =
       '<div class="prop-field-header">' +
+        '<span class="prop-field-drag" title="드래그하여 순서 변경">⠿</span>' +
         '<input type="text" class="prop-field-label" placeholder="항목명 (예: 배경, 대상, 기대효과...)" value="' + escapeHtml(label || '') + '">' +
         '<button class="btn btn-small btn-danger prop-field-remove" title="삭제">✕</button>' +
       '</div>' +
-      '<textarea class="prop-field-value" rows="3" placeholder="내용을 입력하세요">' + escapeHtml(value || '') + '</textarea>';
+      '<textarea class="prop-field-value" rows="3" placeholder="내용을 입력하세요" data-rich></textarea>';
     container.appendChild(div);
+    // 리치 에디터 초기화
+    var ta = div.querySelector('.prop-field-value');
+    var re = createRichEditor(ta);
+    if (value) re.setHTML(value);
   }
+
+  // -- Drag & Drop for proposal fields --
+  (function () {
+    var dragEl = null;
+    var container = $('#prop-fields');
+
+    container.addEventListener('dragstart', function (e) {
+      var item = e.target.closest('.prop-field-item');
+      if (!item) return;
+      dragEl = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', '');
+    });
+
+    container.addEventListener('dragend', function (e) {
+      if (dragEl) {
+        dragEl.classList.remove('dragging');
+        dragEl = null;
+      }
+      $$('.prop-field-item.drag-over').forEach(function (el) { el.classList.remove('drag-over'); });
+    });
+
+    container.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      var target = e.target.closest('.prop-field-item');
+      if (!target || target === dragEl) return;
+      $$('.prop-field-item.drag-over').forEach(function (el) { el.classList.remove('drag-over'); });
+      target.classList.add('drag-over');
+    });
+
+    container.addEventListener('dragleave', function (e) {
+      var target = e.target.closest('.prop-field-item');
+      if (target) target.classList.remove('drag-over');
+    });
+
+    container.addEventListener('drop', function (e) {
+      e.preventDefault();
+      var target = e.target.closest('.prop-field-item');
+      if (!target || !dragEl || target === dragEl) return;
+      target.classList.remove('drag-over');
+      // Insert before or after based on position
+      var rect = target.getBoundingClientRect();
+      var midY = rect.top + rect.height / 2;
+      if (e.clientY < midY) {
+        container.insertBefore(dragEl, target);
+      } else {
+        container.insertBefore(dragEl, target.nextSibling);
+      }
+    });
+  })();
 
   function getProposalData() {
     var fields = [];
     $$('.prop-field-item').forEach(function (el) {
       var label = el.querySelector('.prop-field-label').value.trim();
-      var value = el.querySelector('.prop-field-value').value.trim();
+      var editable = el.querySelector('.rich-editable');
+      var value = editable ? editable.innerHTML : '';
+      if (value === '<br>') value = '';
       if (label || value) {
         fields.push({ label: label, value: value });
       }
     });
     var data = {
-      id: uid(),
+      id: currentPropEditId || uid(),
       title: $('#prop-title').value.trim(),
       fields: fields,
       createdAt: $('#prop-datetime').value || new Date().toISOString()
@@ -959,8 +1055,9 @@
     if (item.title) text += '# ' + item.title + '\n\n';
     if (item.fields) {
       item.fields.forEach(function (f) {
-        if (f.label && f.value) text += '## ' + f.label + '\n' + f.value + '\n\n';
-        else if (f.value) text += f.value + '\n\n';
+        var val = htmlToText(f.value);
+        if (f.label && val) text += '## ' + f.label + '\n' + val + '\n\n';
+        else if (val) text += val + '\n\n';
         else if (f.label) text += '## ' + f.label + '\n\n';
       });
     }
@@ -968,6 +1065,7 @@
   }
 
   function loadProposalToForm(item) {
+    currentPropEditId = item.id;
     showPropForm();
     $('#prop-title').value = item.title || '';
     $('#prop-fields').innerHTML = '';
@@ -989,6 +1087,7 @@
   }
 
   function clearProposalForm() {
+    currentPropEditId = null;
     $('#prop-title').value = '';
     $('#prop-fields').innerHTML = '';
     setDatetimeNow('#prop-datetime');
@@ -1038,8 +1137,12 @@
     var data = getProposalData();
     if (!data.title && data.fields.length === 0) { toast('제목 또는 항목을 입력해주세요'); return; }
     var items = load(PROP_KEY);
+    if (currentPropEditId) {
+      items = items.filter(function (i) { return i.id !== currentPropEditId; });
+    }
     items.unshift(data);
     save(PROP_KEY, items);
+    currentPropEditId = null;
     renderProposalList();
     showPropList();
     toast('제언서가 저장되었습니다');
@@ -1071,7 +1174,7 @@
       data.fields.forEach(function (f) {
         sheetData.push([]);
         sheetData.push([f.label || '']);
-        sheetData.push([f.value || '']);
+        sheetData.push([htmlToText(f.value) || '']);
       });
     }
     exportAsExcel(data.title || '제언서', sheetData);
@@ -1086,7 +1189,7 @@
     if (data.fields) {
       data.fields.forEach(function (f) {
         if (f.label) html += '<h2>' + escapeHtml(f.label) + '</h2>';
-        if (f.value) html += '<pre>' + escapeHtml(f.value) + '</pre>';
+        if (f.value) html += '<div>' + f.value + '</div>';
       });
     }
     exportAsPDF(data.title || '제언서', html);
@@ -1162,6 +1265,7 @@
   $('#open-settings').addEventListener('click', function () {
     var settings = loadSettings();
     $('#setting-api-key').value = settings.apiKey || '';
+    $('#setting-ai-prompt').value = settings.aiPrompt || DEFAULT_AI_PROMPT;
     $('#api-key-status').textContent = settings.apiKey ? '키가 설정되어 있습니다' : '';
     $('#settings-overlay').classList.add('active');
   });
@@ -1176,11 +1280,18 @@
 
   $('#settings-save').addEventListener('click', function () {
     var key = $('#setting-api-key').value.trim();
+    var prompt = $('#setting-ai-prompt').value.trim();
     var settings = loadSettings();
     settings.apiKey = key;
+    settings.aiPrompt = prompt || '';
     saveSettingsData(settings);
     $('#api-key-status').textContent = key ? '키가 저장되었습니다' : '';
     toast('설정이 저장되었습니다');
+  });
+
+  $('#settings-reset-prompt').addEventListener('click', function () {
+    $('#setting-ai-prompt').value = DEFAULT_AI_PROMPT;
+    toast('기본 프롬프트로 되돌렸습니다');
   });
 
   $('#settings-clear-key').addEventListener('click', function () {
@@ -1191,6 +1302,220 @@
     $('#api-key-status').textContent = '';
     toast('API 키가 삭제되었습니다');
   });
+
+  // ══════════════════════════════════════
+  // 7. 리치 에디터 (볼드, 밑줄, 리스트, 이미지, 그리기)
+  // ══════════════════════════════════════
+  var richEditors = {};
+  var activeRichEditor = null; // 그리기 삽입 대상
+
+  function createRichEditor(textarea) {
+    var id = textarea.id || ('re-' + uid());
+    textarea.style.display = 'none';
+
+    var wrapper = document.createElement('div');
+    wrapper.className = 'rich-editor';
+
+    // Toolbar
+    var toolbar = document.createElement('div');
+    toolbar.className = 'rich-toolbar';
+    toolbar.innerHTML =
+      '<button type="button" class="rich-btn" data-cmd="bold" title="볼드 (Ctrl+B)"><b>B</b></button>' +
+      '<button type="button" class="rich-btn" data-cmd="underline" title="밑줄 (Ctrl+U)"><u>U</u></button>' +
+      '<span class="rich-sep"></span>' +
+      '<button type="button" class="rich-btn" data-cmd="insertOrderedList" title="번호 목록">1.</button>' +
+      '<button type="button" class="rich-btn" data-cmd="insertUnorderedList" title="점 목록">-</button>' +
+      '<button type="button" class="rich-btn" data-cmd="indent" title="들여쓰기 (Tab)">→</button>' +
+      '<button type="button" class="rich-btn" data-cmd="outdent" title="내어쓰기 (Shift+Tab)">←</button>' +
+      '<span class="rich-sep"></span>' +
+      '<button type="button" class="rich-btn" data-action="image" title="이미지 첨부">🖼</button>' +
+      '<button type="button" class="rich-btn" data-action="draw" title="그리기">✏</button>';
+
+    // Editable area
+    var editor = document.createElement('div');
+    editor.className = 'rich-editable';
+    editor.contentEditable = 'true';
+    editor.style.minHeight = (parseInt(textarea.rows, 10) || 4) * 24 + 'px';
+    editor.setAttribute('data-placeholder', textarea.placeholder || '');
+
+    wrapper.appendChild(toolbar);
+    wrapper.appendChild(editor);
+    textarea.parentNode.insertBefore(wrapper, textarea);
+
+    // Toolbar click
+    toolbar.addEventListener('click', function (e) {
+      var btn = e.target.closest('.rich-btn');
+      if (!btn) return;
+      e.preventDefault();
+      var cmd = btn.dataset.cmd;
+      var action = btn.dataset.action;
+      if (cmd) {
+        editor.focus();
+        document.execCommand(cmd, false, null);
+      } else if (action === 'image') {
+        // 파일 선택으로 이미지 추가
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.addEventListener('change', function () {
+          if (input.files && input.files[0]) {
+            insertImageFile(editor, input.files[0]);
+          }
+        });
+        input.click();
+      } else if (action === 'draw') {
+        activeRichEditor = editor;
+        openDrawCanvas();
+      }
+    });
+
+    // Paste images
+    editor.addEventListener('paste', function (e) {
+      var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          e.preventDefault();
+          var file = items[i].getAsFile();
+          insertImageFile(editor, file);
+          return;
+        }
+      }
+    });
+
+    // Tab key for indent/outdent
+    editor.addEventListener('keydown', function (e) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          document.execCommand('outdent', false, null);
+        } else {
+          document.execCommand('indent', false, null);
+        }
+      }
+    });
+
+    var re = {
+      editor: editor,
+      getHTML: function () { return editor.innerHTML === '<br>' ? '' : editor.innerHTML; },
+      setHTML: function (html) { editor.innerHTML = html || ''; },
+      getText: function () { return editor.innerText || ''; }
+    };
+    richEditors[id] = re;
+    return re;
+  }
+
+  function insertImageFile(editor, file) {
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      editor.focus();
+      document.execCommand('insertImage', false, ev.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // 그리기 캔버스
+  function openDrawCanvas() {
+    var overlay = $('#draw-overlay');
+    var canvas = $('#draw-canvas');
+    var ctx = canvas.getContext('2d');
+
+    // Reset canvas
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    var drawing = false;
+    var erasing = false;
+
+    function getPos(e) {
+      var rect = canvas.getBoundingClientRect();
+      var touch = e.touches ? e.touches[0] : e;
+      return {
+        x: (touch.clientX - rect.left) * (canvas.width / rect.width),
+        y: (touch.clientY - rect.top) * (canvas.height / rect.height)
+      };
+    }
+
+    function startDraw(e) {
+      drawing = true;
+      var pos = getPos(e);
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    }
+
+    function moveDraw(e) {
+      if (!drawing) return;
+      e.preventDefault();
+      var pos = getPos(e);
+      ctx.lineWidth = parseInt($('#draw-size').value, 10);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      if (erasing) {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = 'rgba(0,0,0,1)';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = $('#draw-color').value;
+      }
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+    }
+
+    function stopDraw() { drawing = false; }
+
+    canvas.onmousedown = startDraw;
+    canvas.onmousemove = moveDraw;
+    canvas.onmouseup = stopDraw;
+    canvas.onmouseleave = stopDraw;
+    canvas.ontouchstart = startDraw;
+    canvas.ontouchmove = moveDraw;
+    canvas.ontouchend = stopDraw;
+
+    $('#draw-eraser').onclick = function () {
+      erasing = !erasing;
+      this.textContent = erasing ? '펜' : '지우개';
+    };
+
+    $('#draw-clear').onclick = function () {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    };
+
+    $('#draw-insert').onclick = function () {
+      if (activeRichEditor) {
+        var dataUrl = canvas.toDataURL('image/png');
+        activeRichEditor.focus();
+        document.execCommand('insertImage', false, dataUrl);
+      }
+      closeDrawCanvas();
+    };
+
+    $('#draw-cancel').onclick = closeDrawCanvas;
+    $('#draw-close').onclick = closeDrawCanvas;
+
+    overlay.classList.add('active');
+    erasing = false;
+    $('#draw-eraser').textContent = '지우개';
+  }
+
+  function closeDrawCanvas() {
+    $('#draw-overlay').classList.remove('active');
+    activeRichEditor = null;
+  }
+
+  $('#draw-overlay').addEventListener('click', function (e) {
+    if (e.target === this) closeDrawCanvas();
+  });
+
+  // Initialize all rich editors on static textareas
+  $$('textarea[data-rich]').forEach(function (ta) {
+    createRichEditor(ta);
+  });
+
+  // Helper to get rich editor by original textarea ID
+  function getRich(id) {
+    return richEditors[id.replace('#', '')];
+  }
 
   // ── Init ──
   function init() {
