@@ -898,6 +898,28 @@ body {
   color: #d0d1d8;
 }
 
+/* 프레젠테이션 표 테두리 프리셋 */
+.pres-body .re-table.custom-border-color th,
+.pres-body .re-table.custom-border-color td {
+  border-color: var(--table-border-color) !important;
+}
+.pres-body .re-table.border-none th,
+.pres-body .re-table.border-none td { border: none !important; }
+.pres-body .re-table.border-outer { border: 1px solid var(--table-border-color, rgba(255,255,255,0.15)); }
+.pres-body .re-table.border-outer th,
+.pres-body .re-table.border-outer td { border: none !important; }
+.pres-body .re-table.border-horiz th,
+.pres-body .re-table.border-horiz td { border-left:none!important;border-right:none!important; border-top:1px solid var(--table-border-color, rgba(255,255,255,0.15)); border-bottom:1px solid var(--table-border-color, rgba(255,255,255,0.15)); }
+.pres-body .re-table.border-vert th,
+.pres-body .re-table.border-vert td { border-top:none!important;border-bottom:none!important; border-left:1px solid var(--table-border-color, rgba(255,255,255,0.15)); border-right:1px solid var(--table-border-color, rgba(255,255,255,0.15)); }
+.pres-body .re-table.border-header th,
+.pres-body .re-table.border-header td { border:none!important; }
+.pres-body .re-table.border-header thead tr { border-bottom:2px solid var(--table-border-color, rgba(255,255,255,0.3)); }
+.pres-body .re-table.border-thick th,
+.pres-body .re-table.border-thick td { border:2px solid var(--table-border-color, rgba(255,255,255,0.15))!important; }
+.pres-body .re-table.border-dashed th,
+.pres-body .re-table.border-dashed td { border:1px dashed var(--table-border-color, rgba(255,255,255,0.15))!important; }
+
 .pres-body ol, .pres-body ul {
   padding-left: 28px;
   margin: 8px 0;
@@ -1310,6 +1332,148 @@ body {
   background: rgba(59, 130, 246, 0.15) !important;
   outline: 2px solid rgba(59, 130, 246, 0.5);
   outline-offset: -2px;
+}
+
+/* ── 표 테두리 프리셋 ── */
+.re-table.custom-border-color th,
+.re-table.custom-border-color td {
+  border-color: var(--table-border-color) !important;
+}
+
+.re-table.border-none th,
+.re-table.border-none td {
+  border: none !important;
+}
+
+.re-table.border-outer {
+  border: 1px solid var(--table-border-color, var(--border));
+}
+.re-table.border-outer th,
+.re-table.border-outer td {
+  border: none !important;
+}
+
+.re-table.border-horiz th,
+.re-table.border-horiz td {
+  border-left: none !important;
+  border-right: none !important;
+  border-top: 1px solid var(--table-border-color, var(--border));
+  border-bottom: 1px solid var(--table-border-color, var(--border));
+}
+
+.re-table.border-vert th,
+.re-table.border-vert td {
+  border-top: none !important;
+  border-bottom: none !important;
+  border-left: 1px solid var(--table-border-color, var(--border));
+  border-right: 1px solid var(--table-border-color, var(--border));
+}
+
+.re-table.border-header th,
+.re-table.border-header td {
+  border: none !important;
+}
+.re-table.border-header thead tr {
+  border-bottom: 2px solid var(--table-border-color, var(--border));
+}
+
+.re-table.border-thick th,
+.re-table.border-thick td {
+  border: 2px solid var(--table-border-color, var(--border)) !important;
+}
+
+.re-table.border-dashed th,
+.re-table.border-dashed td {
+  border: 1px dashed var(--table-border-color, var(--border)) !important;
+}
+
+/* ── 표 테두리 피커 UI ── */
+.table-border-picker {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  min-width: 170px;
+  user-select: none;
+}
+
+.table-border-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  text-align: left;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.table-border-item:hover {
+  background: var(--bg-elevated);
+}
+
+.table-border-item.active {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.table-border-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  font-size: 0.95rem;
+}
+
+.table-border-label {
+  flex: 1;
+}
+
+.table-border-color-section {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+
+.table-border-color-title {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+.table-border-colors {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 2px 4px 4px;
+}
+
+.table-border-color-btn {
+  width: 20px;
+  height: 20px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s;
+  padding: 0;
+}
+
+.table-border-color-btn:hover {
+  transform: scale(1.2);
+  border-color: var(--accent);
 }
 
 /* ── 표 셀 리사이즈 ── */

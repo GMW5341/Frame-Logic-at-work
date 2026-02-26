@@ -1331,7 +1331,9 @@
       '<button type="button" class="rich-btn" data-action="image" title="이미지 첨부">🖼</button>' +
       '<button type="button" class="rich-btn" data-action="draw" title="그리기">✏</button>' +
       '<span class="rich-sep"></span>' +
-      '<button type="button" class="rich-btn" data-action="table" title="표 삽입">▦</button>';
+      '<button type="button" class="rich-btn" data-action="table" title="표 삽입">▦</button>' +
+      '<span class="rich-sep table-border-sep" style="display:none"></span>' +
+      '<button type="button" class="rich-btn table-border-btn" data-action="table-border" title="표 테두리" style="display:none;width:auto;padding:0 6px;font-size:0.75rem;">┃테두리</button>';
 
     // Editable area
     var editor = document.createElement('div');
@@ -1370,8 +1372,38 @@
         openDrawCanvas();
       } else if (action === 'table') {
         openTablePicker(btn, editor);
+      } else if (action === 'table-border') {
+        openTableBorderPicker(btn, editor);
       }
     });
+
+    // 표 포커스 시 테두리 버튼 표시
+    var borderBtn = toolbar.querySelector('.table-border-btn');
+    var borderSep = toolbar.querySelector('.table-border-sep');
+    editor.addEventListener('focus', showBorderBtnIfTable, true);
+    editor.addEventListener('click', showBorderBtnIfTable);
+    editor.addEventListener('blur', function () {
+      setTimeout(function () {
+        if (!editor.contains(document.activeElement) &&
+            !document.querySelector('.table-border-picker')) {
+          borderBtn.style.display = 'none';
+          borderSep.style.display = 'none';
+        }
+      }, 200);
+    }, true);
+
+    function showBorderBtnIfTable() {
+      var sel = window.getSelection();
+      var node = sel && sel.anchorNode;
+      var inTable = node && (node.nodeType === 1 ? node : node.parentElement);
+      if (inTable && inTable.closest && inTable.closest('.re-table')) {
+        borderBtn.style.display = '';
+        borderSep.style.display = '';
+      } else if (!document.querySelector('.table-border-picker')) {
+        borderBtn.style.display = 'none';
+        borderSep.style.display = 'none';
+      }
+    }
 
     // 표 컨텍스트 메뉴 (우클릭)
     editor.addEventListener('contextmenu', function (e) {
@@ -1592,6 +1624,133 @@
       activeTablePicker.remove();
       activeTablePicker = null;
       document.removeEventListener('mousedown', closePickerOutside);
+    }
+  }
+
+  // ── 표 테두리 설정 피커 ──
+  var activeBorderPicker = null;
+
+  var borderPresets = [
+    { id: '',              label: '전체 테두리',   icon: '▦' },
+    { id: 'border-none',   label: '테두리 없음',   icon: '▢' },
+    { id: 'border-outer',  label: '바깥만',        icon: '□' },
+    { id: 'border-horiz',  label: '가로만',        icon: '━' },
+    { id: 'border-vert',   label: '세로만',        icon: '┃' },
+    { id: 'border-header', label: '헤더 구분만',    icon: '▔' },
+    { id: 'border-thick',  label: '굵은 테두리',   icon: '▣' },
+    { id: 'border-dashed', label: '점선 테두리',   icon: '┈' }
+  ];
+
+  function getActiveTable(editor) {
+    var sel = window.getSelection();
+    var node = sel && sel.anchorNode;
+    var el = node && (node.nodeType === 1 ? node : node.parentElement);
+    if (el && el.closest) {
+      var t = el.closest('.re-table');
+      if (t && editor.contains(t)) return t;
+    }
+    // fallback: 선택된 셀이 있으면 그 표
+    if (tableSel.table && editor.contains(tableSel.table)) return tableSel.table;
+    return editor.querySelector('.re-table');
+  }
+
+  function openTableBorderPicker(btn, editor) {
+    closeTableBorderPicker();
+    var table = getActiveTable(editor);
+    if (!table) return;
+
+    var picker = document.createElement('div');
+    picker.className = 'table-border-picker';
+
+    // 현재 적용된 프리셋 감지
+    var current = '';
+    borderPresets.forEach(function (p) {
+      if (p.id && table.classList.contains(p.id)) current = p.id;
+    });
+
+    borderPresets.forEach(function (p) {
+      var item = document.createElement('button');
+      item.className = 'table-border-item' + (current === p.id ? ' active' : '');
+      item.dataset.borderId = p.id;
+      item.innerHTML = '<span class="table-border-icon">' + p.icon + '</span>' +
+                        '<span class="table-border-label">' + p.label + '</span>';
+      picker.appendChild(item);
+    });
+
+    // 커스텀 색상 선택
+    var colorSection = document.createElement('div');
+    colorSection.className = 'table-border-color-section';
+    colorSection.innerHTML =
+      '<span class="table-border-color-title">테두리 색상</span>' +
+      '<div class="table-border-colors">' +
+        '<button class="table-border-color-btn" data-bcolor="" title="기본" style="background:var(--border);border:1px solid var(--border)"></button>' +
+        '<button class="table-border-color-btn" data-bcolor="#3b82f6" title="파랑" style="background:#3b82f6"></button>' +
+        '<button class="table-border-color-btn" data-bcolor="#ef4444" title="빨강" style="background:#ef4444"></button>' +
+        '<button class="table-border-color-btn" data-bcolor="#22c55e" title="초록" style="background:#22c55e"></button>' +
+        '<button class="table-border-color-btn" data-bcolor="#a855f7" title="보라" style="background:#a855f7"></button>' +
+        '<button class="table-border-color-btn" data-bcolor="#f59e0b" title="주황" style="background:#f59e0b"></button>' +
+        '<button class="table-border-color-btn" data-bcolor="#6b7280" title="회색" style="background:#6b7280"></button>' +
+        '<button class="table-border-color-btn" data-bcolor="#1f2937" title="진한" style="background:#1f2937"></button>' +
+      '</div>';
+    picker.appendChild(colorSection);
+
+    picker.addEventListener('click', function (e) {
+      var item = e.target.closest('.table-border-item');
+      var colorBtn = e.target.closest('[data-bcolor]');
+      if (item) {
+        var bid = item.dataset.borderId;
+        // 기존 border 클래스 모두 제거
+        borderPresets.forEach(function (p) {
+          if (p.id) table.classList.remove(p.id);
+        });
+        if (bid) table.classList.add(bid);
+        // active 표시 업데이트
+        picker.querySelectorAll('.table-border-item').forEach(function (i) {
+          i.classList.toggle('active', i.dataset.borderId === bid);
+        });
+      } else if (colorBtn) {
+        var color = colorBtn.dataset.bcolor;
+        if (color) {
+          table.style.setProperty('--table-border-color', color);
+          table.classList.add('custom-border-color');
+        } else {
+          table.style.removeProperty('--table-border-color');
+          table.classList.remove('custom-border-color');
+        }
+      }
+    });
+
+    var rect = btn.getBoundingClientRect();
+    picker.style.position = 'fixed';
+    picker.style.top = (rect.bottom + 4) + 'px';
+    picker.style.left = rect.left + 'px';
+    picker.style.zIndex = '9999';
+    document.body.appendChild(picker);
+    activeBorderPicker = picker;
+
+    requestAnimationFrame(function () {
+      var pr = picker.getBoundingClientRect();
+      if (pr.right > window.innerWidth) {
+        picker.style.left = (window.innerWidth - pr.width - 8) + 'px';
+      }
+    });
+
+    setTimeout(function () {
+      document.addEventListener('mousedown', closeBorderPickerOutside);
+    }, 0);
+  }
+
+  function closeBorderPickerOutside(e) {
+    if (activeBorderPicker && !activeBorderPicker.contains(e.target) && !e.target.closest('.table-border-btn')) {
+      closeTableBorderPicker();
+    }
+  }
+
+  function closeTableBorderPicker() {
+    if (activeBorderPicker) {
+      activeBorderPicker.remove();
+      activeBorderPicker = null;
+      document.removeEventListener('mousedown', closeBorderPickerOutside);
     }
   }
 
