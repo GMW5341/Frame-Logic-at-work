@@ -3581,6 +3581,201 @@
     renderJnlAttachList();
   }
 
+  // ── 리치 텍스트 유틸리티 ──
+  function sanitizeJnlHtml(html) {
+    if (!html) return '';
+    var temp = document.createElement('div');
+    temp.innerHTML = html;
+    var dangerous = temp.querySelectorAll('script, style, iframe, form, object, embed, applet');
+    for (var i = 0; i < dangerous.length; i++) dangerous[i].remove();
+    var all = temp.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var attrs = all[i].attributes;
+      for (var j = attrs.length - 1; j >= 0; j--) {
+        if (attrs[j].name.toLowerCase().indexOf('on') === 0) all[i].removeAttribute(attrs[j].name);
+      }
+      if (all[i].hasAttribute('href') && all[i].getAttribute('href').trim().toLowerCase().indexOf('javascript:') === 0) {
+        all[i].removeAttribute('href');
+      }
+    }
+    return temp.innerHTML;
+  }
+
+  function htmlToPlainText(html) {
+    if (!html) return '';
+    return html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/?(div|p|li|h[1-6])[^>]*>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+      .replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  function plainTextToHtml(text) {
+    if (!text) return '';
+    if (text.indexOf('<') !== -1) return text; // already HTML
+    return escapeHtml(text).replace(/\n/g, '<br>');
+  }
+
+  function insertJnlImage(editorDiv, file) {
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      editorDiv.focus();
+      var img = document.createElement('img');
+      img.src = ev.target.result;
+      img.className = 'jnl-rich-img';
+      var sel = window.getSelection();
+      if (sel.rangeCount > 0 && editorDiv.contains(sel.anchorNode)) {
+        var range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(img);
+        range.setStartAfter(img);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        editorDiv.appendChild(img);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function insertJnlFileTag(editorDiv, file) {
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      editorDiv.focus();
+      var fileStore = loadJnlFiles();
+      var fid = 'rf-' + uid();
+      fileStore[fid] = { name: file.name, size: file.size, type: file.type, dataUrl: ev.target.result };
+      saveJnlFiles(fileStore);
+      var tag = document.createElement('a');
+      tag.className = 'jnl-inline-file';
+      tag.href = '#';
+      tag.dataset.fileId = fid;
+      tag.contentEditable = 'false';
+      tag.textContent = '\uD83D\uDCCE ' + file.name;
+      var sel = window.getSelection();
+      if (sel.rangeCount > 0 && editorDiv.contains(sel.anchorNode)) {
+        var range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(tag);
+        var space = document.createTextNode(' ');
+        range.setStartAfter(tag);
+        range.insertNode(space);
+        range.setStartAfter(space);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        editorDiv.appendChild(tag);
+        editorDiv.appendChild(document.createTextNode(' '));
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function openJnlLinkDialog(editorDiv) {
+    var sel = window.getSelection();
+    var savedRange = null, selectedText = '';
+    if (sel.rangeCount > 0 && editorDiv.contains(sel.anchorNode)) {
+      savedRange = sel.getRangeAt(0).cloneRange();
+      selectedText = sel.toString().trim();
+    }
+    var overlay = document.createElement('div');
+    overlay.className = 'jnl-link-overlay';
+    var dialog = document.createElement('div');
+    dialog.className = 'jnl-link-dialog';
+    dialog.innerHTML =
+      '<div class="jnl-link-title">\uB9C1\uD06C \uC0BD\uC785</div>' +
+      '<input type="text" class="jnl-link-input" placeholder="\uD45C\uC2DC \uD14D\uC2A4\uD2B8" value="' + escapeHtml(selectedText) + '">' +
+      '<input type="text" class="jnl-link-input jnl-link-url" placeholder="URL (\uC608: https://...)">' +
+      '<div class="jnl-link-btns">' +
+        '<button class="btn btn-small btn-ghost jnl-link-cancel">\uCDE8\uC18C</button>' +
+        '<button class="btn btn-small btn-primary jnl-link-ok">\uD655\uC778</button>' +
+      '</div>';
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    var textInput = dialog.querySelector('input:first-of-type');
+    var urlInput = dialog.querySelector('.jnl-link-url');
+    urlInput.focus();
+
+    function doClose() { if (overlay.parentNode) overlay.remove(); }
+    overlay.addEventListener('click', function (ev) { if (ev.target === overlay) doClose(); });
+    dialog.querySelector('.jnl-link-cancel').addEventListener('click', doClose);
+
+    function doSave() {
+      var url = urlInput.value.trim();
+      var text = textInput.value.trim() || url;
+      if (!url) { urlInput.focus(); return; }
+      if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) url = 'https://' + url;
+      var a = document.createElement('a');
+      a.href = url; a.textContent = text;
+      a.target = '_blank'; a.rel = 'noopener noreferrer';
+      editorDiv.focus();
+      if (savedRange && editorDiv.contains(savedRange.startContainer)) {
+        var newSel = window.getSelection();
+        savedRange.deleteContents();
+        savedRange.insertNode(a);
+        savedRange.setStartAfter(a);
+        savedRange.collapse(true);
+        newSel.removeAllRanges();
+        newSel.addRange(savedRange);
+      } else {
+        editorDiv.appendChild(a);
+      }
+      doClose();
+    }
+    dialog.querySelector('.jnl-link-ok').addEventListener('click', doSave);
+    urlInput.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') doSave();
+      if (ev.key === 'Escape') doClose();
+    });
+  }
+
+  // ── 셀 단위 AI ──
+  var _jnlSuppressBlur = false;
+
+  function runCellAI(entryId, fieldKey, action, customPrompt) {
+    var items = load(JNL_KEY);
+    var entry = items.find(function (i) { return i.id === entryId; });
+    if (!entry) return Promise.reject(new Error('항목 없음'));
+    var cols = loadJnlColumns();
+    var col = cols.find(function (c) { return c.key === fieldKey; });
+    var colLabel = col ? col.label : fieldKey;
+    var cellVal = entry[fieldKey] || '';
+    if (col && col.type === 'longtext') cellVal = htmlToPlainText(cellVal);
+
+    var entryText = jnlEntryToText(entry);
+    var contextItems = items.slice(0, 10).filter(function (i) { return i.id !== entryId; }).slice(0, 5);
+    var contextText = contextItems.map(function (c) { return jnlEntryToText(c); }).join('\n---\n');
+
+    var systemPrompt = '당신은 전략기획팀의 업무일지 작성을 돕는 AI 어시스턴트입니다. 간결하고 실무적인 한국어로 답변하세요.';
+    var userMsg = '';
+
+    if (action === 'fill') {
+      if (cellVal) return Promise.resolve(null);
+      userMsg = '아래 업무일지 행의 "' + colLabel + '" 칸이 비어있습니다. 적절한 내용을 작성해주세요.\n\n' +
+        '현재 행:\n' + entryText + '\n\n참고 항목:\n' + contextText +
+        '\n\n"' + colLabel + '" 칸에 들어갈 내용만 작성하세요. 부가 설명 없이 내용만 출력하세요.';
+    } else if (action === 'improve') {
+      if (!cellVal) return Promise.resolve(null);
+      userMsg = '아래 업무일지 행의 "' + colLabel + '" 칸 내용을 개선해주세요.\n\n현재 값: ' + cellVal +
+        '\n\n전체 행:\n' + entryText + '\n\n참고 항목:\n' + contextText +
+        '\n\n개선된 "' + colLabel + '" 내용만 출력하세요. 부가 설명 없이 내용만 출력하세요.';
+    } else if (action === 'custom') {
+      userMsg = (customPrompt || '') + '\n\n대상 칸: "' + colLabel + '"\n현재 값: ' + (cellVal || '(비어있음)') +
+        '\n\n전체 행:\n' + entryText + '\n\n참고 항목:\n' + contextText +
+        '\n\n"' + colLabel + '" 칸에 들어갈 결과만 출력하세요. 부가 설명 없이 내용만 출력하세요.';
+    } else {
+      return Promise.resolve(null);
+    }
+
+    return callClaudeAPI(systemPrompt, userMsg).then(function (text) {
+      return text.trim();
+    });
+  }
+
   function getJnlData() {
     var cols = loadJnlColumns();
     var fileStore = loadJnlFiles();
@@ -3696,7 +3891,8 @@
       } else if (col.filterable === 'input') {
         var kw = jnlColFilters[col.key].toLowerCase();
         items = items.filter(function (e) {
-          var val = col.type === 'date' ? formatJnlDate(e[col.key]) : (e[col.key] || '');
+          var val = col.type === 'date' ? formatJnlDate(e[col.key]) :
+            col.type === 'longtext' ? htmlToPlainText(e[col.key] || '') : (e[col.key] || '');
           return val.toLowerCase().indexOf(kw) !== -1;
         });
       }
@@ -3705,7 +3901,8 @@
     if (search) {
       items = items.filter(function (e) {
         return cols.some(function (col) {
-          return (e[col.key] || '').toLowerCase().indexOf(search) !== -1;
+          var sv = col.type === 'longtext' ? htmlToPlainText(e[col.key] || '') : (e[col.key] || '');
+          return sv.toLowerCase().indexOf(search) !== -1;
         });
       });
     }
@@ -3734,7 +3931,7 @@
     cols.forEach(function (col) {
       headerHtml += '<th>' + escapeHtml(col.label) + '</th>';
     });
-    headerHtml += '<th style="width:80px">작업</th></tr>';
+    headerHtml += '<th style="width:50px">작업</th></tr>';
     // 필터 행
     var filterHtml = '<tr class="jnl-filter-header">';
     cols.forEach(function (col) {
@@ -3775,7 +3972,11 @@
     var val = entry[col.key] || '';
     if (isFirst) return '<span class="jnl-category-badge">' + escapeHtml(val || '-') + '</span>';
     if (col.type === 'date') return escapeHtml(formatJnlDate(val));
-    if (col.type === 'longtext') return '<div class="jnl-cell-text">' + escapeHtml(val) + '</div>';
+    if (col.type === 'longtext') {
+      var html = val;
+      if (html && html.indexOf('<') === -1) html = escapeHtml(html).replace(/\n/g, '<br>');
+      return '<div class="jnl-cell-text jnl-rich-content">' + sanitizeJnlHtml(html) + '</div>';
+    }
     return escapeHtml(val);
   }
 
@@ -3820,7 +4021,6 @@
       }).join('');
       return '<tr data-id="' + e.id + '">' + cells +
         '<td class="jnl-td-actions">' +
-          '<button class="btn btn-small btn-accent jnl-ai-row-btn" data-action="ai-row" title="AI 도우미">🤖</button>' +
           '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
         '</td>' +
       '</tr>';
@@ -3907,9 +4107,19 @@
     if (!td) { jnlSaving = false; return; }
 
     td.classList.remove('jnl-editing');
+
+    // contentEditable (리치 텍스트) 또는 일반 input/textarea
+    var richEditor = td.querySelector('.jnl-cell-rich-editor');
     var input = td.querySelector('.jnl-cell-input, .jnl-cell-textarea');
-    if (!input) { jnlSaving = false; return; }
-    var newVal = input.value.trim();
+    var newVal;
+    if (richEditor) {
+      newVal = richEditor.innerHTML.trim();
+      if (newVal === '<br>' || newVal === '<div><br></div>' || newVal === '<p><br></p>') newVal = '';
+    } else if (input) {
+      newVal = input.value.trim();
+    } else {
+      jnlSaving = false; return;
+    }
 
     var items = load(JNL_KEY);
     var entry = items.find(function (i) { return i.id === editId; });
@@ -3921,7 +4131,6 @@
         populateJnlCategoryFilter();
         populateJnlColFilters();
       }
-      // 셀 내용만 교체 (전체 테이블 리렌더 안 함)
       td.innerHTML = renderJnlCellContentByField(editField, entry);
       var cols = loadJnlColumns();
       var col = cols.find(function (c) { return c.key === editField; });
@@ -3929,11 +4138,51 @@
     }
 
     jnlSaving = false;
-    // 첫 번째 칼럼 변경 시 정렬이 바뀔 수 있으므로 전체 리렌더
     var cols2 = loadJnlColumns();
     if (!skipRender && cols2[0] && editField === cols2[0].key) {
       renderJnlTable();
     }
+  }
+
+  function moveToNextCell(td) {
+    var nextTd = td.nextElementSibling;
+    while (nextTd && !nextTd.classList.contains('jnl-editable')) {
+      nextTd = nextTd.nextElementSibling;
+    }
+    if (nextTd) {
+      var nextTr = nextTd.closest('tr[data-id]');
+      if (nextTr) startJnlEdit(nextTd, nextTr.dataset.id, nextTd.dataset.field);
+    }
+  }
+
+  function bindSimpleEditKeys(inputEl, td, id, field, col, currentVal) {
+    inputEl.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && !ev.shiftKey) {
+        ev.preventDefault();
+        commitJnlEdit();
+      } else if (ev.key === 'Escape') {
+        jnlEditing = null;
+        td.classList.remove('jnl-editing');
+        td.innerHTML = renderJnlCellContentByField(field, { });
+        var items = load(JNL_KEY);
+        var e = items.find(function (i) { return i.id === id; });
+        if (e) td.innerHTML = renderJnlCellContentByField(field, e);
+        if (col && col.type === 'date') td.dataset.raw = currentVal;
+      } else if (ev.key === 'Tab') {
+        ev.preventDefault();
+        commitJnlEdit(true);
+        moveToNextCell(td);
+      }
+    });
+    inputEl.addEventListener('blur', function () {
+      setTimeout(function () {
+        if (_jnlSuppressBlur) return;
+        if (jnlEditing && jnlEditing.id === id && jnlEditing.field === field) {
+          if (td.contains(document.activeElement)) return;
+          commitJnlEdit();
+        }
+      }, 150);
+    });
   }
 
   function startJnlEdit(td, id, field) {
@@ -3949,48 +4198,242 @@
     var currentVal = entry[field] || '';
 
     if (col && col.type === 'date') {
+      // 날짜 입력
       td.innerHTML = '<input type="date" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">';
+      var dateEl = td.querySelector('.jnl-cell-input');
+      dateEl.focus();
+      bindSimpleEditKeys(dateEl, td, id, field, col, currentVal);
     } else if (col && col.type === 'longtext') {
-      td.innerHTML = '<textarea class="jnl-cell-textarea" rows="3">' + escapeHtml(currentVal) + '</textarea>';
-    } else {
-      td.innerHTML = '<input type="text" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">';
-    }
+      // ── 리치 텍스트 편집 ──
+      td.innerHTML = '';
+      var toolbar = document.createElement('div');
+      toolbar.className = 'jnl-rich-toolbar';
+      toolbar.innerHTML =
+        '<button type="button" class="jnl-rich-btn" data-cmd="bold" title="굵게 Ctrl+B"><b>B</b></button>' +
+        '<button type="button" class="jnl-rich-btn" data-cmd="underline" title="밑줄 Ctrl+U"><u>U</u></button>' +
+        '<button type="button" class="jnl-rich-btn" data-cmd="italic" title="기울임 Ctrl+I"><i>I</i></button>' +
+        '<span class="jnl-rich-sep"></span>' +
+        '<button type="button" class="jnl-rich-btn" data-action="link" title="링크">\uD83D\uDD17</button>' +
+        '<button type="button" class="jnl-rich-btn" data-action="image" title="이미지">\uD83D\uDDBC</button>' +
+        '<button type="button" class="jnl-rich-btn" data-action="file" title="파일 첨부">\uD83D\uDCCE</button>' +
+        '<span class="jnl-rich-sep"></span>' +
+        '<button type="button" class="jnl-rich-btn jnl-rich-ai" data-action="ai" title="AI">\uD83E\uDD16</button>' +
+        '<span style="flex:1"></span>' +
+        '<button type="button" class="jnl-rich-btn jnl-rich-save" data-action="save" title="저장 Ctrl+Enter">\u2713</button>' +
+        '<button type="button" class="jnl-rich-btn jnl-rich-cancel" data-action="cancel" title="취소 Esc">\u2715</button>';
 
-    var inputEl = td.querySelector('.jnl-cell-input, .jnl-cell-textarea');
-    if (!inputEl) return;
-    inputEl.focus();
+      var editorDiv = document.createElement('div');
+      editorDiv.className = 'jnl-cell-rich-editor';
+      editorDiv.contentEditable = 'true';
+      var htmlVal = currentVal;
+      if (htmlVal && htmlVal.indexOf('<') === -1) htmlVal = escapeHtml(htmlVal).replace(/\n/g, '<br>');
+      editorDiv.innerHTML = htmlVal;
 
-    inputEl.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter' && !ev.shiftKey) {
+      td.appendChild(toolbar);
+      td.appendChild(editorDiv);
+      editorDiv.focus();
+
+      // 툴바 mousedown → 에디터 blur 방지
+      toolbar.addEventListener('mousedown', function (ev) {
+        if (ev.target.closest('.jnl-rich-btn')) ev.preventDefault();
+      });
+
+      toolbar.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('.jnl-rich-btn');
+        if (!btn) return;
         ev.preventDefault();
-        commitJnlEdit();
-      } else if (ev.key === 'Escape') {
-        jnlEditing = null;
-        td.classList.remove('jnl-editing');
-        td.innerHTML = renderJnlCellContentByField(field, entry);
-        if (col && col.type === 'date') td.dataset.raw = currentVal;
-      } else if (ev.key === 'Tab') {
-        ev.preventDefault();
-        commitJnlEdit(true);
-        // Tab으로 다음 편집 가능한 셀로 이동
-        var nextTd = td.nextElementSibling;
-        while (nextTd && !nextTd.classList.contains('jnl-editable')) {
-          nextTd = nextTd.nextElementSibling;
-        }
-        if (nextTd) {
-          var nextTr = nextTd.closest('tr[data-id]');
-          if (nextTr) startJnlEdit(nextTd, nextTr.dataset.id, nextTd.dataset.field);
-        }
-      }
-    });
-
-    inputEl.addEventListener('blur', function () {
-      // 짧은 지연으로 다른 셀 클릭 시 순서 보장
-      setTimeout(function () {
-        if (jnlEditing && jnlEditing.id === id && jnlEditing.field === field) {
+        ev.stopPropagation();
+        var cmd = btn.dataset.cmd;
+        var action = btn.dataset.action;
+        if (cmd) {
+          editorDiv.focus();
+          document.execCommand(cmd, false, null);
+        } else if (action === 'link') {
+          openJnlLinkDialog(editorDiv);
+        } else if (action === 'image') {
+          _jnlSuppressBlur = true;
+          var inp = document.createElement('input');
+          inp.type = 'file'; inp.accept = 'image/*';
+          inp.addEventListener('change', function () {
+            _jnlSuppressBlur = false;
+            if (inp.files && inp.files[0]) insertJnlImage(editorDiv, inp.files[0]);
+            editorDiv.focus();
+          });
+          inp.click();
+          setTimeout(function () { _jnlSuppressBlur = false; }, 60000);
+        } else if (action === 'file') {
+          _jnlSuppressBlur = true;
+          var inp = document.createElement('input');
+          inp.type = 'file';
+          inp.addEventListener('change', function () {
+            _jnlSuppressBlur = false;
+            if (inp.files && inp.files[0]) insertJnlFileTag(editorDiv, inp.files[0]);
+            editorDiv.focus();
+          });
+          inp.click();
+          setTimeout(function () { _jnlSuppressBlur = false; }, 60000);
+        } else if (action === 'ai') {
+          showCellAiMenu(btn, id, field, editorDiv);
+        } else if (action === 'save') {
           commitJnlEdit();
+        } else if (action === 'cancel') {
+          jnlEditing = null;
+          td.classList.remove('jnl-editing');
+          td.innerHTML = renderJnlCellContentByField(field, entry);
         }
-      }, 100);
+      });
+
+      // 키보드 단축키
+      editorDiv.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape') {
+          jnlEditing = null;
+          td.classList.remove('jnl-editing');
+          td.innerHTML = renderJnlCellContentByField(field, entry);
+        } else if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
+          ev.preventDefault();
+          commitJnlEdit();
+        } else if (ev.key === 'Tab') {
+          ev.preventDefault();
+          commitJnlEdit(true);
+          moveToNextCell(td);
+        }
+      });
+
+      // 이미지 붙여넣기
+      editorDiv.addEventListener('paste', function (ev) {
+        var clipItems = (ev.clipboardData || ev.originalEvent.clipboardData).items;
+        for (var pi = 0; pi < clipItems.length; pi++) {
+          if (clipItems[pi].type.indexOf('image') !== -1) {
+            ev.preventDefault();
+            insertJnlImage(editorDiv, clipItems[pi].getAsFile());
+            return;
+          }
+        }
+      });
+
+      // blur → 저장
+      editorDiv.addEventListener('blur', function () {
+        setTimeout(function () {
+          if (_jnlSuppressBlur) return;
+          if (jnlEditing && jnlEditing.id === id && jnlEditing.field === field) {
+            if (td.contains(document.activeElement)) return;
+            commitJnlEdit();
+          }
+        }, 250);
+      });
+    } else {
+      // ── 짧은 텍스트 + AI 버튼 ──
+      var wrap = document.createElement('div');
+      wrap.className = 'jnl-text-edit-wrap';
+      wrap.innerHTML = '<input type="text" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">' +
+        '<button type="button" class="jnl-cell-ai-btn" title="AI">\uD83E\uDD16</button>';
+      td.innerHTML = '';
+      td.appendChild(wrap);
+      var inputEl = wrap.querySelector('.jnl-cell-input');
+      inputEl.focus();
+
+      wrap.querySelector('.jnl-cell-ai-btn').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      wrap.querySelector('.jnl-cell-ai-btn').addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        showCellAiMenu(ev.target, id, field, null, inputEl);
+      });
+
+      bindSimpleEditKeys(inputEl, td, id, field, col, currentVal);
+    }
+  }
+
+  // ── 셀 AI 메뉴 ──
+  function showCellAiMenu(anchorEl, entryId, fieldKey, editorDiv, inputEl) {
+    var existing = document.querySelector('.jnl-ai-menu');
+    if (existing) existing.remove();
+
+    var menu = document.createElement('div');
+    menu.className = 'jnl-ai-menu';
+    menu.innerHTML =
+      '<button data-ai-action="fill">\u2728 AI \uCC44\uC6B0\uAE30</button>' +
+      '<button data-ai-action="improve">\uD83D\uDD0D AI \uAC1C\uC120</button>' +
+      '<button data-ai-action="custom">\u270D \uC9C1\uC811 \uC785\uB825</button>';
+
+    var rect = anchorEl.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.left = rect.left + 'px';
+    menu.style.zIndex = '9999';
+    document.body.appendChild(menu);
+
+    function closeMenu() {
+      if (menu.parentNode) menu.remove();
+      document.removeEventListener('mousedown', outsideHandler);
+    }
+    function outsideHandler(ev) {
+      if (!menu.contains(ev.target)) closeMenu();
+    }
+    setTimeout(function () { document.addEventListener('mousedown', outsideHandler); }, 50);
+
+    menu.addEventListener('click', function (ev) {
+      var action = ev.target.dataset.aiAction;
+      if (!action) return;
+
+      if (action === 'custom') {
+        // 커스텀 프롬프트 입력
+        menu.innerHTML =
+          '<input type="text" class="jnl-ai-custom-input" placeholder="\uC608: \uC601\uC5B4\uB85C \uBC88\uC5ED\uD574\uC918">' +
+          '<button class="btn btn-small btn-primary jnl-ai-custom-go">\uC2E4\uD589</button>';
+        var cInput = menu.querySelector('.jnl-ai-custom-input');
+        cInput.focus();
+        cInput.addEventListener('keydown', function (kev) {
+          if (kev.key === 'Enter') menu.querySelector('.jnl-ai-custom-go').click();
+          if (kev.key === 'Escape') closeMenu();
+        });
+        menu.querySelector('.jnl-ai-custom-go').addEventListener('click', function () {
+          var prompt = cInput.value.trim();
+          if (!prompt) return;
+          closeMenu();
+          applyCellAI(entryId, fieldKey, 'custom', editorDiv, inputEl, prompt);
+        });
+        return;
+      }
+
+      closeMenu();
+      applyCellAI(entryId, fieldKey, action, editorDiv, inputEl);
+    });
+  }
+
+  function applyCellAI(entryId, fieldKey, action, editorDiv, inputEl, customPrompt) {
+    toast('AI 처리 중...');
+    runCellAI(entryId, fieldKey, action, customPrompt).then(function (result) {
+      if (!result) { toast('AI 결과 없음'); return; }
+      // 결과를 셀에 적용
+      var items = load(JNL_KEY);
+      var target = items.find(function (i) { return i.id === entryId; });
+      if (!target) return;
+
+      var cols = loadJnlColumns();
+      var col = cols.find(function (c) { return c.key === fieldKey; });
+      var isRich = col && col.type === 'longtext';
+
+      if (isRich) {
+        target[fieldKey] = result.replace(/\n/g, '<br>');
+      } else {
+        target[fieldKey] = result;
+      }
+      save(JNL_KEY, items);
+
+      // 현재 편집 중이면 에디터에 반영, 아니면 테이블 리렌더
+      if (jnlEditing && jnlEditing.id === entryId && jnlEditing.field === fieldKey) {
+        if (editorDiv) {
+          editorDiv.innerHTML = target[fieldKey];
+        } else if (inputEl) {
+          inputEl.value = target[fieldKey];
+        }
+      } else {
+        renderJnlTable();
+      }
+      populateJnlCategoryFilter();
+      populateJnlColFilters();
+      toast('AI 결과가 적용되었습니다');
+    }).catch(function (err) {
+      toast('AI 오류: ' + err.message);
     });
   }
 
@@ -4006,8 +4449,27 @@
       return;
     }
 
-    // 이미 편집 중인 input/textarea 클릭은 무시
-    if (e.target.closest('.jnl-cell-input, .jnl-cell-textarea')) return;
+    // 인라인 파일 태그 (리치 텍스트 내 파일)
+    var inlineFile = e.target.closest('.jnl-inline-file');
+    if (inlineFile) {
+      e.preventDefault();
+      var fid2 = inlineFile.dataset.fileId;
+      var fs2 = loadJnlFiles();
+      var f2 = fs2[fid2];
+      if (f2) downloadJnlFile(f2);
+      return;
+    }
+
+    // 리치 컨텐츠 내 링크 클릭 (뷰 모드에서만)
+    var richLink = e.target.closest('.jnl-rich-content a[href]');
+    if (richLink && !e.target.closest('.jnl-editing')) {
+      e.preventDefault();
+      window.open(richLink.href, '_blank', 'noopener');
+      return;
+    }
+
+    // 이미 편집 중인 input/textarea/contentEditable 클릭은 무시
+    if (e.target.closest('.jnl-cell-input, .jnl-cell-textarea, .jnl-cell-rich-editor, .jnl-rich-toolbar, .jnl-text-edit-wrap')) return;
 
     var tr = e.target.closest('tr[data-id]');
     if (!tr) return;
@@ -4117,7 +4579,7 @@
         var f = fileStore[fid];
         return f ? f.name : '';
       }).filter(Boolean).join(', ');
-      var row = cols.map(function (c) { return e[c.key] || ''; });
+      var row = cols.map(function (c) { var v = e[c.key] || ''; return c.type === 'longtext' ? htmlToPlainText(v) : v; });
       row.push(attachNames);
       sheetData.push(row);
     });
@@ -4138,7 +4600,7 @@
         var f = fileStore[fid];
         return f ? f.name : '';
       }).filter(Boolean).join('; ');
-      var row = cols.map(function (c) { return e[c.key] || ''; });
+      var row = cols.map(function (c) { var v = e[c.key] || ''; return c.type === 'longtext' ? htmlToPlainText(v) : v; });
       row.push(attachNames);
       row = row.map(function (cell) {
         if (cell.indexOf(',') !== -1 || cell.indexOf('"') !== -1 || cell.indexOf('\n') !== -1) {
@@ -4337,6 +4799,7 @@
       var val = e[col.key];
       if (!val) return;
       if (col.type === 'date') val = formatJnlDate(val);
+      else if (col.type === 'longtext') val = htmlToPlainText(val);
       parts.push(col.label + ': ' + val);
     });
     return parts.join('\n');
@@ -4366,157 +4829,7 @@
     $('#jnl-ai-panel').style.display = 'none';
   });
 
-  // ── 행 단위 AI 도우미 (🤖 버튼) ──
-  $('#jnl-tbody').addEventListener('click', function (e) {
-    var aiBtn = e.target.closest('[data-action="ai-row"]');
-    if (!aiBtn) return;
-    e.stopPropagation();
-
-    var tr = aiBtn.closest('tr[data-id]');
-    if (!tr) return;
-    var id = tr.dataset.id;
-    var items = load(JNL_KEY);
-    var entry = items.find(function (i) { return i.id === id; });
-    if (!entry) return;
-
-    // 메뉴 팝업 표시
-    var existing = document.querySelector('.jnl-ai-menu');
-    if (existing) existing.remove();
-
-    var menu = document.createElement('div');
-    menu.className = 'jnl-ai-menu';
-    menu.innerHTML =
-      '<button data-ai-action="fill">✨ 빈 칸 채우기</button>' +
-      '<button data-ai-action="feedback">💬 피드백 생성</button>' +
-      '<button data-ai-action="action">📋 수행 사항 제안</button>' +
-      '<button data-ai-action="improve">🔍 내용 개선 제안</button>';
-
-    var rect = aiBtn.getBoundingClientRect();
-    menu.style.position = 'fixed';
-    menu.style.top = (rect.bottom + 4) + 'px';
-    menu.style.left = rect.left + 'px';
-    document.body.appendChild(menu);
-
-    function closeMenu() {
-      if (menu.parentNode) menu.remove();
-      document.removeEventListener('click', closeMenu);
-    }
-    setTimeout(function () { document.addEventListener('click', closeMenu); }, 50);
-
-    menu.addEventListener('click', function (ev) {
-      var action = ev.target.dataset.aiAction;
-      if (!action) return;
-      closeMenu();
-
-      var entryText = jnlEntryToText(entry);
-      // 주변 항목도 맥락으로 전달
-      var contextItems = items.slice(0, 10).filter(function (i) { return i.id !== id; }).slice(0, 5);
-      var contextText = contextItems.map(function (c) { return jnlEntryToText(c); }).join('\n---\n');
-
-      var systemPrompt = '당신은 전략기획팀의 업무일지 작성을 돕는 AI 어시스턴트입니다. 간결하고 실무적인 한국어로 답변하세요.';
-      var userMsg = '';
-
-      if (action === 'fill') {
-        var fillCols = loadJnlColumns();
-        var emptyFields = [];
-        var jsonExample = {};
-        fillCols.forEach(function (col, idx) {
-          if (idx === 0) return; // 첫 번째 칼럼(번호)은 건너뜀
-          if (!entry[col.key]) {
-            emptyFields.push(col.label);
-            jsonExample[col.key] = '...';
-          }
-        });
-        if (emptyFields.length === 0) { toast('채울 빈 칸이 없습니다'); return; }
-        userMsg = '아래 업무일지 항목의 비어있는 필드를 채워주세요.\n\n현재 항목:\n' + entryText +
-          '\n\n비어있는 필드: ' + emptyFields.join(', ') +
-          '\n\n다른 항목 참고:\n' + contextText +
-          '\n\n반드시 아래 JSON 형식으로만 응답하세요 (비어있는 필드만 포함):\n' +
-          JSON.stringify(jsonExample);
-      } else if (action === 'feedback') {
-        userMsg = '아래 업무 항목에 대한 피드백과 결정 사항을 작성해주세요.\n\n' + entryText +
-          '\n\n참고 항목:\n' + contextText +
-          '\n\n3-5줄로 구체적인 피드백을 작성하세요.';
-      } else if (action === 'action') {
-        userMsg = '아래 업무 항목을 바탕으로 수행해야 할 사항과 느낀 점을 작성해주세요.\n\n' + entryText +
-          '\n\n참고 항목:\n' + contextText +
-          '\n\n구체적인 액션 아이템 3-5개를 포함해서 작성하세요.';
-      } else if (action === 'improve') {
-        userMsg = '아래 업무일지 항목의 내용을 검토하고 개선 제안을 해주세요.\n\n' + entryText +
-          '\n\n- 내용이 부족한 부분\n- 더 구체적으로 작성할 수 있는 부분\n- 추가하면 좋을 정보\n등을 제안해주세요.';
-      }
-
-      aiBtn.disabled = true;
-      aiBtn.textContent = '⏳';
-      toast('AI 처리 중...');
-
-      callClaudeAPI(systemPrompt, userMsg).then(function (text) {
-        if (action === 'fill') {
-          // JSON 파싱해서 직접 셀에 적용
-          try {
-            var jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) throw new Error('JSON 파싱 실패');
-            var result = JSON.parse(jsonMatch[0]);
-            var reloadItems = load(JNL_KEY);
-            var target = reloadItems.find(function (i) { return i.id === id; });
-            if (target) {
-              var changed = false;
-              var fillCols2 = loadJnlColumns();
-              fillCols2.forEach(function (col, idx) {
-                if (idx === 0) return;
-                if (result[col.key] && !target[col.key]) { target[col.key] = result[col.key]; changed = true; }
-              });
-              if (changed) {
-                save(JNL_KEY, reloadItems);
-                renderJnlTable();
-                populateJnlCategoryFilter();
-                populateJnlColFilters();
-                toast('AI가 빈 칸을 채웠습니다');
-              } else {
-                toast('채울 내용이 없습니다');
-              }
-            }
-          } catch (err) {
-            showJnlAiPanel('AI 자동 채우기 결과', formatAiResponse(text));
-          }
-        } else if (action === 'feedback') {
-          var reloadItems = load(JNL_KEY);
-          var target = reloadItems.find(function (i) { return i.id === id; });
-          if (target) {
-            // 'feedback' 키 또는 첫 번째 longtext 칼럼에 적용
-            var fbCols = loadJnlColumns();
-            var fbKey = fbCols.find(function (c) { return c.key === 'feedback'; }) ? 'feedback'
-              : (fbCols.filter(function (c) { return c.type === 'longtext'; })[0] || {}).key;
-            if (fbKey) { target[fbKey] = text.trim(); }
-            save(JNL_KEY, reloadItems);
-            renderJnlTable();
-            toast('피드백이 생성되었습니다');
-          }
-        } else if (action === 'action') {
-          var reloadItems = load(JNL_KEY);
-          var target = reloadItems.find(function (i) { return i.id === id; });
-          if (target) {
-            var actCols = loadJnlColumns();
-            var actKey = actCols.find(function (c) { return c.key === 'note'; }) ? 'note'
-              : (actCols.filter(function (c) { return c.type === 'longtext'; })[1] || actCols.filter(function (c) { return c.type === 'longtext'; })[0] || {}).key;
-            if (actKey) { target[actKey] = text.trim(); }
-            save(JNL_KEY, reloadItems);
-            renderJnlTable();
-            toast('수행 사항이 생성되었습니다');
-          }
-        } else {
-          var improveCols = loadJnlColumns();
-          var nameKey = improveCols[1] ? improveCols[1].key : (improveCols[0] ? improveCols[0].key : '');
-          showJnlAiPanel('AI 개선 제안 — ' + (entry[nameKey] || entry[improveCols[0].key] || ''), formatAiResponse(text));
-        }
-      }).catch(function (err) {
-        toast('AI 오류: ' + err.message);
-      }).finally(function () {
-        aiBtn.disabled = false;
-        aiBtn.textContent = '🤖';
-      });
-    });
-  });
+  // (셀 단위 AI 기능은 startJnlEdit 내 showCellAiMenu로 이동됨)
 
   // ── 전체 데이터 AI 요약 ──
   $('#jnl-ai-summary').addEventListener('click', function () {
@@ -4710,6 +5023,102 @@
     renderJnlColList();
     refreshJnlView();
     toast('칼럼이 기본값으로 복원되었습니다');
+  });
+
+  // ══════════════════════════════════════
+  // 11. 포스트잇 메모 위젯
+  // ══════════════════════════════════════
+  var STICKY_KEY = 'fl_sticky_notes';
+
+  function loadStickies() {
+    try { return JSON.parse(localStorage.getItem(STICKY_KEY)) || []; }
+    catch (e) { return []; }
+  }
+  function saveStickies(list) { localStorage.setItem(STICKY_KEY, JSON.stringify(list)); }
+
+  function renderStickies() {
+    var notes = loadStickies();
+    var body = $('#sticky-body');
+    if (notes.length === 0) {
+      body.innerHTML = '<div class="sticky-empty">메모가 없습니다.<br>+ 버튼으로 추가하세요.</div>';
+      return;
+    }
+    body.innerHTML = notes.map(function (n, i) {
+      var colors = ['#fff9c4', '#c8e6c9', '#bbdefb', '#f8bbd0', '#ffe0b2', '#e1bee7'];
+      var bg = colors[i % colors.length];
+      return '<div class="sticky-note" data-idx="' + i + '" style="background:' + bg + '">' +
+        '<div class="sticky-note-header">' +
+          '<span class="sticky-note-color" data-action="color" title="색상 변경">🎨</span>' +
+          '<button class="sticky-note-del" data-action="del" title="삭제">✕</button>' +
+        '</div>' +
+        '<div class="sticky-note-text" contenteditable="true" data-idx="' + i + '">' + sanitizeJnlHtml(n.text || '') + '</div>' +
+        (n.checked !== undefined ? '<label class="sticky-note-check"><input type="checkbox"' + (n.checked ? ' checked' : '') + ' data-action="check" data-idx="' + i + '"> 완료</label>' : '') +
+      '</div>';
+    }).join('');
+
+    // 텍스트 편집 저장
+    body.querySelectorAll('.sticky-note-text').forEach(function (el) {
+      el.addEventListener('blur', function () {
+        var idx = parseInt(el.dataset.idx, 10);
+        var notes = loadStickies();
+        if (notes[idx]) {
+          notes[idx].text = el.innerHTML;
+          saveStickies(notes);
+        }
+      });
+      el.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' && !ev.shiftKey) {
+          // Allow Enter for line breaks, no commit
+        }
+      });
+    });
+  }
+
+  // 토글
+  $('#sticky-toggle').addEventListener('click', function () {
+    var widget = $('#sticky-widget');
+    var visible = widget.style.display !== 'none';
+    widget.style.display = visible ? 'none' : '';
+    if (!visible) renderStickies();
+  });
+
+  // 접기
+  $('#sticky-collapse').addEventListener('click', function () {
+    $('#sticky-widget').style.display = 'none';
+  });
+
+  // 새 메모 추가
+  $('#sticky-add').addEventListener('click', function () {
+    var notes = loadStickies();
+    notes.unshift({ text: '', checked: undefined, createdAt: new Date().toISOString() });
+    saveStickies(notes);
+    renderStickies();
+    // 첫 번째 메모에 포커스
+    var firstText = $('#sticky-body .sticky-note-text');
+    if (firstText) firstText.focus();
+  });
+
+  // 삭제 / 체크
+  $('#sticky-body').addEventListener('click', function (e) {
+    var note = e.target.closest('.sticky-note');
+    if (!note) return;
+    var idx = parseInt(note.dataset.idx, 10);
+    if (e.target.closest('[data-action="del"]')) {
+      var notes = loadStickies();
+      notes.splice(idx, 1);
+      saveStickies(notes);
+      renderStickies();
+    }
+  });
+  $('#sticky-body').addEventListener('change', function (e) {
+    if (e.target.dataset.action === 'check') {
+      var idx = parseInt(e.target.dataset.idx, 10);
+      var notes = loadStickies();
+      if (notes[idx]) {
+        notes[idx].checked = e.target.checked;
+        saveStickies(notes);
+      }
+    }
   });
 
   // ── Init ──
