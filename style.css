@@ -611,6 +611,7 @@ body {
   cursor: pointer;
   transition: all var(--transition);
   font-family: inherit;
+  color: var(--text);
 }
 
 .mtg-type-card:hover {
@@ -2121,11 +2122,73 @@ body {
 .jnl-th-feedback { min-width: 160px; }
 .jnl-th-note { min-width: 160px; }
 .jnl-th-ref { min-width: 120px; }
-.jnl-th-actions { width: 80px; text-align: center; }
+.jnl-th-actions { width: 60px; text-align: center; }
 
 .jnl-table td.jnl-td-actions {
   text-align: center;
   white-space: nowrap;
+}
+
+/* 칼럼 필터 헤더 */
+.jnl-filter-header th {
+  padding: 4px 6px;
+  border-bottom: 2px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.jnl-col-filter,
+.jnl-col-filter-input {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 0.72rem;
+  font-family: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  box-sizing: border-box;
+}
+
+.jnl-col-filter:focus,
+.jnl-col-filter-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+/* 인라인 편집 가능 셀 */
+.jnl-editable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.jnl-editable:hover {
+  background: var(--accent-subtle);
+}
+
+.jnl-editable.jnl-editing {
+  padding: 4px 6px;
+  background: var(--bg);
+}
+
+.jnl-cell-input,
+.jnl-cell-textarea {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: var(--bg);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--text);
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.jnl-cell-input:focus,
+.jnl-cell-textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 .jnl-cell-text {

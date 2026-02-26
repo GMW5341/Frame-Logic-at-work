@@ -688,15 +688,21 @@
 
   function clearMeetingForm() {
     currentMtgEditId = null;
-    $('#mtg-title').value = '';
-    $('#mtg-attendees').value = '';
+    var titleEl = $('#mtg-title');
+    var attendeesEl = $('#mtg-attendees');
+    if (titleEl) titleEl.value = '';
+    if (attendeesEl) attendeesEl.value = '';
     mtgAgendaItems = [];
     renderAgendaList();
-    if (getRich('mtg-notes')) getRich('mtg-notes').setHTML('');
-    if (getRich('mtg-decisions')) getRich('mtg-decisions').setHTML('');
-    if (getRich('mtg-actions')) getRich('mtg-actions').setHTML('');
-    setDatetimeNow('#mtg-date');
-    populateFolderSelect('#mtg-folder', '');
+    try {
+      if (getRich('mtg-notes')) getRich('mtg-notes').setHTML('');
+      if (getRich('mtg-decisions')) getRich('mtg-decisions').setHTML('');
+      if (getRich('mtg-actions')) getRich('mtg-actions').setHTML('');
+    } catch (e) { /* rich editor not yet initialized */ }
+    var dateEl = $('#mtg-date');
+    if (dateEl) dateEl.value = nowLocalISO();
+    var folderEl = $('#mtg-folder');
+    if (folderEl) populateFolderSelect('#mtg-folder', '');
   }
 
   function renderMeetingItem(item) {
@@ -769,8 +775,15 @@
   // -- Event listeners --
   $$('.mtg-type-card').forEach(function (card) {
     card.addEventListener('click', function () {
-      clearMeetingForm();
-      showMtgForm(card.dataset.mtgType);
+      try {
+        var type = card.dataset.mtgType;
+        if (!type) return;
+        clearMeetingForm();
+        showMtgForm(type);
+      } catch (err) {
+        console.error('회의 유형 선택 오류:', err);
+        toast('회의 양식 열기 실패: ' + err.message);
+      }
     });
   });
 
@@ -3440,9 +3453,19 @@
     $('#jnl-form-view').style.display = '';
   }
 
+  function getNextJnlNumber() {
+    var items = load(JNL_KEY);
+    var maxNum = 0;
+    items.forEach(function (e) {
+      var n = parseInt(e.category, 10);
+      if (!isNaN(n) && n > maxNum) maxNum = n;
+    });
+    return maxNum + 1;
+  }
+
   function clearJnlForm() {
     currentJnlEditId = null;
-    $('#jnl-category').value = '';
+    $('#jnl-category').value = getNextJnlNumber();
     $('#jnl-item').value = '';
     $('#jnl-subitem').value = '';
     $('#jnl-date').value = new Date().toISOString().slice(0, 10);
@@ -3523,6 +3546,26 @@
     sel.innerHTML = html;
   }
 
+  // 칼럼 필터 상태
+  var jnlColFilters = { category: '', item: '', subitem: '', date: '', feedback: '', note: '', ref: '' };
+
+  function populateJnlColFilters() {
+    var items = load(JNL_KEY);
+    var fields = ['category', 'item', 'subitem'];
+    fields.forEach(function (field) {
+      var vals = {};
+      items.forEach(function (e) { if (e[field]) vals[e[field]] = true; });
+      var sel = document.querySelector('.jnl-col-filter[data-field="' + field + '"]');
+      if (!sel) return;
+      var current = sel.value;
+      var html = '<option value="">전체</option>';
+      Object.keys(vals).sort().forEach(function (v) {
+        html += '<option value="' + escapeHtml(v) + '"' + (v === current ? ' selected' : '') + '>' + escapeHtml(v) + '</option>';
+      });
+      sel.innerHTML = html;
+    });
+  }
+
   function renderJnlTable() {
     var items = load(JNL_KEY);
     var search = ($('#jnl-search').value || '').toLowerCase();
@@ -3531,6 +3574,22 @@
     if (filterCat) {
       items = items.filter(function (e) { return e.category === filterCat; });
     }
+
+    // 칼럼별 필터 적용
+    ['category', 'item', 'subitem'].forEach(function (field) {
+      if (jnlColFilters[field]) {
+        items = items.filter(function (e) { return (e[field] || '') === jnlColFilters[field]; });
+      }
+    });
+    ['date', 'feedback', 'note', 'ref'].forEach(function (field) {
+      if (jnlColFilters[field]) {
+        var kw = jnlColFilters[field].toLowerCase();
+        items = items.filter(function (e) {
+          var val = field === 'date' ? formatJnlDate(e[field]) : (e[field] || '');
+          return val.toLowerCase().includes(kw);
+        });
+      }
+    });
 
     if (search) {
       items = items.filter(function (e) {
@@ -3566,15 +3625,14 @@
         '</div>';
       }
       return '<tr data-id="' + e.id + '">' +
-        '<td><span class="jnl-category-badge">' + escapeHtml(e.category || '-') + '</span></td>' +
-        '<td>' + escapeHtml(e.item || '-') + '</td>' +
-        '<td>' + escapeHtml(e.subitem || '-') + '</td>' +
-        '<td>' + escapeHtml(formatJnlDate(e.date)) + '</td>' +
-        '<td><div class="jnl-cell-text">' + escapeHtml(e.feedback || '') + '</div></td>' +
-        '<td><div class="jnl-cell-text">' + escapeHtml(e.note || '') + '</div></td>' +
-        '<td><div class="jnl-cell-ref">' + escapeHtml(e.ref || '') + '</div>' + attachHtml + '</td>' +
+        '<td class="jnl-editable" data-field="category"><span class="jnl-category-badge">' + escapeHtml(e.category || '-') + '</span></td>' +
+        '<td class="jnl-editable" data-field="item">' + escapeHtml(e.item || '') + '</td>' +
+        '<td class="jnl-editable" data-field="subitem">' + escapeHtml(e.subitem || '') + '</td>' +
+        '<td class="jnl-editable" data-field="date" data-raw="' + escapeHtml(e.date || '') + '">' + escapeHtml(formatJnlDate(e.date)) + '</td>' +
+        '<td class="jnl-editable" data-field="feedback"><div class="jnl-cell-text">' + escapeHtml(e.feedback || '') + '</div></td>' +
+        '<td class="jnl-editable" data-field="note"><div class="jnl-cell-text">' + escapeHtml(e.note || '') + '</div></td>' +
+        '<td class="jnl-editable" data-field="ref"><div class="jnl-cell-ref">' + escapeHtml(e.ref || '') + '</div>' + attachHtml + '</td>' +
         '<td class="jnl-td-actions">' +
-          '<button class="btn btn-small btn-secondary" data-action="edit" title="수정">✎</button> ' +
           '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
         '</td>' +
       '</tr>';
@@ -3583,8 +3641,26 @@
 
   // -- Event listeners --
   $('#jnl-new').addEventListener('click', function () {
-    clearJnlForm();
-    showJnlForm();
+    // 새 항목: 구분에 자동 번호 부여하고 바로 테이블에 추가
+    var items = load(JNL_KEY);
+    var newEntry = {
+      id: uid(),
+      category: String(getNextJnlNumber()),
+      item: '',
+      subitem: '',
+      date: new Date().toISOString().slice(0, 10),
+      feedback: '',
+      note: '',
+      ref: '',
+      attachments: [],
+      createdAt: new Date().toISOString()
+    };
+    items.unshift(newEntry);
+    save(JNL_KEY, items);
+    renderJnlTable();
+    populateJnlCategoryFilter();
+    populateJnlColFilters();
+    toast('새 항목이 추가되었습니다. 셀을 클릭하여 편집하세요.');
   });
 
   $('#jnl-back').addEventListener('click', function () {
@@ -3611,12 +3687,53 @@
     currentJnlEditId = null;
     renderJnlTable();
     populateJnlCategoryFilter();
+    populateJnlColFilters();
     showJnlList();
     toast('업무일지가 저장되었습니다');
   });
 
   $('#jnl-search').addEventListener('input', function () { renderJnlTable(); });
   $('#jnl-filter-category').addEventListener('change', function () { renderJnlTable(); });
+
+  // 칼럼 필터 이벤트
+  document.querySelectorAll('.jnl-col-filter').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      jnlColFilters[sel.dataset.field] = sel.value;
+      renderJnlTable();
+    });
+  });
+  document.querySelectorAll('.jnl-col-filter-input').forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      jnlColFilters[inp.dataset.field] = inp.value.trim();
+      renderJnlTable();
+    });
+  });
+
+  // 인라인 편집: 셀 클릭 시 편집 모드
+  var jnlEditingCell = null;
+
+  function saveJnlCellEdit(td) {
+    if (!td || !td.classList.contains('jnl-editing')) return;
+    td.classList.remove('jnl-editing');
+    var tr = td.closest('tr[data-id]');
+    if (!tr) return;
+    var id = tr.dataset.id;
+    var field = td.dataset.field;
+    var input = td.querySelector('.jnl-cell-input, .jnl-cell-textarea');
+    if (!input) return;
+    var newVal = input.value.trim();
+
+    var items = load(JNL_KEY);
+    var entry = items.find(function (i) { return i.id === id; });
+    if (entry && entry[field] !== newVal) {
+      entry[field] = newVal;
+      save(JNL_KEY, items);
+      populateJnlCategoryFilter();
+      populateJnlColFilters();
+    }
+    renderJnlTable();
+    jnlEditingCell = null;
+  }
 
   $('#jnl-tbody').addEventListener('click', function (e) {
     // File download from table
@@ -3634,8 +3751,8 @@
     if (!tr) return;
     var id = tr.dataset.id;
     var items = load(JNL_KEY);
+
     if (e.target.closest('[data-action="delete"]')) {
-      // Clean up attached files
       var delEntry = items.find(function (i) { return i.id === id; });
       if (delEntry && delEntry.attachments && delEntry.attachments.length > 0) {
         var fileStore = loadJnlFiles();
@@ -3645,13 +3762,62 @@
       save(JNL_KEY, items.filter(function (i) { return i.id !== id; }));
       renderJnlTable();
       populateJnlCategoryFilter();
+      populateJnlColFilters();
       toast('삭제되었습니다');
-    } else if (e.target.closest('[data-action="edit"]')) {
-      var entry = items.find(function (i) { return i.id === id; });
-      if (entry) {
-        loadJnlToForm(entry);
-        toast('편집 모드');
-      }
+      return;
+    }
+
+    // 인라인 편집: 셀 클릭
+    var td = e.target.closest('.jnl-editable');
+    if (!td || td.classList.contains('jnl-editing')) return;
+    if (e.target.closest('.jnl-cell-attach-tag')) return;
+
+    // 이전 편집 중인 셀 저장
+    if (jnlEditingCell && jnlEditingCell !== td) {
+      saveJnlCellEdit(jnlEditingCell);
+    }
+
+    var field = td.dataset.field;
+    var entry = items.find(function (i) { return i.id === id; });
+    if (!entry) return;
+
+    td.classList.add('jnl-editing');
+    jnlEditingCell = td;
+    var currentVal = entry[field] || '';
+
+    if (field === 'date') {
+      td.innerHTML = '<input type="date" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">';
+    } else if (field === 'feedback' || field === 'note' || field === 'ref') {
+      td.innerHTML = '<textarea class="jnl-cell-textarea" rows="3">' + escapeHtml(currentVal) + '</textarea>';
+    } else {
+      td.innerHTML = '<input type="text" class="jnl-cell-input" value="' + escapeHtml(currentVal) + '">';
+    }
+
+    var inputEl = td.querySelector('.jnl-cell-input, .jnl-cell-textarea');
+    if (inputEl) {
+      inputEl.focus();
+      inputEl.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' && !ev.shiftKey) {
+          ev.preventDefault();
+          saveJnlCellEdit(td);
+        } else if (ev.key === 'Escape') {
+          td.classList.remove('jnl-editing');
+          jnlEditingCell = null;
+          renderJnlTable();
+        } else if (ev.key === 'Tab') {
+          ev.preventDefault();
+          saveJnlCellEdit(td);
+          // Tab으로 다음 편집 가능한 셀로 이동
+          var nextTd = td.nextElementSibling;
+          while (nextTd && !nextTd.classList.contains('jnl-editable')) {
+            nextTd = nextTd.nextElementSibling;
+          }
+          if (nextTd) nextTd.click();
+        }
+      });
+      inputEl.addEventListener('blur', function () {
+        setTimeout(function () { saveJnlCellEdit(td); }, 150);
+      });
     }
   });
 
@@ -3871,6 +4037,7 @@
         save(JNL_KEY, items);
         renderJnlTable();
         populateJnlCategoryFilter();
+        populateJnlColFilters();
         toast(importCount + '개 항목을 업로드했습니다');
       } catch (err) {
         toast('파일 읽기 실패: ' + err.message);
@@ -3913,6 +4080,7 @@
     populateFolderFilter();
     renderJnlTable();
     populateJnlCategoryFilter();
+    populateJnlColFilters();
   }
 
   init();
