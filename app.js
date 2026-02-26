@@ -247,13 +247,62 @@
   // ══════════════════════════════════════
   const MTG_KEY = 'fl_meetings';
 
+  const MTG_TYPE_LABELS = {
+    regular: '📅 정기 회의',
+    brainstorm: '🧠 브레인스토밍',
+    sprint: '🏃 스프린트 리뷰',
+    decision: '⚖️ 의사결정',
+    kickoff: '🚀 킥오프',
+    oneone: '👥 1:1 미팅'
+  };
+
+  let currentMtgType = '';
+  let mtgAgendaItems = [];
+
+  // -- View switching --
+  function showMtgTypeSelect() {
+    $('#mtg-type-select').style.display = '';
+    $('#mtg-form-view').style.display = 'none';
+  }
+
+  function showMtgForm(type) {
+    currentMtgType = type;
+    $('#mtg-type-select').style.display = 'none';
+    $('#mtg-form-view').style.display = '';
+    $('#mtg-type-badge').textContent = MTG_TYPE_LABELS[type] || type;
+  }
+
+  // -- Agenda items --
+  function renderAgendaList() {
+    const container = $('#mtg-agenda-list');
+    if (mtgAgendaItems.length === 0) {
+      container.innerHTML = '<div style="font-size:0.8rem;color:var(--text-dim);padding:4px 0;">아래에서 안건을 추가하세요</div>';
+      return;
+    }
+    container.innerHTML = mtgAgendaItems.map(function (text, i) {
+      return '<div class="mtg-agenda-item" data-idx="' + i + '">' +
+        '<span class="mtg-agenda-num">' + (i + 1) + '.</span>' +
+        '<span>' + escapeHtml(text) + '</span>' +
+        '<button class="btn btn-small btn-danger mtg-agenda-remove" title="삭제">✕</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  function addAgendaItem(text) {
+    if (!text) return;
+    mtgAgendaItems.push(text);
+    renderAgendaList();
+  }
+
+  // -- Data --
   function getMeetingData() {
     return {
       id: uid(),
+      type: currentMtgType,
       title: $('#mtg-title').value.trim(),
       date: $('#mtg-date').value,
       attendees: $('#mtg-attendees').value.trim(),
-      agenda: $('#mtg-agenda').value.trim(),
+      agenda: mtgAgendaItems.slice(),
       notes: $('#mtg-notes').value.trim(),
       decisions: $('#mtg-decisions').value.trim(),
       actions: $('#mtg-actions').value.trim(),
@@ -262,23 +311,39 @@
   }
 
   function buildMeetingText(item) {
-    let text = '';
-    if (item.title) text += `# ${item.title}\n`;
-    if (item.date) text += `일시: ${formatDate(item.date)}\n`;
-    if (item.attendees) text += `참석자: ${item.attendees}\n`;
+    var text = '';
+    if (item.title) text += '# ' + item.title + '\n';
+    var typeLabel = MTG_TYPE_LABELS[item.type] || '';
+    if (typeLabel) text += '유형: ' + typeLabel + '\n';
+    if (item.date) text += '일시: ' + formatDate(item.date) + '\n';
+    if (item.attendees) text += '참석자: ' + item.attendees + '\n';
     text += '\n';
-    if (item.agenda) text += `## 안건\n${item.agenda}\n\n`;
-    if (item.notes) text += `## 회의 내용\n${item.notes}\n\n`;
-    if (item.decisions) text += `## 결정 사항\n${item.decisions}\n\n`;
-    if (item.actions) text += `## 액션 아이템\n${item.actions}\n`;
+    var agendaArr = item.agenda;
+    if (agendaArr && agendaArr.length > 0) {
+      text += '## 안건\n';
+      agendaArr.forEach(function (a, i) { text += (i + 1) + '. ' + a + '\n'; });
+      text += '\n';
+    }
+    if (item.notes) text += '## 회의 내용\n' + item.notes + '\n\n';
+    if (item.decisions) text += '## 결정 사항\n' + item.decisions + '\n\n';
+    if (item.actions) text += '## 액션 플랜\n' + item.actions + '\n';
     return text.trim();
   }
 
   function loadMeetingToForm(item) {
+    showMtgForm(item.type || 'regular');
     $('#mtg-title').value = item.title || '';
     $('#mtg-date').value = item.date || '';
     $('#mtg-attendees').value = item.attendees || '';
-    $('#mtg-agenda').value = item.agenda || '';
+    // agenda: support both old string format and new array format
+    if (Array.isArray(item.agenda)) {
+      mtgAgendaItems = item.agenda.slice();
+    } else if (item.agenda) {
+      mtgAgendaItems = item.agenda.split('\n').filter(Boolean);
+    } else {
+      mtgAgendaItems = [];
+    }
+    renderAgendaList();
     $('#mtg-notes').value = item.notes || '';
     $('#mtg-decisions').value = item.decisions || '';
     $('#mtg-actions').value = item.actions || '';
@@ -288,65 +353,117 @@
     $('#mtg-title').value = '';
     $('#mtg-date').value = '';
     $('#mtg-attendees').value = '';
-    $('#mtg-agenda').value = '';
+    mtgAgendaItems = [];
+    renderAgendaList();
     $('#mtg-notes').value = '';
     $('#mtg-decisions').value = '';
     $('#mtg-actions').value = '';
+    // Reset datetime
+    var now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    $('#mtg-date').value = now.toISOString().slice(0, 16);
   }
 
   function renderMeetingList() {
-    const items = load(MTG_KEY);
-    const ul = $('#mtg-items');
+    var items = load(MTG_KEY);
+    var ul = $('#mtg-items');
     if (items.length === 0) {
       ul.innerHTML = '<li class="empty-state">저장된 회의 메모가 없습니다</li>';
       return;
     }
-    ul.innerHTML = items.map(item => `
-      <li class="saved-item" data-id="${item.id}">
-        <div class="saved-item-info" data-action="load">
-          <div class="saved-item-title">${escapeHtml(item.title || '(제목 없음)')}</div>
-          <div class="saved-item-date">${formatDate(item.date || item.createdAt)}</div>
-        </div>
-        <div class="saved-item-actions">
-          <button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>
-        </div>
-      </li>
-    `).join('');
+    ul.innerHTML = items.map(function (item) {
+      var typeBadge = MTG_TYPE_LABELS[item.type] || '';
+      return '<li class="saved-item" data-id="' + item.id + '">' +
+        '<div class="saved-item-info" data-action="load">' +
+          '<div class="saved-item-title">' + escapeHtml(item.title || '(제목 없음)') +
+            (typeBadge ? ' <span class="tag" style="margin-left:6px">' + escapeHtml(typeBadge) + '</span>' : '') +
+          '</div>' +
+          '<div class="saved-item-date">' + formatDate(item.date || item.createdAt) + '</div>' +
+        '</div>' +
+        '<div class="saved-item-actions">' +
+          '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
+        '</div>' +
+      '</li>';
+    }).join('');
   }
 
-  $('#mtg-save').addEventListener('click', () => {
-    const data = getMeetingData();
+  // -- Event listeners --
+  // Type selection
+  $$('.mtg-type-card').forEach(function (card) {
+    card.addEventListener('click', function () {
+      clearMeetingForm();
+      showMtgForm(card.dataset.mtgType);
+    });
+  });
+
+  // Back button
+  $('#mtg-back').addEventListener('click', function () {
+    showMtgTypeSelect();
+  });
+
+  // Agenda add
+  $('#mtg-agenda-add-btn').addEventListener('click', function () {
+    var input = $('#mtg-agenda-input');
+    addAgendaItem(input.value.trim());
+    input.value = '';
+    input.focus();
+  });
+
+  $('#mtg-agenda-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addAgendaItem(this.value.trim());
+      this.value = '';
+    }
+  });
+
+  // Agenda remove
+  $('#mtg-agenda-list').addEventListener('click', function (e) {
+    if (e.target.closest('.mtg-agenda-remove')) {
+      var item = e.target.closest('.mtg-agenda-item');
+      var idx = parseInt(item.dataset.idx, 10);
+      mtgAgendaItems.splice(idx, 1);
+      renderAgendaList();
+    }
+  });
+
+  // Save
+  $('#mtg-save').addEventListener('click', function () {
+    var data = getMeetingData();
     if (!data.title && !data.notes) { toast('회의명 또는 내용을 입력해주세요'); return; }
-    const items = load(MTG_KEY);
+    var items = load(MTG_KEY);
     items.unshift(data);
     save(MTG_KEY, items);
     renderMeetingList();
     toast('회의 메모가 저장되었습니다');
   });
 
-  $('#mtg-copy').addEventListener('click', () => {
-    const data = getMeetingData();
-    const text = buildMeetingText(data);
+  // Copy
+  $('#mtg-copy').addEventListener('click', function () {
+    var data = getMeetingData();
+    var text = buildMeetingText(data);
     if (!text) { toast('내용을 입력해주세요'); return; }
     copyToClipboard(text);
   });
 
-  $('#mtg-clear').addEventListener('click', () => {
+  // Clear
+  $('#mtg-clear').addEventListener('click', function () {
     clearMeetingForm();
     toast('초기화되었습니다');
   });
 
-  $('#mtg-items').addEventListener('click', (e) => {
-    const li = e.target.closest('.saved-item');
+  // Saved list interactions
+  $('#mtg-items').addEventListener('click', function (e) {
+    var li = e.target.closest('.saved-item');
     if (!li) return;
-    const id = li.dataset.id;
-    const items = load(MTG_KEY);
+    var id = li.dataset.id;
+    var items = load(MTG_KEY);
     if (e.target.closest('[data-action="delete"]')) {
-      save(MTG_KEY, items.filter(i => i.id !== id));
+      save(MTG_KEY, items.filter(function (i) { return i.id !== id; }));
       renderMeetingList();
       toast('삭제되었습니다');
     } else {
-      const item = items.find(i => i.id === id);
+      var item = items.find(function (i) { return i.id === id; });
       if (item) { loadMeetingToForm(item); toast('불러왔습니다'); }
     }
   });
@@ -496,14 +613,10 @@
 
   // ── Init ──
   function init() {
-    // Set default meeting datetime to now
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    $('#mtg-date').value = now.toISOString().slice(0, 16);
-
     renderContextList();
     renderIdeaBoard();
     renderMeetingList();
+    renderAgendaList();
     renderProposalList();
   }
 

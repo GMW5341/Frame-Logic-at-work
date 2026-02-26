@@ -498,6 +498,145 @@ body {
   color: var(--text-dim);
 }
 
+/* ===== Meeting Type Selection ===== */
+.mtg-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.mtg-type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: inherit;
+}
+
+.mtg-type-card:hover {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.mtg-type-icon {
+  font-size: 1.8rem;
+}
+
+.mtg-type-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mtg-type-desc {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+/* ===== Meeting Form Header ===== */
+.mtg-form-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.mtg-type-badge {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 4px 12px;
+  border-radius: 100px;
+}
+
+/* ===== Meeting Two-Column Layout (2:1) ===== */
+.mtg-two-col {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.mtg-col-main {
+  flex: 2;
+  min-width: 0;
+}
+
+.mtg-col-side {
+  flex: 1;
+  min-width: 0;
+  position: sticky;
+  top: 24px;
+}
+
+.mtg-side-actions {
+  margin-top: 20px;
+}
+
+/* ===== Meeting Agenda Items ===== */
+.mtg-agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.mtg-agenda-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.88rem;
+}
+
+.mtg-agenda-item span {
+  flex: 1;
+}
+
+.mtg-agenda-item .mtg-agenda-num {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.8rem;
+  flex: none;
+  width: 20px;
+}
+
+.mtg-agenda-add {
+  display: flex;
+  gap: 8px;
+}
+
+.mtg-agenda-add input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-family: inherit;
+  transition: border-color var(--transition);
+}
+
+.mtg-agenda-add input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.mtg-agenda-add input::placeholder {
+  color: var(--text-dim);
+}
+
 /* ===== Toast ===== */
 .toast {
   position: fixed;
@@ -596,5 +735,17 @@ body {
   .btn {
     width: 100%;
     text-align: center;
+  }
+
+  .mtg-type-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mtg-two-col {
+    flex-direction: column;
+  }
+
+  .mtg-col-side {
+    position: static;
   }
 }

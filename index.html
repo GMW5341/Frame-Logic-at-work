@@ -106,51 +106,108 @@
 
       <!-- 회의 메모 탭 -->
       <section id="tab-meeting" class="tab-panel" role="tabpanel">
-        <div class="panel-header">
-          <h2>회의 메모</h2>
-          <p class="panel-desc">회의 내용을 구조적으로 기록하세요. 안건, 결정 사항, 액션 아이템을 분리하여 관리합니다.</p>
+
+        <!-- STEP 1: 회의 종류 선택 -->
+        <div id="mtg-type-select" class="mtg-step">
+          <div class="panel-header">
+            <h2>회의 메모</h2>
+            <p class="panel-desc">회의 종류를 선택하면 맞춤 양식이 열립니다.</p>
+          </div>
+          <div class="mtg-type-grid">
+            <button class="mtg-type-card" data-mtg-type="regular">
+              <span class="mtg-type-icon">📅</span>
+              <span class="mtg-type-name">정기 회의</span>
+              <span class="mtg-type-desc">주간/월간 정기 미팅</span>
+            </button>
+            <button class="mtg-type-card" data-mtg-type="brainstorm">
+              <span class="mtg-type-icon">🧠</span>
+              <span class="mtg-type-name">브레인스토밍</span>
+              <span class="mtg-type-desc">아이디어 발산 회의</span>
+            </button>
+            <button class="mtg-type-card" data-mtg-type="sprint">
+              <span class="mtg-type-icon">🏃</span>
+              <span class="mtg-type-name">스프린트 리뷰</span>
+              <span class="mtg-type-desc">스프린트 회고/리뷰</span>
+            </button>
+            <button class="mtg-type-card" data-mtg-type="decision">
+              <span class="mtg-type-icon">⚖️</span>
+              <span class="mtg-type-name">의사결정</span>
+              <span class="mtg-type-desc">안건 검토 및 결정</span>
+            </button>
+            <button class="mtg-type-card" data-mtg-type="kickoff">
+              <span class="mtg-type-icon">🚀</span>
+              <span class="mtg-type-name">킥오프</span>
+              <span class="mtg-type-desc">프로젝트 시작 회의</span>
+            </button>
+            <button class="mtg-type-card" data-mtg-type="oneone">
+              <span class="mtg-type-icon">👥</span>
+              <span class="mtg-type-name">1:1 미팅</span>
+              <span class="mtg-type-desc">개인 면담/피드백</span>
+            </button>
+          </div>
+          <div class="saved-list" id="mtg-saved-list">
+            <h3>저장된 회의 메모</h3>
+            <ul id="mtg-items"></ul>
+          </div>
         </div>
-        <div class="meeting-form">
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="mtg-title">회의명</label>
-              <input type="text" id="mtg-title" placeholder="예: 주간 스프린트 리뷰">
+
+        <!-- STEP 2: 회의 작성 폼 (2:1 레이아웃) -->
+        <div id="mtg-form-view" class="mtg-step" style="display:none">
+          <div class="mtg-form-header">
+            <button class="btn btn-secondary btn-small" id="mtg-back">← 회의 목록</button>
+            <span class="mtg-type-badge" id="mtg-type-badge"></span>
+          </div>
+
+          <div class="mtg-two-col">
+            <!-- 왼쪽 (2/3) -->
+            <div class="mtg-col-main">
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="mtg-title">회의명</label>
+                  <input type="text" id="mtg-title" placeholder="예: 주간 스프린트 리뷰">
+                </div>
+                <div class="form-group">
+                  <label for="mtg-date">일시</label>
+                  <input type="datetime-local" id="mtg-date">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="mtg-attendees">참석자</label>
+                <input type="text" id="mtg-attendees" placeholder="쉼표로 구분">
+              </div>
+              <div class="form-group">
+                <label>안건</label>
+                <div id="mtg-agenda-list" class="mtg-agenda-list"></div>
+                <div class="mtg-agenda-add">
+                  <input type="text" id="mtg-agenda-input" placeholder="안건 주제 입력 후 추가">
+                  <button class="btn btn-secondary btn-small" id="mtg-agenda-add-btn">+ 추가</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="mtg-notes">회의 내용</label>
+                <textarea id="mtg-notes" rows="20" placeholder="회의 중 기록"></textarea>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="mtg-date">일시</label>
-              <input type="datetime-local" id="mtg-date">
+
+            <!-- 오른쪽 (1/3) -->
+            <div class="mtg-col-side">
+              <div class="form-group">
+                <label for="mtg-decisions">결정 사항</label>
+                <textarea id="mtg-decisions" rows="10" placeholder="합의된 내용"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="mtg-actions">액션 플랜</label>
+                <textarea id="mtg-actions" rows="10" placeholder="누가 무엇을 언제까지&#10;(한 줄에 하나씩)"></textarea>
+              </div>
+              <div class="btn-row mtg-side-actions">
+                <button class="btn btn-primary" id="mtg-save" style="flex:1">저장</button>
+                <button class="btn btn-secondary" id="mtg-copy">📋 복사</button>
+                <button class="btn btn-ghost" id="mtg-clear">초기화</button>
+              </div>
             </div>
           </div>
-          <div class="form-group">
-            <label for="mtg-attendees">참석자</label>
-            <input type="text" id="mtg-attendees" placeholder="쉼표로 구분">
-          </div>
-          <div class="form-group">
-            <label for="mtg-agenda">안건</label>
-            <textarea id="mtg-agenda" rows="5" placeholder="논의할 주제들"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="mtg-notes">회의 내용</label>
-            <textarea id="mtg-notes" rows="10" placeholder="회의 중 기록"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="mtg-decisions">결정 사항</label>
-            <textarea id="mtg-decisions" rows="4" placeholder="합의된 내용"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="mtg-actions">액션 아이템</label>
-            <textarea id="mtg-actions" rows="4" placeholder="누가 무엇을 언제까지 (한 줄에 하나씩)"></textarea>
-          </div>
-          <div class="btn-row">
-            <button class="btn btn-primary" id="mtg-save">저장</button>
-            <button class="btn btn-secondary" id="mtg-copy">📋 복사</button>
-            <button class="btn btn-ghost" id="mtg-clear">초기화</button>
-          </div>
         </div>
-        <div class="saved-list" id="mtg-saved-list">
-          <h3>저장된 회의 메모</h3>
-          <ul id="mtg-items"></ul>
-        </div>
+
       </section>
 
       <!-- 제언 템플릿 탭 -->
