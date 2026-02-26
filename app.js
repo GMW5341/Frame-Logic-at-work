@@ -1384,6 +1384,7 @@
       '<span class="rich-sep"></span>' +
       '<button type="button" class="rich-btn" data-action="image" title="이미지 첨부">🖼</button>' +
       '<button type="button" class="rich-btn" data-action="draw" title="그리기">✏</button>' +
+      '<button type="button" class="rich-btn" data-action="link" title="링크 삽입 (Ctrl+K)">🔗</button>' +
       '<span class="rich-sep"></span>' +
       '<button type="button" class="rich-btn" data-action="table" title="표 삽입">▦</button>' +
       '<span class="rich-sep table-border-sep" style="display:none"></span>' +
@@ -1429,6 +1430,8 @@
       } else if (action === 'draw') {
         activeRichEditor = editor;
         openDrawCanvas();
+      } else if (action === 'link') {
+        openLinkDialog(editor);
       } else if (action === 'table') {
         openTablePicker(btn, editor);
       } else if (action === 'table-border') {
@@ -1486,6 +1489,13 @@
         return;
       }
 
+      // Ctrl+K → 링크 삽입
+      if (e.key === 'k' || e.key === 'K') {
+        e.preventDefault();
+        openLinkDialog(editor);
+        return;
+      }
+
       // 셀 2개 이상 다중 선택 시에만 서식 단축키 가로채기
       if (tableSel.cells.length > 1 && tableSel.table && editor.contains(tableSel.table)) {
         var formatMap = { b: 'bold', u: 'underline', i: 'italic' };
@@ -1537,6 +1547,9 @@
     // 표 셀 다중 선택 (좌클릭 드래그)
     initTableCellSelection(editor);
 
+    // 하이퍼링크 핸들러
+    initLinkHandlers(editor);
+
     // Paste images
     editor.addEventListener('paste', function (e) {
       var items = (e.clipboardData || e.originalEvent.clipboardData).items;
@@ -1577,6 +1590,250 @@
     };
     richEditors[id] = re;
     return re;
+  }
+
+  // ── 하이퍼링크 삽입/편집 ──
+  var activeLinkDialog = null;
+  var activeLinkTooltip = null;
+
+  function getSavedRange() {
+    var sel = window.getSelection();
+    if (sel.rangeCount > 0) return sel.getRangeAt(0).cloneRange();
+    return null;
+  }
+
+  function restoreRange(range) {
+    if (!range) return;
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function getParentAnchor(editor) {
+    var sel = window.getSelection();
+    var node = sel && sel.anchorNode;
+    if (!node) return null;
+    var el = node.nodeType === 1 ? node : node.parentElement;
+    if (!el) return null;
+    var a = el.closest('a');
+    return (a && editor.contains(a)) ? a : null;
+  }
+
+  function openLinkDialog(editor, existingAnchor) {
+    closeLinkDialog();
+    var savedRange = getSavedRange();
+    var sel = window.getSelection();
+    var selectedText = sel ? sel.toString().trim() : '';
+
+    var overlay = document.createElement('div');
+    overlay.className = 're-link-overlay';
+
+    var dialog = document.createElement('div');
+    dialog.className = 're-link-dialog';
+
+    var isEdit = !!existingAnchor;
+    var currentUrl = isEdit ? existingAnchor.href : '';
+    var currentText = isEdit ? existingAnchor.textContent : selectedText;
+
+    dialog.innerHTML =
+      '<div class="re-link-title">' + (isEdit ? '링크 수정' : '링크 삽입') + '</div>' +
+      '<label class="re-link-label">표시 텍스트</label>' +
+      '<input type="text" class="re-link-input" id="re-link-text" placeholder="링크에 표시될 텍스트" value="' + escapeHtml(currentText) + '">' +
+      '<label class="re-link-label">URL</label>' +
+      '<input type="text" class="re-link-input" id="re-link-url" placeholder="https://example.com" value="' + escapeHtml(currentUrl) + '">' +
+      '<div class="re-link-actions">' +
+        (isEdit ? '<button type="button" class="btn btn-small btn-danger re-link-remove">링크 제거</button>' : '') +
+        '<button type="button" class="btn btn-small re-link-cancel">취소</button>' +
+        '<button type="button" class="btn btn-small btn-primary re-link-save">' + (isEdit ? '수정' : '삽입') + '</button>' +
+      '</div>';
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    activeLinkDialog = overlay;
+
+    var urlInput = dialog.querySelector('#re-link-url');
+    var textInput = dialog.querySelector('#re-link-text');
+    setTimeout(function () { urlInput.focus(); }, 50);
+
+    // URL 입력 시 텍스트가 비어있으면 자동 채움
+    urlInput.addEventListener('input', function () {
+      if (!textInput.value.trim() || textInput.value === textInput.dataset.autoFilled) {
+        textInput.value = urlInput.value;
+        textInput.dataset.autoFilled = urlInput.value;
+      }
+    });
+
+    function doSave() {
+      var url = urlInput.value.trim();
+      var text = textInput.value.trim() || url;
+      if (!url) { urlInput.focus(); return; }
+
+      // 프로토콜 없으면 추가
+      if (url && !/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
+        url = 'https://' + url;
+      }
+
+      saveSnapshot(editor);
+
+      if (isEdit && existingAnchor) {
+        existingAnchor.href = url;
+        existingAnchor.textContent = text;
+      } else {
+        restoreRange(savedRange);
+        var a = document.createElement('a');
+        a.href = url;
+        a.textContent = text;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+
+        // 선택 영역이 있으면 교체, 없으면 삽입
+        var newSel = window.getSelection();
+        if (newSel.rangeCount > 0) {
+          var range = newSel.getRangeAt(0);
+          if (editor.contains(range.startContainer)) {
+            range.deleteContents();
+            range.insertNode(a);
+            range.setStartAfter(a);
+            range.collapse(true);
+            newSel.removeAllRanges();
+            newSel.addRange(range);
+          } else {
+            editor.focus();
+            editor.appendChild(a);
+          }
+        } else {
+          editor.focus();
+          editor.appendChild(a);
+        }
+      }
+
+      saveSnapshotAndNotify(editor);
+      closeLinkDialog();
+    }
+
+    dialog.querySelector('.re-link-save').addEventListener('click', doSave);
+    dialog.querySelector('.re-link-cancel').addEventListener('click', closeLinkDialog);
+
+    if (isEdit) {
+      dialog.querySelector('.re-link-remove').addEventListener('click', function () {
+        saveSnapshot(editor);
+        var textNode = document.createTextNode(existingAnchor.textContent);
+        existingAnchor.parentNode.replaceChild(textNode, existingAnchor);
+        saveSnapshotAndNotify(editor);
+        closeLinkDialog();
+      });
+    }
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) closeLinkDialog();
+    });
+
+    // Enter로 저장
+    dialog.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+      if (e.key === 'Escape') { closeLinkDialog(); }
+    });
+  }
+
+  function closeLinkDialog() {
+    if (activeLinkDialog) {
+      activeLinkDialog.remove();
+      activeLinkDialog = null;
+    }
+  }
+
+  // 링크 호버 툴팁
+  function showLinkTooltip(anchor, editor) {
+    hideLinkTooltip();
+    var tip = document.createElement('div');
+    tip.className = 're-link-tooltip';
+    var url = anchor.href || '';
+    tip.innerHTML =
+      '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" class="re-link-tip-url">' + escapeHtml(url.length > 50 ? url.slice(0, 50) + '…' : url) + '</a>' +
+      '<button type="button" class="re-link-tip-btn" data-tip-act="edit" title="수정">✎</button>' +
+      '<button type="button" class="re-link-tip-btn" data-tip-act="remove" title="링크 제거">✕</button>';
+
+    tip.addEventListener('click', function (e) {
+      var act = e.target.closest('[data-tip-act]');
+      if (!act) return;
+      if (act.dataset.tipAct === 'edit') {
+        openLinkDialog(editor, anchor);
+      } else if (act.dataset.tipAct === 'remove') {
+        saveSnapshot(editor);
+        var textNode = document.createTextNode(anchor.textContent);
+        anchor.parentNode.replaceChild(textNode, anchor);
+        saveSnapshotAndNotify(editor);
+      }
+      hideLinkTooltip();
+    });
+
+    var rect = anchor.getBoundingClientRect();
+    tip.style.position = 'fixed';
+    tip.style.top = (rect.bottom + 4) + 'px';
+    tip.style.left = rect.left + 'px';
+    tip.style.zIndex = '10000';
+    document.body.appendChild(tip);
+    activeLinkTooltip = tip;
+
+    requestAnimationFrame(function () {
+      var tr = tip.getBoundingClientRect();
+      if (tr.right > window.innerWidth) tip.style.left = (window.innerWidth - tr.width - 8) + 'px';
+      if (tr.bottom > window.innerHeight) tip.style.top = (rect.top - tr.height - 4) + 'px';
+    });
+  }
+
+  function hideLinkTooltip() {
+    if (activeLinkTooltip) {
+      activeLinkTooltip.remove();
+      activeLinkTooltip = null;
+    }
+  }
+
+  // 에디터 내 링크 클릭 처리 (각 에디터 초기화 시 바인딩)
+  function initLinkHandlers(editor) {
+    editor.addEventListener('click', function (e) {
+      var a = e.target.closest('a');
+      if (a && editor.contains(a)) {
+        e.preventDefault();
+        showLinkTooltip(a, editor);
+      } else if (!e.target.closest('.re-link-tooltip')) {
+        hideLinkTooltip();
+      }
+    });
+
+    // URL 붙여넣기 시 자동 링크화
+    editor.addEventListener('paste', function (e) {
+      // 이미지 붙여넣기가 우선
+      var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) return; // 이미지 핸들러에 위임
+      }
+
+      var text = (e.clipboardData || e.originalEvent.clipboardData).getData('text/plain');
+      if (text && /^https?:\/\/\S+$/i.test(text.trim())) {
+        var sel = window.getSelection();
+        var selectedText = sel ? sel.toString().trim() : '';
+        // 텍스트 선택 상태에서 URL 붙여넣기 → 선택 텍스트를 링크로
+        if (selectedText) {
+          e.preventDefault();
+          saveSnapshot(editor);
+          var a = document.createElement('a');
+          a.href = text.trim();
+          a.textContent = selectedText;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          var range = sel.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(a);
+          range.setStartAfter(a);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          saveSnapshotAndNotify(editor);
+        }
+        // 선택 없이 URL만 붙여넣기 → 브라우저 기본 (plain text로 삽입)
+      }
+    });
   }
 
   // ── 표 셀 다중 선택 ──
