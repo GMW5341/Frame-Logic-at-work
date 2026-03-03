@@ -4047,12 +4047,16 @@
     }
   });
 
-  // ── 이미지 저장 (HTML2Canvas 방식) ──
-  $('#dg-export-png').addEventListener('click', function () {
+  // ── 이미지 저장 (PNG / JPEG) ──
+  function exportDgImage(format) {
     var preview = $('#dg-result-preview');
     var svgEl = preview.querySelector('.dg-rendered-svg svg');
+    var mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    var ext = format === 'jpeg' ? '.jpg' : '.png';
+    var fname = 'diagram-' + new Date().toISOString().slice(0, 10) + ext;
+
     if (svgEl) {
-      // SVG → PNG
+      // SVG → Canvas → PNG/JPEG
       var svgData = new XMLSerializer().serializeToString(svgEl);
       var blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
       var url = URL.createObjectURL(blob);
@@ -4066,28 +4070,47 @@
         c.toBlob(function (b) {
           var a = document.createElement('a');
           a.href = URL.createObjectURL(b);
-          a.download = 'diagram-' + new Date().toISOString().slice(0, 10) + '.png';
+          a.download = fname;
           a.click();
-        });
+          toast(format.toUpperCase() + ' \uC800\uC7A5 \uC644\uB8CC');
+        }, mimeType, 0.95);
         URL.revokeObjectURL(url);
       };
       img.src = url;
-      toast('PNG \uC800\uC7A5 \uC644\uB8CC');
       return;
     }
-    // iframe → 스크린샷 불가, HTML 파일로 대체 저장
+
+    // HTML(iframe) → html2canvas\uB85C \uCEA1\uCC98
     if (dgLastCode) {
-      var htmlContent = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}body{margin:20px;font-family:sans-serif;background:#fff;color:#1a1a2e;line-height:1.5}</style></head><body>' + dgLastCode + '</body></html>';
-      var blob2 = new Blob([htmlContent], { type: 'text/html' });
-      var a2 = document.createElement('a');
-      a2.href = URL.createObjectURL(blob2);
-      a2.download = 'diagram-' + new Date().toISOString().slice(0, 10) + '.html';
-      a2.click();
-      toast('HTML \uD30C\uC77C\uB85C \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+      if (typeof html2canvas === 'undefined') {
+        toast('html2canvas \uB85C\uB529 \uC911\u2026 \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694');
+        return;
+      }
+      var container = document.createElement('div');
+      container.style.cssText = 'position:fixed;left:-9999px;top:0;width:900px;background:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:24px;color:#1a1a2e;line-height:1.5;z-index:-1';
+      container.innerHTML = dgLastCode;
+      document.body.appendChild(container);
+      toast('\uC774\uBBF8\uC9C0 \uBCC0\uD658 \uC911\u2026');
+      html2canvas(container, { scale: 2, backgroundColor: '#ffffff', useCORS: true }).then(function (canvas) {
+        canvas.toBlob(function (b) {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(b);
+          a.download = fname;
+          a.click();
+          toast(format.toUpperCase() + ' \uC800\uC7A5 \uC644\uB8CC');
+        }, mimeType, 0.95);
+        document.body.removeChild(container);
+      }).catch(function () {
+        document.body.removeChild(container);
+        toast('\uC774\uBBF8\uC9C0 \uBCC0\uD658\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4');
+      });
     } else {
       toast('\uC800\uC7A5\uD560 \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4');
     }
-  });
+  }
+
+  $('#dg-export-png').addEventListener('click', function () { exportDgImage('png'); });
+  $('#dg-export-jpeg').addEventListener('click', function () { exportDgImage('jpeg'); });
 
   // 초기화
   updateGalleryCount();
