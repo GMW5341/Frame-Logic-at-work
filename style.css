@@ -2869,6 +2869,332 @@ body {
   margin-top: 8px;
 }
 
+/* ===== 도식화 탭 ===== */
+.dg-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.dg-mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-surface);
+  border-radius: var(--radius);
+  padding: 3px;
+  border: 1px solid var(--border);
+}
+
+.dg-mode-btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.dg-mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.dg-mode-btn:hover:not(.active) {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.dg-toolbar-right {
+  display: flex;
+  gap: 6px;
+}
+
+/* 갤러리 패널 */
+.dg-gallery-panel {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  overflow: hidden;
+  animation: jnl-ai-slide 0.2s ease-out;
+}
+
+.dg-gallery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.dg-gallery-title {
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.dg-gallery-list {
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.dg-gallery-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.dg-gallery-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  transition: background 0.12s;
+}
+
+.dg-gallery-item:hover {
+  background: var(--accent-subtle);
+}
+
+.dg-gallery-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dg-gallery-item-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dg-gallery-item-meta {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.dg-gallery-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* 에디터 영역 */
+.dg-editor-area {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.dg-split {
+  display: flex;
+  min-height: 400px;
+}
+
+.dg-code-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+
+.dg-preview-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dg-code-header, .dg-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dg-code-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.dg-template-select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.78rem;
+}
+
+.dg-code-textarea {
+  flex: 1;
+  width: 100%;
+  border: none;
+  padding: 12px 14px;
+  font-family: 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  background: var(--bg);
+  color: var(--text);
+  resize: none;
+  outline: none;
+  tab-size: 4;
+  box-sizing: border-box;
+  min-height: 350px;
+}
+
+.dg-preview {
+  flex: 1;
+  padding: 16px;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 350px;
+  background: var(--bg);
+}
+
+.dg-preview .dg-rendered-svg {
+  max-width: 100%;
+  overflow: auto;
+}
+
+.dg-preview .dg-rendered-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.dg-placeholder {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  text-align: center;
+  padding: 60px 20px;
+  line-height: 1.6;
+}
+
+.dg-error {
+  color: var(--danger);
+  font-size: 0.82rem;
+  padding: 16px;
+  background: rgba(220,38,38,0.06);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* HTML iframe */
+.dg-html-iframe {
+  width: 100%;
+  min-height: 200px;
+  border: none;
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+/* AI 모드 */
+.dg-ai-input-area {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.dg-ai-prompt {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.dg-ai-prompt:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.dg-ai-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.dg-ai-opt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.dg-ai-opt input { accent-color: var(--accent); }
+
+.dg-ai-format-select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.dg-ai-result-area {
+  display: flex;
+  flex-direction: column;
+}
+
+.dg-ai-result-actions {
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 768px) {
+  .dg-split {
+    flex-direction: column;
+  }
+  .dg-code-pane {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .dg-code-textarea { min-height: 200px; }
+  .dg-preview { min-height: 200px; }
+}
+
 /* ===== 할 일 목록 탭 ===== */
 .task-top-bar {
   display: flex;

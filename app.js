@@ -3757,6 +3757,378 @@
   $('#task-show-done').addEventListener('change', renderTaskList);
 
   // ══════════════════════════════════════
+  // 7.8  도식화 탭 (Mermaid + AI)
+  // ══════════════════════════════════════
+  var DG_KEY = 'fl_diagrams';
+  var dgCurrentMode = 'mermaid';
+  var dgLastAiCode = '';
+  var dgLastAiFormat = 'mermaid';
+
+  // Mermaid 초기화
+  if (typeof mermaid !== 'undefined') {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true },
+      sequence: { useMaxWidth: true },
+      gantt: { useMaxWidth: true }
+    });
+  }
+
+  function loadDiagrams() {
+    try { return JSON.parse(localStorage.getItem(DG_KEY)) || []; }
+    catch (e) { return []; }
+  }
+  function saveDiagrams(list) { localStorage.setItem(DG_KEY, JSON.stringify(list)); }
+
+  // ── 렌더링 ──
+  var dgRenderCounter = 0;
+  function renderMermaidToEl(code, targetEl, cb) {
+    if (typeof mermaid === 'undefined') {
+      targetEl.innerHTML = '<div class="dg-error">Mermaid.js\uAC00 \uB85C\uB4DC\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4. \uD398\uC774\uC9C0\uB97C \uC0C8\uB85C\uACE0\uCE68\uD574\uC8FC\uC138\uC694.</div>';
+      return;
+    }
+    dgRenderCounter++;
+    var elId = 'dg-mermaid-' + dgRenderCounter;
+    try {
+      mermaid.render(elId, code).then(function (result) {
+        targetEl.innerHTML = '<div class="dg-rendered-svg">' + result.svg + '</div>';
+        if (cb) cb(null);
+      }).catch(function (err) {
+        targetEl.innerHTML = '<div class="dg-error">\uBB38\uBC95 \uC624\uB958: ' + escapeHtml(err.message || String(err)) + '</div>';
+        if (cb) cb(err);
+      });
+    } catch (err) {
+      targetEl.innerHTML = '<div class="dg-error">\uBB38\uBC95 \uC624\uB958: ' + escapeHtml(err.message || String(err)) + '</div>';
+      if (cb) cb(err);
+    }
+  }
+
+  function renderHtmlToEl(html, targetEl) {
+    var iframe = document.createElement('iframe');
+    iframe.className = 'dg-html-iframe';
+    iframe.sandbox = 'allow-scripts';
+    targetEl.innerHTML = '';
+    targetEl.appendChild(iframe);
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:16px;font-family:sans-serif;background:#fff;color:#222}</style></head><body>' + html + '</body></html>');
+    doc.close();
+    // 자동 높이 조절
+    setTimeout(function () {
+      try {
+        var h = Math.min(600, Math.max(200, doc.body.scrollHeight + 40));
+        iframe.style.height = h + 'px';
+      } catch (e) {}
+    }, 300);
+  }
+
+  // ── 템플릿 ──
+  var DG_TEMPLATES = {
+    flowchart: 'graph TD\n    A[\uC2DC\uC791] --> B{\uC870\uAC74 \uD655\uC778}\n    B -->|\uC608| C[\uCC98\uB9AC]\n    B -->|\uC544\uB2C8\uC624| D[\uB300\uCCB4 \uCC98\uB9AC]\n    C --> E[\uC644\uB8CC]\n    D --> E',
+    sequence: 'sequenceDiagram\n    participant A as \uC0AC\uC6A9\uC790\n    participant B as \uC11C\uBC84\n    participant C as DB\n    A->>B: \uC694\uCCAD\n    B->>C: \uCFFC\uB9AC\n    C-->>B: \uACB0\uACFC\n    B-->>A: \uC751\uB2F5',
+    gantt: 'gantt\n    title \uD504\uB85C\uC81D\uD2B8 \uC77C\uC815\n    dateFormat  YYYY-MM-DD\n    section \uAE30\uD68D\n    \uC694\uAD6C\uC0AC\uD56D \uBD84\uC11D    :a1, 2024-01-01, 7d\n    \uC124\uACC4              :a2, after a1, 5d\n    section \uAC1C\uBC1C\n    \uAD6C\uD604              :b1, after a2, 14d\n    \uD14C\uC2A4\uD2B8            :b2, after b1, 7d',
+    mindmap: 'mindmap\n  root((\uD504\uB85C\uC81D\uD2B8))\n    \uAE30\uD68D\n      \uC694\uAD6C\uC0AC\uD56D\n      \uC77C\uC815\n    \uAC1C\uBC1C\n      \uD504\uB860\uD2B8\uC5D4\uB4DC\n      \uBC31\uC5D4\uB4DC\n    \uB9C8\uCF00\uD305\n      SNS\n      \uAD11\uACE0',
+    pie: 'pie title \uC5C5\uBB34 \uBE44\uC728\n    "\uAE30\uD68D" : 30\n    "\uAC1C\uBC1C" : 45\n    "\uD68C\uC758" : 15\n    "\uAE30\uD0C0" : 10',
+    er: 'erDiagram\n    CUSTOMER ||--o{ ORDER : places\n    ORDER ||--|{ LINE-ITEM : contains\n    PRODUCT ||--o{ LINE-ITEM : "ordered in"',
+    classDiagram: 'classDiagram\n    class Animal {\n      +String name\n      +int age\n      +makeSound()\n    }\n    class Dog {\n      +fetch()\n    }\n    class Cat {\n      +purr()\n    }\n    Animal <|-- Dog\n    Animal <|-- Cat',
+    stateDiagram: 'stateDiagram-v2\n    [*] --> \uB300\uAE30\n    \uB300\uAE30 --> \uCC98\uB9AC\uC911 : \uC694\uCCAD\n    \uCC98\uB9AC\uC911 --> \uC644\uB8CC : \uC131\uACF5\n    \uCC98\uB9AC\uC911 --> \uC624\uB958 : \uC2E4\uD328\n    \uC624\uB958 --> \uB300\uAE30 : \uC7AC\uC2DC\uB3C4\n    \uC644\uB8CC --> [*]'
+  };
+
+  // ── 모드 전환 ──
+  document.querySelectorAll('.dg-mode-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.dg-mode-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      dgCurrentMode = btn.dataset.mode;
+      $('#dg-mode-mermaid').style.display = dgCurrentMode === 'mermaid' ? '' : 'none';
+      $('#dg-mode-ai').style.display = dgCurrentMode === 'ai' ? '' : 'none';
+    });
+  });
+
+  // ── 템플릿 선택 ──
+  $('#dg-template').addEventListener('change', function () {
+    var key = this.value;
+    if (key && DG_TEMPLATES[key]) {
+      $('#dg-code').value = DG_TEMPLATES[key];
+      this.value = '';
+      renderMermaidPreview();
+    }
+  });
+
+  // ── 렌더링 버튼 ──
+  function renderMermaidPreview() {
+    var code = $('#dg-code').value.trim();
+    var preview = $('#dg-preview');
+    if (!code) {
+      preview.innerHTML = '<div class="dg-placeholder">\uC67C\uCABD\uC5D0 Mermaid \uCF54\uB4DC\uB97C \uC785\uB825\uD558\uACE0 \u25B6 \uB80C\uB354\uB9C1\uC744 \uD074\uB9AD\uD558\uC138\uC694</div>';
+      return;
+    }
+    renderMermaidToEl(code, preview);
+  }
+
+  $('#dg-render').addEventListener('click', renderMermaidPreview);
+
+  // Ctrl+Enter로 렌더링
+  $('#dg-code').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      renderMermaidPreview();
+    }
+    // Tab 들여쓰기
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var start = this.selectionStart, end = this.selectionEnd;
+      this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
+      this.selectionStart = this.selectionEnd = start + 4;
+    }
+  });
+
+  // ── 저장 ──
+  $('#dg-save').addEventListener('click', function () {
+    var code = $('#dg-code').value.trim();
+    if (!code) { toast('\uCF54\uB4DC\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }
+    var name = prompt('\uB2E4\uC774\uC5B4\uADF8\uB7A8 \uC774\uB984:');
+    if (!name) return;
+    var diagrams = loadDiagrams();
+    diagrams.unshift({
+      id: 'dg-' + uid(),
+      name: name.trim(),
+      type: 'mermaid',
+      code: code,
+      createdAt: new Date().toISOString()
+    });
+    saveDiagrams(diagrams);
+    updateGalleryCount();
+    toast('\uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+  });
+
+  // ── AI 생성 ──
+  $('#dg-ai-generate').addEventListener('click', function () {
+    var prompt = $('#dg-ai-prompt').value.trim();
+    if (!prompt) { toast('\uC124\uBA85\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }
+    var format = $('#dg-ai-format').value;
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '\u23F3 \uC0DD\uC131 \uC911...';
+
+    // 워크스페이스 데이터 수집
+    var contextParts = [];
+    if ($('#dg-ai-use-journal').checked) {
+      var jItems = (function () { try { return JSON.parse(localStorage.getItem('fl_journal')) || []; } catch (e) { return []; } })();
+      if (jItems.length > 0) {
+        var jText = jItems.slice(0, 15).map(function (e) {
+          return Object.keys(e).filter(function (k) { return k !== 'id' && k !== 'attachments'; })
+            .map(function (k) { return k + ': ' + (e[k] || ''); }).join(', ');
+        }).join('\n');
+        contextParts.push('\uC5C5\uBB34\uC77C\uC9C0 \uB370\uC774\uD130:\n' + jText);
+      }
+    }
+    if ($('#dg-ai-use-meeting').checked) {
+      var mItems = (function () { try { return JSON.parse(localStorage.getItem('fl_meetings')) || []; } catch (e) { return []; } })();
+      if (mItems.length > 0) {
+        var mText = mItems.slice(0, 10).map(function (m) {
+          return '\uC81C\uBAA9: ' + (m.title || '') + '\n\uB0B4\uC6A9: ' + (m.content || '').substring(0, 300);
+        }).join('\n---\n');
+        contextParts.push('\uD68C\uC758\uB85D \uB370\uC774\uD130:\n' + mText);
+      }
+    }
+    if ($('#dg-ai-use-context').checked) {
+      var cItems = (function () { try { return JSON.parse(localStorage.getItem('fl_contexts')) || []; } catch (e) { return []; } })();
+      if (cItems.length > 0) {
+        var cText = cItems.slice(0, 5).map(function (c) {
+          return '\uC81C\uBAA9: ' + (c.title || '') + '\n\uB0B4\uC6A9: ' + (c.content || '').substring(0, 300);
+        }).join('\n---\n');
+        contextParts.push('\uCEE8\uD14D\uC2A4\uD2B8 \uB370\uC774\uD130:\n' + cText);
+      }
+    }
+
+    var systemPrompt, userMsg;
+    if (format === 'mermaid') {
+      systemPrompt = '\uB2F9\uC2E0\uC740 Mermaid.js \uB2E4\uC774\uC5B4\uADF8\uB7A8 \uC0DD\uC131 \uC804\uBB38\uAC00\uC785\uB2C8\uB2E4. \uC0AC\uC6A9\uC790\uC758 \uC694\uCCAD\uC5D0 \uB530\uB77C \uC815\uD655\uD55C Mermaid \uCF54\uB4DC\uB9CC \uCD9C\uB825\uD558\uC138\uC694. \uCF54\uB4DC \uBE14\uB85D(\u0060\u0060\u0060) \uC5C6\uC774 Mermaid \uCF54\uB4DC\uB9CC \uC21C\uC218\uD558\uAC8C \uCD9C\uB825\uD558\uC138\uC694. \uBD80\uAC00 \uC124\uBA85 \uC5C6\uC774 \uCF54\uB4DC\uB9CC \uCD9C\uB825\uD558\uC138\uC694. \uD55C\uAE00\uC744 \uC0AC\uC6A9\uD558\uC138\uC694.';
+      userMsg = prompt;
+    } else {
+      systemPrompt = '\uB2F9\uC2E0\uC740 HTML/SVG \uC2DC\uAC01\uD654 \uC804\uBB38\uAC00\uC785\uB2C8\uB2E4. \uC0AC\uC6A9\uC790\uC758 \uC694\uCCAD\uC5D0 \uB530\uB77C \uC2DC\uAC01\uC801\uC73C\uB85C \uD6CC\uB96D\uD55C HTML\uCF54\uB4DC\uB97C \uC0DD\uC131\uD558\uC138\uC694. \uC678\uBD80 \uB77C\uC774\uBE0C\uB7EC\uB9AC \uC5C6\uC774 \uC21C\uC218 HTML+CSS+\uC778\uB77C\uC778 SVG\uB9CC \uC0AC\uC6A9\uD558\uC138\uC694. <html><head><body> \uD0DC\uADF8 \uC5C6\uC774 body \uC548\uC5D0 \uB4E4\uC5B4\uAC08 \uCF54\uB4DC\uB9CC \uCD9C\uB825\uD558\uC138\uC694. \uBD80\uAC00 \uC124\uBA85 \uC5C6\uC774 \uCF54\uB4DC\uB9CC \uCD9C\uB825\uD558\uC138\uC694. \uD55C\uAE00\uC744 \uC0AC\uC6A9\uD558\uC138\uC694.';
+      userMsg = 'HTML/SVG\uB85C \uC2DC\uAC01\uD654\uD574\uC8FC\uC138\uC694: ' + prompt;
+    }
+    if (contextParts.length > 0) {
+      userMsg += '\n\n\uCC38\uACE0 \uB370\uC774\uD130:\n' + contextParts.join('\n\n');
+    }
+
+    callClaudeAPI(systemPrompt, userMsg, true).then(function (text) {
+      dgLastAiCode = text.trim();
+      // 코드 블록 제거
+      dgLastAiCode = dgLastAiCode.replace(/^```(?:mermaid|html|svg)?\n?/i, '').replace(/\n?```$/i, '').trim();
+      dgLastAiFormat = format;
+      var preview = $('#dg-ai-preview');
+      if (format === 'mermaid') {
+        renderMermaidToEl(dgLastAiCode, preview);
+      } else {
+        renderHtmlToEl(dgLastAiCode, preview);
+      }
+      $('#dg-ai-result-actions').style.display = '';
+      toast('\uB2E4\uC774\uC5B4\uADF8\uB7A8\uC774 \uC0DD\uC131\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+    }).catch(function (err) {
+      toast('AI \uC624\uB958: ' + err.message);
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = '\uD83E\uDD16 AI \uC0DD\uC131';
+    });
+  });
+
+  // AI 결과 → 코드 에디터로 이동
+  $('#dg-ai-edit').addEventListener('click', function () {
+    if (dgLastAiFormat === 'mermaid' && dgLastAiCode) {
+      $('#dg-code').value = dgLastAiCode;
+      // Mermaid 모드로 전환
+      document.querySelectorAll('.dg-mode-btn').forEach(function (b) { b.classList.remove('active'); });
+      document.querySelector('.dg-mode-btn[data-mode="mermaid"]').classList.add('active');
+      $('#dg-mode-mermaid').style.display = '';
+      $('#dg-mode-ai').style.display = 'none';
+      dgCurrentMode = 'mermaid';
+      renderMermaidPreview();
+      toast('Mermaid \uC5D0\uB514\uD130\uB85C \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+    } else {
+      toast('HTML \uBAA8\uB4DC\uB294 \uCF54\uB4DC \uD3B8\uC9D1\uC774 \uC9C0\uC6D0\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4');
+    }
+  });
+
+  // AI 결과 저장
+  $('#dg-ai-save').addEventListener('click', function () {
+    if (!dgLastAiCode) return;
+    var name = prompt('\uB2E4\uC774\uC5B4\uADF8\uB7A8 \uC774\uB984:');
+    if (!name) return;
+    var diagrams = loadDiagrams();
+    diagrams.unshift({
+      id: 'dg-' + uid(),
+      name: name.trim(),
+      type: dgLastAiFormat,
+      code: dgLastAiCode,
+      createdAt: new Date().toISOString()
+    });
+    saveDiagrams(diagrams);
+    updateGalleryCount();
+    toast('\uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+  });
+
+  // ── 갤러리 ──
+  function updateGalleryCount() {
+    var d = loadDiagrams();
+    $('#dg-gallery-count').textContent = d.length;
+  }
+
+  function renderGallery() {
+    var diagrams = loadDiagrams();
+    var list = $('#dg-gallery-list');
+    if (diagrams.length === 0) {
+      list.innerHTML = '<div class="dg-gallery-empty">\uC800\uC7A5\uB41C \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4</div>';
+      return;
+    }
+    list.innerHTML = diagrams.map(function (d) {
+      var typeLabel = d.type === 'mermaid' ? 'Mermaid' : 'HTML';
+      var dateStr = d.createdAt ? new Date(d.createdAt).toLocaleDateString('ko-KR') : '';
+      return '<div class="dg-gallery-item" data-id="' + d.id + '">' +
+        '<div class="dg-gallery-item-info">' +
+          '<span class="dg-gallery-item-name">' + escapeHtml(d.name) + '</span>' +
+          '<span class="dg-gallery-item-meta">' + typeLabel + ' \xB7 ' + dateStr + '</span>' +
+        '</div>' +
+        '<div class="dg-gallery-item-actions">' +
+          '<button class="btn btn-small btn-ghost" data-action="load" data-id="' + d.id + '">\uC5F4\uAE30</button>' +
+          '<button class="btn btn-small btn-danger" data-action="del" data-id="' + d.id + '">\uC0AD\uC81C</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  $('#dg-gallery-toggle').addEventListener('click', function () {
+    var panel = $('#dg-gallery-panel');
+    var vis = panel.style.display !== 'none';
+    panel.style.display = vis ? 'none' : '';
+    if (!vis) renderGallery();
+  });
+  $('#dg-gallery-close').addEventListener('click', function () {
+    $('#dg-gallery-panel').style.display = 'none';
+  });
+
+  $('#dg-gallery-list').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var id = btn.dataset.id;
+    var action = btn.dataset.action;
+    var diagrams = loadDiagrams();
+    if (action === 'del') {
+      saveDiagrams(diagrams.filter(function (d) { return d.id !== id; }));
+      updateGalleryCount();
+      renderGallery();
+      toast('\uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+    } else if (action === 'load') {
+      var dg = diagrams.find(function (d) { return d.id === id; });
+      if (!dg) return;
+      if (dg.type === 'mermaid') {
+        // Mermaid 모드로 전환 후 코드 로드
+        document.querySelectorAll('.dg-mode-btn').forEach(function (b) { b.classList.remove('active'); });
+        document.querySelector('.dg-mode-btn[data-mode="mermaid"]').classList.add('active');
+        $('#dg-mode-mermaid').style.display = '';
+        $('#dg-mode-ai').style.display = 'none';
+        dgCurrentMode = 'mermaid';
+        $('#dg-code').value = dg.code;
+        renderMermaidPreview();
+      } else {
+        // AI HTML 모드로 전환 후 렌더링
+        document.querySelectorAll('.dg-mode-btn').forEach(function (b) { b.classList.remove('active'); });
+        document.querySelector('.dg-mode-btn[data-mode="ai"]').classList.add('active');
+        $('#dg-mode-mermaid').style.display = 'none';
+        $('#dg-mode-ai').style.display = '';
+        dgCurrentMode = 'ai';
+        dgLastAiCode = dg.code;
+        dgLastAiFormat = dg.type;
+        renderHtmlToEl(dg.code, $('#dg-ai-preview'));
+        $('#dg-ai-result-actions').style.display = '';
+      }
+      $('#dg-gallery-panel').style.display = 'none';
+      toast('"' + dg.name + '" \uB85C\uB4DC\uB428');
+    }
+  });
+
+  // ── PNG 내보내기 ──
+  $('#dg-export-png').addEventListener('click', function () {
+    var svgEl = document.querySelector('#dg-preview .dg-rendered-svg svg') ||
+                document.querySelector('#dg-ai-preview .dg-rendered-svg svg');
+    if (!svgEl) {
+      toast('\uB0B4\uBCF4\uB0BC \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uBA3C\uC800 \uB80C\uB354\uB9C1\uD574\uC8FC\uC138\uC694.');
+      return;
+    }
+    var svgData = new XMLSerializer().serializeToString(svgEl);
+    var svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    var url = URL.createObjectURL(svgBlob);
+    var img = new Image();
+    img.onload = function () {
+      var canvas = document.createElement('canvas');
+      var scale = 2;
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(function (blob) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'diagram-' + new Date().toISOString().slice(0, 10) + '.png';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        toast('PNG \uB0B4\uBCF4\uB0B4\uAE30 \uC644\uB8CC');
+      });
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
+
+  // 초기화
+  updateGalleryCount();
+
+  // ══════════════════════════════════════
   // 8. 업무일지 탭
   // ══════════════════════════════════════
   var JNL_KEY = 'fl_journal';
