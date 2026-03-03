@@ -5026,99 +5026,264 @@
   });
 
   // ══════════════════════════════════════
-  // 11. 포스트잇 메모 위젯
+  // 11. 포스트잇 메모 (자유 배치 드래그)
   // ══════════════════════════════════════
   var STICKY_KEY = 'fl_sticky_notes';
+  var STICKY_VIS_KEY = 'fl_sticky_visible';
+  var stickyColors = ['#fff9c4', '#c8e6c9', '#bbdefb', '#f8bbd0', '#ffe0b2', '#e1bee7'];
+  var stickyZBase = 8100;
+  var stickyZTop = stickyZBase;
 
   function loadStickies() {
     try { return JSON.parse(localStorage.getItem(STICKY_KEY)) || []; }
     catch (e) { return []; }
   }
   function saveStickies(list) { localStorage.setItem(STICKY_KEY, JSON.stringify(list)); }
+  function isStickyVisible() { return localStorage.getItem(STICKY_VIS_KEY) !== 'false'; }
+  function setStickyVisible(v) { localStorage.setItem(STICKY_VIS_KEY, v ? 'true' : 'false'); }
 
-  function renderStickies() {
+  function clampPos(x, y, w, h) {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    return {
+      x: Math.max(0, Math.min(x, vw - Math.min(w, 60))),
+      y: Math.max(0, Math.min(y, vh - 30))
+    };
+  }
+
+  function renderAllStickies() {
+    var container = $('#sticky-container');
+    container.innerHTML = '';
     var notes = loadStickies();
-    var body = $('#sticky-body');
-    if (notes.length === 0) {
-      body.innerHTML = '<div class="sticky-empty">메모가 없습니다.<br>+ 버튼으로 추가하세요.</div>';
-      return;
-    }
-    body.innerHTML = notes.map(function (n, i) {
-      var colors = ['#fff9c4', '#c8e6c9', '#bbdefb', '#f8bbd0', '#ffe0b2', '#e1bee7'];
-      var bg = colors[i % colors.length];
-      return '<div class="sticky-note" data-idx="' + i + '" style="background:' + bg + '">' +
-        '<div class="sticky-note-header">' +
-          '<span class="sticky-note-color" data-action="color" title="색상 변경">🎨</span>' +
-          '<button class="sticky-note-del" data-action="del" title="삭제">✕</button>' +
-        '</div>' +
-        '<div class="sticky-note-text" contenteditable="true" data-idx="' + i + '">' + sanitizeJnlHtml(n.text || '') + '</div>' +
-        (n.checked !== undefined ? '<label class="sticky-note-check"><input type="checkbox"' + (n.checked ? ' checked' : '') + ' data-action="check" data-idx="' + i + '"> 완료</label>' : '') +
-      '</div>';
-    }).join('');
+    var visible = isStickyVisible();
+    notes.forEach(function (n, i) { createStickyEl(n, i, container, visible); });
+  }
 
-    // 텍스트 편집 저장
-    body.querySelectorAll('.sticky-note-text').forEach(function (el) {
-      el.addEventListener('blur', function () {
-        var idx = parseInt(el.dataset.idx, 10);
+  function createStickyEl(note, idx, container, visible) {
+    var el = document.createElement('div');
+    el.className = 'sticky-float-note' + (note.minimized ? ' sticky-minimized' : '');
+    el.dataset.idx = idx;
+    var bg = note.color || stickyColors[idx % stickyColors.length];
+    el.style.background = bg;
+    el.style.left = (note.x || 100 + idx * 30) + 'px';
+    el.style.top = (note.y || 100 + idx * 30) + 'px';
+    el.style.width = (note.w || 220) + 'px';
+    el.style.zIndex = stickyZBase + idx;
+    if (!visible) el.style.display = 'none';
+
+    el.innerHTML =
+      '<div class="sticky-float-header" data-drag="header">' +
+        '<span class="sticky-float-title">\uD83D\uDCCC</span>' +
+        '<div class="sticky-float-btns">' +
+          '<button class="sticky-fbtn" data-action="color" title="색상 변경">\uD83C\uDFA8</button>' +
+          '<button class="sticky-fbtn" data-action="minimize" title="최소화">\u2500</button>' +
+          '<button class="sticky-fbtn" data-action="add" title="새 메모">+</button>' +
+          '<button class="sticky-fbtn sticky-fbtn-del" data-action="del" title="삭제">\u2715</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="sticky-float-body">' +
+        '<div class="sticky-float-text" contenteditable="true">' + sanitizeJnlHtml(note.text || '') + '</div>' +
+      '</div>' +
+      '<div class="sticky-float-resize" data-drag="resize"></div>';
+
+    container.appendChild(el);
+
+    // ── 드래그 이동 ──
+    var header = el.querySelector('[data-drag="header"]');
+    header.addEventListener('mousedown', startDrag);
+    header.addEventListener('touchstart', startDragTouch, { passive: false });
+
+    function startDrag(e) {
+      if (e.target.closest('.sticky-fbtn')) return;
+      e.preventDefault();
+      bringToFront(el, idx);
+      var startX = e.clientX, startY = e.clientY;
+      var origLeft = el.offsetLeft, origTop = el.offsetTop;
+      function onMove(ev) {
+        var dx = ev.clientX - startX, dy = ev.clientY - startY;
+        var p = clampPos(origLeft + dx, origTop + dy, el.offsetWidth, el.offsetHeight);
+        el.style.left = p.x + 'px';
+        el.style.top = p.y + 'px';
+      }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        saveStickyPos(idx, el);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    }
+
+    function startDragTouch(e) {
+      if (e.target.closest('.sticky-fbtn')) return;
+      e.preventDefault();
+      bringToFront(el, idx);
+      var t = e.touches[0];
+      var startX = t.clientX, startY = t.clientY;
+      var origLeft = el.offsetLeft, origTop = el.offsetTop;
+      function onMove(ev) {
+        var ct = ev.touches[0];
+        var dx = ct.clientX - startX, dy = ct.clientY - startY;
+        var p = clampPos(origLeft + dx, origTop + dy, el.offsetWidth, el.offsetHeight);
+        el.style.left = p.x + 'px';
+        el.style.top = p.y + 'px';
+      }
+      function onEnd() {
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onEnd);
+        saveStickyPos(idx, el);
+      }
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
+    }
+
+    // ── 리사이즈 ──
+    var resizeHandle = el.querySelector('[data-drag="resize"]');
+    resizeHandle.addEventListener('mousedown', startResize);
+    resizeHandle.addEventListener('touchstart', startResizeTouch, { passive: false });
+
+    function startResize(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      bringToFront(el, idx);
+      var startX = e.clientX, startW = el.offsetWidth;
+      function onMove(ev) {
+        var nw = Math.max(160, startW + (ev.clientX - startX));
+        el.style.width = nw + 'px';
+      }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        saveStickyPos(idx, el);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    }
+
+    function startResizeTouch(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      bringToFront(el, idx);
+      var t = e.touches[0];
+      var startX = t.clientX, startW = el.offsetWidth;
+      function onMove(ev) {
+        var ct = ev.touches[0];
+        var nw = Math.max(160, startW + (ct.clientX - startX));
+        el.style.width = nw + 'px';
+      }
+      function onEnd() {
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onEnd);
+        saveStickyPos(idx, el);
+      }
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
+    }
+
+    // ── 포커스 시 맨 앞으로 ──
+    el.addEventListener('mousedown', function () { bringToFront(el, idx); });
+
+    // ── 텍스트 편집 blur → 저장 ──
+    var textEl = el.querySelector('.sticky-float-text');
+    textEl.addEventListener('blur', function () {
+      var notes = loadStickies();
+      if (notes[idx]) { notes[idx].text = textEl.innerHTML; saveStickies(notes); }
+    });
+
+    // ── 버튼 동작 ──
+    el.querySelectorAll('.sticky-fbtn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var action = btn.dataset.action;
         var notes = loadStickies();
-        if (notes[idx]) {
-          notes[idx].text = el.innerHTML;
-          saveStickies(notes);
-        }
-      });
-      el.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter' && !ev.shiftKey) {
-          // Allow Enter for line breaks, no commit
+        if (action === 'del') {
+          if (notes.length > 0) {
+            notes.splice(idx, 1);
+            saveStickies(notes);
+            renderAllStickies();
+          }
+        } else if (action === 'color') {
+          if (notes[idx]) {
+            var curColor = notes[idx].color || stickyColors[idx % stickyColors.length];
+            var ci = stickyColors.indexOf(curColor);
+            notes[idx].color = stickyColors[(ci + 1) % stickyColors.length];
+            saveStickies(notes);
+            el.style.background = notes[idx].color;
+          }
+        } else if (action === 'minimize') {
+          if (notes[idx]) {
+            notes[idx].minimized = !notes[idx].minimized;
+            saveStickies(notes);
+            el.classList.toggle('sticky-minimized', notes[idx].minimized);
+          }
+        } else if (action === 'add') {
+          addStickyNote();
         }
       });
     });
   }
 
-  // 토글
-  $('#sticky-toggle').addEventListener('click', function () {
-    var widget = $('#sticky-widget');
-    var visible = widget.style.display !== 'none';
-    widget.style.display = visible ? 'none' : '';
-    if (!visible) renderStickies();
-  });
+  function bringToFront(el) {
+    stickyZTop++;
+    el.style.zIndex = stickyZTop;
+  }
 
-  // 접기
-  $('#sticky-collapse').addEventListener('click', function () {
-    $('#sticky-widget').style.display = 'none';
-  });
-
-  // 새 메모 추가
-  $('#sticky-add').addEventListener('click', function () {
+  function saveStickyPos(idx, el) {
     var notes = loadStickies();
-    notes.unshift({ text: '', checked: undefined, createdAt: new Date().toISOString() });
+    if (!notes[idx]) return;
+    notes[idx].x = el.offsetLeft;
+    notes[idx].y = el.offsetTop;
+    notes[idx].w = el.offsetWidth;
     saveStickies(notes);
-    renderStickies();
-    // 첫 번째 메모에 포커스
-    var firstText = $('#sticky-body .sticky-note-text');
-    if (firstText) firstText.focus();
+  }
+
+  function addStickyNote() {
+    var notes = loadStickies();
+    var offset = notes.length * 25;
+    var cx = Math.min(window.innerWidth - 260, 200 + offset);
+    var cy = Math.min(window.innerHeight - 200, 120 + offset);
+    notes.push({
+      text: '',
+      x: cx, y: cy, w: 220,
+      color: stickyColors[notes.length % stickyColors.length],
+      minimized: false,
+      createdAt: new Date().toISOString()
+    });
+    saveStickies(notes);
+    setStickyVisible(true);
+    renderAllStickies();
+    // 새 메모에 포커스
+    var allNotes = document.querySelectorAll('.sticky-float-note');
+    var last = allNotes[allNotes.length - 1];
+    if (last) {
+      bringToFront(last);
+      var txt = last.querySelector('.sticky-float-text');
+      if (txt) txt.focus();
+    }
+  }
+
+  // ── 토글 버튼 (좌클릭=토글, 우클릭=새 메모) ──
+  var _stickyClickTimer = null;
+  $('#sticky-toggle').addEventListener('click', function () {
+    // 싱글 클릭 → 토글
+    var notes = loadStickies();
+    if (notes.length === 0) {
+      addStickyNote();
+      return;
+    }
+    var vis = isStickyVisible();
+    setStickyVisible(!vis);
+    var allEls = document.querySelectorAll('.sticky-float-note');
+    allEls.forEach(function (n) { n.style.display = vis ? 'none' : ''; });
   });
 
-  // 삭제 / 체크
-  $('#sticky-body').addEventListener('click', function (e) {
-    var note = e.target.closest('.sticky-note');
-    if (!note) return;
-    var idx = parseInt(note.dataset.idx, 10);
-    if (e.target.closest('[data-action="del"]')) {
-      var notes = loadStickies();
-      notes.splice(idx, 1);
-      saveStickies(notes);
-      renderStickies();
-    }
+  $('#sticky-toggle').addEventListener('dblclick', function (e) {
+    e.preventDefault();
+    addStickyNote();
   });
-  $('#sticky-body').addEventListener('change', function (e) {
-    if (e.target.dataset.action === 'check') {
-      var idx = parseInt(e.target.dataset.idx, 10);
-      var notes = loadStickies();
-      if (notes[idx]) {
-        notes[idx].checked = e.target.checked;
-        saveStickies(notes);
-      }
-    }
+
+  $('#sticky-toggle').addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+    addStickyNote();
   });
 
   // ── Init ──
@@ -5133,6 +5298,7 @@
     renderJnlTable();
     populateJnlCategoryFilter();
     populateJnlColFilters();
+    renderAllStickies();
   }
 
   init();
