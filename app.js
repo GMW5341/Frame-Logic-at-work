@@ -3757,22 +3757,19 @@
   $('#task-show-done').addEventListener('change', renderTaskList);
 
   // ══════════════════════════════════════
-  // 7.8  도식화 탭 (Mermaid + AI)
+  // 7.8  도식화 탭 (AI 시각화)
   // ══════════════════════════════════════
   var DG_KEY = 'fl_diagrams';
-  var dgCurrentMode = 'mermaid';
-  var dgLastAiCode = '';
-  var dgLastAiFormat = 'mermaid';
+  var dgLastCode = '';
+  var dgLastPrompt = '';
 
-  // Mermaid 초기화
+  // Mermaid 초기화 (AI가 Mermaid 코드를 생성할 때 사용)
   if (typeof mermaid !== 'undefined') {
     mermaid.initialize({
       startOnLoad: false,
       theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default',
       securityLevel: 'loose',
-      flowchart: { useMaxWidth: true, htmlLabels: true },
-      sequence: { useMaxWidth: true },
-      gantt: { useMaxWidth: true }
+      flowchart: { useMaxWidth: true, htmlLabels: true }
     });
   }
 
@@ -3783,29 +3780,24 @@
   function saveDiagrams(list) { localStorage.setItem(DG_KEY, JSON.stringify(list)); }
 
   // ── 렌더링 ──
-  var dgRenderCounter = 0;
-  function renderMermaidToEl(code, targetEl, cb) {
-    if (typeof mermaid === 'undefined') {
-      targetEl.innerHTML = '<div class="dg-error">Mermaid.js\uAC00 \uB85C\uB4DC\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4. \uD398\uC774\uC9C0\uB97C \uC0C8\uB85C\uACE0\uCE68\uD574\uC8FC\uC138\uC694.</div>';
-      return;
-    }
-    dgRenderCounter++;
-    var elId = 'dg-mermaid-' + dgRenderCounter;
-    try {
-      mermaid.render(elId, code).then(function (result) {
+  function renderDgResult(code, targetEl) {
+    // Mermaid 코드인지 HTML인지 자동 판별
+    var trimmed = code.trim();
+    var isMermaid = /^(graph |flowchart |sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie |mindmap|journey|gitGraph)/m.test(trimmed);
+
+    if (isMermaid && typeof mermaid !== 'undefined') {
+      var elId = 'dg-m-' + Date.now();
+      mermaid.render(elId, trimmed).then(function (result) {
         targetEl.innerHTML = '<div class="dg-rendered-svg">' + result.svg + '</div>';
-        if (cb) cb(null);
-      }).catch(function (err) {
-        targetEl.innerHTML = '<div class="dg-error">\uBB38\uBC95 \uC624\uB958: ' + escapeHtml(err.message || String(err)) + '</div>';
-        if (cb) cb(err);
+      }).catch(function () {
+        renderDgHtml(trimmed, targetEl);
       });
-    } catch (err) {
-      targetEl.innerHTML = '<div class="dg-error">\uBB38\uBC95 \uC624\uB958: ' + escapeHtml(err.message || String(err)) + '</div>';
-      if (cb) cb(err);
+    } else {
+      renderDgHtml(trimmed, targetEl);
     }
   }
 
-  function renderHtmlToEl(html, targetEl) {
+  function renderDgHtml(html, targetEl) {
     var iframe = document.createElement('iframe');
     iframe.className = 'dg-html-iframe';
     iframe.sandbox = 'allow-scripts';
@@ -3813,198 +3805,180 @@
     targetEl.appendChild(iframe);
     var doc = iframe.contentDocument || iframe.contentWindow.document;
     doc.open();
-    doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:16px;font-family:sans-serif;background:#fff;color:#222}</style></head><body>' + html + '</body></html>');
+    doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}body{margin:20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fff;color:#1a1a2e;line-height:1.5}</style></head><body>' + html + '</body></html>');
     doc.close();
-    // 자동 높이 조절
-    setTimeout(function () {
+    iframe.onload = function () {
       try {
-        var h = Math.min(600, Math.max(200, doc.body.scrollHeight + 40));
+        var h = Math.min(800, Math.max(250, doc.body.scrollHeight + 50));
         iframe.style.height = h + 'px';
       } catch (e) {}
-    }, 300);
+    };
+    setTimeout(function () {
+      try {
+        var h = Math.min(800, Math.max(250, doc.body.scrollHeight + 50));
+        iframe.style.height = h + 'px';
+      } catch (e) {}
+    }, 500);
   }
 
-  // ── 템플릿 ──
-  var DG_TEMPLATES = {
-    flowchart: 'graph TD\n    A[\uC2DC\uC791] --> B{\uC870\uAC74 \uD655\uC778}\n    B -->|\uC608| C[\uCC98\uB9AC]\n    B -->|\uC544\uB2C8\uC624| D[\uB300\uCCB4 \uCC98\uB9AC]\n    C --> E[\uC644\uB8CC]\n    D --> E',
-    sequence: 'sequenceDiagram\n    participant A as \uC0AC\uC6A9\uC790\n    participant B as \uC11C\uBC84\n    participant C as DB\n    A->>B: \uC694\uCCAD\n    B->>C: \uCFFC\uB9AC\n    C-->>B: \uACB0\uACFC\n    B-->>A: \uC751\uB2F5',
-    gantt: 'gantt\n    title \uD504\uB85C\uC81D\uD2B8 \uC77C\uC815\n    dateFormat  YYYY-MM-DD\n    section \uAE30\uD68D\n    \uC694\uAD6C\uC0AC\uD56D \uBD84\uC11D    :a1, 2024-01-01, 7d\n    \uC124\uACC4              :a2, after a1, 5d\n    section \uAC1C\uBC1C\n    \uAD6C\uD604              :b1, after a2, 14d\n    \uD14C\uC2A4\uD2B8            :b2, after b1, 7d',
-    mindmap: 'mindmap\n  root((\uD504\uB85C\uC81D\uD2B8))\n    \uAE30\uD68D\n      \uC694\uAD6C\uC0AC\uD56D\n      \uC77C\uC815\n    \uAC1C\uBC1C\n      \uD504\uB860\uD2B8\uC5D4\uB4DC\n      \uBC31\uC5D4\uB4DC\n    \uB9C8\uCF00\uD305\n      SNS\n      \uAD11\uACE0',
-    pie: 'pie title \uC5C5\uBB34 \uBE44\uC728\n    "\uAE30\uD68D" : 30\n    "\uAC1C\uBC1C" : 45\n    "\uD68C\uC758" : 15\n    "\uAE30\uD0C0" : 10',
-    er: 'erDiagram\n    CUSTOMER ||--o{ ORDER : places\n    ORDER ||--|{ LINE-ITEM : contains\n    PRODUCT ||--o{ LINE-ITEM : "ordered in"',
-    classDiagram: 'classDiagram\n    class Animal {\n      +String name\n      +int age\n      +makeSound()\n    }\n    class Dog {\n      +fetch()\n    }\n    class Cat {\n      +purr()\n    }\n    Animal <|-- Dog\n    Animal <|-- Cat',
-    stateDiagram: 'stateDiagram-v2\n    [*] --> \uB300\uAE30\n    \uB300\uAE30 --> \uCC98\uB9AC\uC911 : \uC694\uCCAD\n    \uCC98\uB9AC\uC911 --> \uC644\uB8CC : \uC131\uACF5\n    \uCC98\uB9AC\uC911 --> \uC624\uB958 : \uC2E4\uD328\n    \uC624\uB958 --> \uB300\uAE30 : \uC7AC\uC2DC\uB3C4\n    \uC644\uB8CC --> [*]'
-  };
-
-  // ── 모드 전환 ──
-  document.querySelectorAll('.dg-mode-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      document.querySelectorAll('.dg-mode-btn').forEach(function (b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      dgCurrentMode = btn.dataset.mode;
-      $('#dg-mode-mermaid').style.display = dgCurrentMode === 'mermaid' ? '' : 'none';
-      $('#dg-mode-ai').style.display = dgCurrentMode === 'ai' ? '' : 'none';
-    });
-  });
-
-  // ── 템플릿 선택 ──
-  $('#dg-template').addEventListener('change', function () {
-    var key = this.value;
-    if (key && DG_TEMPLATES[key]) {
-      $('#dg-code').value = DG_TEMPLATES[key];
-      this.value = '';
-      renderMermaidPreview();
-    }
-  });
-
-  // ── 렌더링 버튼 ──
-  function renderMermaidPreview() {
-    var code = $('#dg-code').value.trim();
-    var preview = $('#dg-preview');
-    if (!code) {
-      preview.innerHTML = '<div class="dg-placeholder">\uC67C\uCABD\uC5D0 Mermaid \uCF54\uB4DC\uB97C \uC785\uB825\uD558\uACE0 \u25B6 \uB80C\uB354\uB9C1\uC744 \uD074\uB9AD\uD558\uC138\uC694</div>';
-      return;
-    }
-    renderMermaidToEl(code, preview);
-  }
-
-  $('#dg-render').addEventListener('click', renderMermaidPreview);
-
-  // Ctrl+Enter로 렌더링
-  $('#dg-code').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      renderMermaidPreview();
-    }
-    // Tab 들여쓰기
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      var start = this.selectionStart, end = this.selectionEnd;
-      this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
-      this.selectionStart = this.selectionEnd = start + 4;
-    }
-  });
-
-  // ── 저장 ──
-  $('#dg-save').addEventListener('click', function () {
-    var code = $('#dg-code').value.trim();
-    if (!code) { toast('\uCF54\uB4DC\uB97C \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }
-    var name = prompt('\uB2E4\uC774\uC5B4\uADF8\uB7A8 \uC774\uB984:');
-    if (!name) return;
-    var diagrams = loadDiagrams();
-    diagrams.unshift({
-      id: 'dg-' + uid(),
-      name: name.trim(),
-      type: 'mermaid',
-      code: code,
-      createdAt: new Date().toISOString()
-    });
-    saveDiagrams(diagrams);
-    updateGalleryCount();
-    toast('\uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
-  });
-
-  // ── AI 생성 ──
-  $('#dg-ai-generate').addEventListener('click', function () {
-    var prompt = $('#dg-ai-prompt').value.trim();
-    if (!prompt) { toast('\uC124\uBA85\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }
-    var format = $('#dg-ai-format').value;
-    var btn = this;
-    btn.disabled = true;
-    btn.textContent = '\u23F3 \uC0DD\uC131 \uC911...';
-
-    // 워크스페이스 데이터 수집
-    var contextParts = [];
+  // ── 워크스페이스 데이터 수집 ──
+  function collectDgContext() {
+    var parts = [];
     if ($('#dg-ai-use-journal').checked) {
       var jItems = (function () { try { return JSON.parse(localStorage.getItem('fl_journal')) || []; } catch (e) { return []; } })();
       if (jItems.length > 0) {
-        var jText = jItems.slice(0, 15).map(function (e) {
-          return Object.keys(e).filter(function (k) { return k !== 'id' && k !== 'attachments'; })
-            .map(function (k) { return k + ': ' + (e[k] || ''); }).join(', ');
+        var cols = (function () { try { return JSON.parse(localStorage.getItem('fl_journal_columns')); } catch (e) { return null; } })();
+        var jText = jItems.slice(0, 20).map(function (e) {
+          return Object.keys(e).filter(function (k) { return k !== 'id' && k !== 'attachments' && e[k]; })
+            .map(function (k) {
+              var v = e[k] || '';
+              if (typeof v === 'string' && v.indexOf('<') !== -1) v = v.replace(/<[^>]+>/g, '').trim();
+              var label = k;
+              if (cols) { var c = cols.find(function (x) { return x.key === k; }); if (c) label = c.label; }
+              return label + ': ' + v;
+            }).join(' | ');
         }).join('\n');
-        contextParts.push('\uC5C5\uBB34\uC77C\uC9C0 \uB370\uC774\uD130:\n' + jText);
+        parts.push('\uC5C5\uBB34\uC77C\uC9C0 \uB370\uC774\uD130 (' + jItems.length + '\uAC74):\n' + jText);
       }
     }
     if ($('#dg-ai-use-meeting').checked) {
       var mItems = (function () { try { return JSON.parse(localStorage.getItem('fl_meetings')) || []; } catch (e) { return []; } })();
       if (mItems.length > 0) {
         var mText = mItems.slice(0, 10).map(function (m) {
-          return '\uC81C\uBAA9: ' + (m.title || '') + '\n\uB0B4\uC6A9: ' + (m.content || '').substring(0, 300);
+          var content = (m.content || '').replace(/<[^>]+>/g, '').substring(0, 500);
+          return '\uC81C\uBAA9: ' + (m.title || '') + '\n' + content;
         }).join('\n---\n');
-        contextParts.push('\uD68C\uC758\uB85D \uB370\uC774\uD130:\n' + mText);
+        parts.push('\uD68C\uC758\uB85D (' + mItems.length + '\uAC74):\n' + mText);
       }
     }
     if ($('#dg-ai-use-context').checked) {
       var cItems = (function () { try { return JSON.parse(localStorage.getItem('fl_contexts')) || []; } catch (e) { return []; } })();
       if (cItems.length > 0) {
         var cText = cItems.slice(0, 5).map(function (c) {
-          return '\uC81C\uBAA9: ' + (c.title || '') + '\n\uB0B4\uC6A9: ' + (c.content || '').substring(0, 300);
+          var content = (c.content || '').replace(/<[^>]+>/g, '').substring(0, 500);
+          return '\uC81C\uBAA9: ' + (c.title || '') + '\n' + content;
         }).join('\n---\n');
-        contextParts.push('\uCEE8\uD14D\uC2A4\uD2B8 \uB370\uC774\uD130:\n' + cText);
+        parts.push('AI \uCEE8\uD14D\uC2A4\uD2B8 (' + cItems.length + '\uAC74):\n' + cText);
       }
     }
-
-    var systemPrompt, userMsg;
-    if (format === 'mermaid') {
-      systemPrompt = '\uB2F9\uC2E0\uC740 Mermaid.js \uB2E4\uC774\uC5B4\uADF8\uB7A8 \uC0DD\uC131 \uC804\uBB38\uAC00\uC785\uB2C8\uB2E4. \uC0AC\uC6A9\uC790\uC758 \uC694\uCCAD\uC5D0 \uB530\uB77C \uC815\uD655\uD55C Mermaid \uCF54\uB4DC\uB9CC \uCD9C\uB825\uD558\uC138\uC694. \uCF54\uB4DC \uBE14\uB85D(\u0060\u0060\u0060) \uC5C6\uC774 Mermaid \uCF54\uB4DC\uB9CC \uC21C\uC218\uD558\uAC8C \uCD9C\uB825\uD558\uC138\uC694. \uBD80\uAC00 \uC124\uBA85 \uC5C6\uC774 \uCF54\uB4DC\uB9CC \uCD9C\uB825\uD558\uC138\uC694. \uD55C\uAE00\uC744 \uC0AC\uC6A9\uD558\uC138\uC694.';
-      userMsg = prompt;
-    } else {
-      systemPrompt = '\uB2F9\uC2E0\uC740 HTML/SVG \uC2DC\uAC01\uD654 \uC804\uBB38\uAC00\uC785\uB2C8\uB2E4. \uC0AC\uC6A9\uC790\uC758 \uC694\uCCAD\uC5D0 \uB530\uB77C \uC2DC\uAC01\uC801\uC73C\uB85C \uD6CC\uB96D\uD55C HTML\uCF54\uB4DC\uB97C \uC0DD\uC131\uD558\uC138\uC694. \uC678\uBD80 \uB77C\uC774\uBE0C\uB7EC\uB9AC \uC5C6\uC774 \uC21C\uC218 HTML+CSS+\uC778\uB77C\uC778 SVG\uB9CC \uC0AC\uC6A9\uD558\uC138\uC694. <html><head><body> \uD0DC\uADF8 \uC5C6\uC774 body \uC548\uC5D0 \uB4E4\uC5B4\uAC08 \uCF54\uB4DC\uB9CC \uCD9C\uB825\uD558\uC138\uC694. \uBD80\uAC00 \uC124\uBA85 \uC5C6\uC774 \uCF54\uB4DC\uB9CC \uCD9C\uB825\uD558\uC138\uC694. \uD55C\uAE00\uC744 \uC0AC\uC6A9\uD558\uC138\uC694.';
-      userMsg = 'HTML/SVG\uB85C \uC2DC\uAC01\uD654\uD574\uC8FC\uC138\uC694: ' + prompt;
-    }
-    if (contextParts.length > 0) {
-      userMsg += '\n\n\uCC38\uACE0 \uB370\uC774\uD130:\n' + contextParts.join('\n\n');
-    }
-
-    callClaudeAPI(systemPrompt, userMsg, true).then(function (text) {
-      dgLastAiCode = text.trim();
-      // 코드 블록 제거
-      dgLastAiCode = dgLastAiCode.replace(/^```(?:mermaid|html|svg)?\n?/i, '').replace(/\n?```$/i, '').trim();
-      dgLastAiFormat = format;
-      var preview = $('#dg-ai-preview');
-      if (format === 'mermaid') {
-        renderMermaidToEl(dgLastAiCode, preview);
-      } else {
-        renderHtmlToEl(dgLastAiCode, preview);
+    if ($('#dg-ai-use-tasks').checked) {
+      var tItems = (function () { try { return JSON.parse(localStorage.getItem('fl_tasks')) || []; } catch (e) { return []; } })();
+      if (tItems.length > 0) {
+        var tText = tItems.slice(0, 30).map(function (t) {
+          return (t.done ? '\u2705' : '\u2B1C') + ' [' + (t.priority || 'normal') + '] ' + t.text + ' (' + t.date + ')';
+        }).join('\n');
+        parts.push('\uD560 \uC77C \uBAA9\uB85D (' + tItems.length + '\uAC74):\n' + tText);
       }
-      $('#dg-ai-result-actions').style.display = '';
+    }
+    return parts.join('\n\n');
+  }
+
+  // ── 고품질 시스템 프롬프트 ──
+  var DG_SYSTEM_PROMPT =
+    '\uB2F9\uC2E0\uC740 \uC804\uBB38\uC801\uC778 \uC815\uBCF4 \uC2DC\uAC01\uD654 \uB514\uC790\uC774\uB108\uC785\uB2C8\uB2E4. \uC0AC\uC6A9\uC790\uC758 \uC694\uCCAD\uC744 \uC544\uB984\uB2F5\uACE0 \uC804\uBB38\uC801\uC778 \uB2E4\uC774\uC5B4\uADF8\uB7A8/\uCC28\uD2B8/\uC2DC\uAC01\uD654\uB85C \uBCC0\uD658\uD569\uB2C8\uB2E4.\n\n' +
+    '\uADDC\uCE59:\n' +
+    '1. \uC21C\uC218 HTML+\uC778\uB77C\uC778 CSS+\uC778\uB77C\uC778 SVG\uB9CC \uC0AC\uC6A9. \uC678\uBD80 \uB77C\uC774\uBE0C\uB7EC\uB9AC/\uD3F0\uD2B8/\uC774\uBBF8\uC9C0 \uC808\uB300 \uBD88\uAC00.\n' +
+    '2. \uBAA8\uB358 CSS \uC0AC\uC6A9: flexbox, grid, linear-gradient, border-radius, box-shadow, \uBC18\uC751\uD615.\n' +
+    '3. \uC804\uBB38\uC801 \uCEEC\uB7EC \uD314\uB808\uD2B8: \uC870\uD654\uB85C\uC6B4 \uC0C9\uC0C1 \uC870\uD569. \uBC30\uACBD #f8f9fa~#fff, \uAC15\uC870\uC0C9 \uD30C\uB780/\uBCF4\uB77C/\uCD08\uB85D \uACC4\uC5F4.\n' +
+    '4. \uD55C\uAE00 \uC0AC\uC6A9. \uD0C0\uC774\uD2C0, \uB808\uC774\uBE14, \uC124\uBA85 \uBAA8\uB450 \uD55C\uAE00.\n' +
+    '5. SVG \uC544\uC774\uCF58/\uB3C4\uD615\uC744 \uC801\uADF9 \uD65C\uC6A9\uD558\uC5EC \uC2DC\uAC01\uC801 \uD488\uC9C8\uC744 \uB192\uC774\uC138\uC694.\n' +
+    '6. \uCDA9\uBD84\uD55C \uD06C\uAE30\uB85C \uB9CC\uB4DC\uC138\uC694. \uC791\uAC8C \uB9CC\uB4E4\uC9C0 \uB9C8\uC138\uC694.\n' +
+    '7. <html>, <head>, <body> \uD0DC\uADF8 \uC5C6\uC774 body \uC548\uC5D0 \uB4E4\uC5B4\uAC08 \uCF54\uB4DC\uB9CC \uCD9C\uB825.\n' +
+    '8. \uBD80\uAC00 \uC124\uBA85/\uC8FC\uC11D \uC5C6\uC774 \uCF54\uB4DC\uB9CC \uCD9C\uB825.\n' +
+    '9. \uCF54\uB4DC \uBE14\uB85D(\u0060\u0060\u0060) \uC5C6\uC774 \uC21C\uC218 HTML\uB9CC \uCD9C\uB825.';
+
+  // ── 템플릿 프롬프트 ──
+  var DG_TPL_PROMPTS = {
+    workflow: '\uC5C5\uBB34 \uD504\uB85C\uC138\uC2A4 \uC6CC\uD06C\uD50C\uB85C\uC6B0 \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC744 \uB9CC\uB4E4\uC5B4\uC8FC\uC138\uC694. \uD654\uC0B4\uD45C\uB85C \uC5F0\uACB0\uB41C \uB2E8\uACC4\uBCC4 \uD50C\uB85C\uC6B0\uCC28\uD2B8. \uAC01 \uB2E8\uACC4\uB294 \uB465\uADFC \uC0C1\uC790\uB85C \uD45C\uD604.',
+    process: '\uBE44\uC988\uB2C8\uC2A4 \uD504\uB85C\uC138\uC2A4 \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC744 \uB9CC\uB4E4\uC5B4\uC8FC\uC138\uC694. \uBC88\uD638\uAC00 \uB9E4\uACA8\uC9C4 \uB2E8\uACC4\uBCC4 \uD504\uB85C\uC138\uC2A4 \uCE74\uB4DC\uC640 \uD654\uC0B4\uD45C.',
+    timeline: '\uD0C0\uC784\uB77C\uC778 \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC744 \uB9CC\uB4E4\uC5B4\uC8FC\uC138\uC694. \uC218\uD3C9 \uB610\uB294 \uC218\uC9C1 \uD0C0\uC784\uB77C\uC778\uC73C\uB85C \uB0A0\uC9DC/\uC774\uBCA4\uD2B8\uB97C \uD45C\uC2DC.',
+    orgchart: '\uC870\uC9C1\uB3C4/\uACC4\uCE35 \uAD6C\uC870 \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC744 \uB9CC\uB4E4\uC5B4\uC8FC\uC138\uC694. \uD2B8\uB9AC \uAD6C\uC870\uB85C \uC0C1\uD558 \uAD00\uACC4\uB97C \uD45C\uD604.',
+    comparison: '\uBE44\uAD50 \uBD84\uC11D\uD45C\uB97C \uB9CC\uB4E4\uC5B4\uC8FC\uC138\uC694. \uC544\uC774\uD15C\uB4E4\uC744 \uB098\uB780\uD788 \uB193\uACE0 \uD56D\uBAA9\uBCC4\uB85C \uBE44\uAD50\uD558\uB294 \uCE74\uB4DC \uB808\uC774\uC544\uC6C3.',
+    mindmap: '\uB9C8\uC778\uB4DC\uB9F5\uC744 \uB9CC\uB4E4\uC5B4\uC8FC\uC138\uC694. \uC911\uC559 \uC8FC\uC81C\uC5D0\uC11C \uBC29\uC0AC\uD615\uC73C\uB85C \uD558\uC704 \uAC00\uC9C0\uAC00 \uD37C\uC838\uB098\uAC00\uB294 \uAD6C\uC870.',
+    funnel: '\uD37C\uB110 \uCC28\uD2B8\uB97C \uB9CC\uB4E4\uC5B4\uC8FC\uC138\uC694. \uC704\uC5D0\uC11C \uC544\uB798\uB85C \uC880\uC544\uC9C0\uB294 \uB2E8\uACC4\uBCC4 \uD37C\uB110.',
+    swot: 'SWOT \uBD84\uC11D \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC744 \uB9CC\uB4E4\uC5B4\uC8FC\uC138\uC694. 2x2 \uADF8\uB9AC\uB4DC\uB85C S/W/O/T \uAC01 \uC601\uC5ED.'
+  };
+
+  // ── 템플릿 버튼 클릭 ──
+  document.querySelectorAll('.dg-tpl-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tpl = btn.dataset.tpl;
+      var prompt = DG_TPL_PROMPTS[tpl] || '';
+      var textarea = $('#dg-ai-prompt');
+      textarea.value = prompt;
+      textarea.focus();
+      // 이미 체크된 데이터가 있으면 바로 생성, 아니면 프롬프트만 채움
+    });
+  });
+
+  // ── AI 생성 ──
+  function dgGenerate(promptText, isRefine) {
+    if (!promptText) { toast('\uC124\uBA85\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694'); return; }
+    var btn = $('#dg-ai-generate');
+    btn.disabled = true;
+    btn.textContent = '\u2728 \uC0DD\uC131 \uC911...';
+
+    var ctx = collectDgContext();
+    var userMsg = promptText;
+    if (ctx) userMsg += '\n\n\uCC38\uACE0 \uB370\uC774\uD130:\n' + ctx;
+    if (isRefine && dgLastCode) {
+      userMsg = '\uC774\uC804 \uACB0\uACFC\uB97C \uC218\uC815\uD574\uC8FC\uC138\uC694.\n\uC218\uC815 \uC694\uCCAD: ' + promptText + '\n\n\uC774\uC804 HTML \uCF54\uB4DC:\n' + dgLastCode;
+    }
+
+    callClaudeAPI(DG_SYSTEM_PROMPT, userMsg, true).then(function (text) {
+      dgLastCode = text.trim().replace(/^```(?:html|svg|mermaid)?\n?/i, '').replace(/\n?```$/i, '').trim();
+      dgLastPrompt = promptText;
+      var preview = $('#dg-result-preview');
+      renderDgResult(dgLastCode, preview);
+      $('#dg-result-card').style.display = '';
+      $('#dg-result-title').textContent = isRefine ? '\uC218\uC815\uB41C \uACB0\uACFC' : '\uC0DD\uC131 \uACB0\uACFC';
+      $('#dg-refine-panel').style.display = 'none';
       toast('\uB2E4\uC774\uC5B4\uADF8\uB7A8\uC774 \uC0DD\uC131\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
     }).catch(function (err) {
       toast('AI \uC624\uB958: ' + err.message);
     }).finally(function () {
       btn.disabled = false;
-      btn.textContent = '\uD83E\uDD16 AI \uC0DD\uC131';
+      btn.textContent = '\u2728 AI \uC0DD\uC131';
     });
-  });
+  }
 
-  // AI 결과 → 코드 에디터로 이동
-  $('#dg-ai-edit').addEventListener('click', function () {
-    if (dgLastAiFormat === 'mermaid' && dgLastAiCode) {
-      $('#dg-code').value = dgLastAiCode;
-      // Mermaid 모드로 전환
-      document.querySelectorAll('.dg-mode-btn').forEach(function (b) { b.classList.remove('active'); });
-      document.querySelector('.dg-mode-btn[data-mode="mermaid"]').classList.add('active');
-      $('#dg-mode-mermaid').style.display = '';
-      $('#dg-mode-ai').style.display = 'none';
-      dgCurrentMode = 'mermaid';
-      renderMermaidPreview();
-      toast('Mermaid \uC5D0\uB514\uD130\uB85C \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
-    } else {
-      toast('HTML \uBAA8\uB4DC\uB294 \uCF54\uB4DC \uD3B8\uC9D1\uC774 \uC9C0\uC6D0\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4');
+  $('#dg-ai-generate').addEventListener('click', function () {
+    dgGenerate($('#dg-ai-prompt').value.trim(), false);
+  });
+  $('#dg-ai-prompt').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      dgGenerate(this.value.trim(), false);
     }
   });
 
-  // AI 결과 저장
-  $('#dg-ai-save').addEventListener('click', function () {
-    if (!dgLastAiCode) return;
+  // ── 수정 요청 ──
+  $('#dg-refine').addEventListener('click', function () {
+    var panel = $('#dg-refine-panel');
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    if (panel.style.display !== 'none') $('#dg-refine-input').focus();
+  });
+  $('#dg-refine-go').addEventListener('click', function () {
+    dgGenerate($('#dg-refine-input').value.trim(), true);
+  });
+  $('#dg-refine-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      dgGenerate(this.value.trim(), true);
+    }
+  });
+
+  // ── 저장 ──
+  $('#dg-save').addEventListener('click', function () {
+    if (!dgLastCode) { toast('\uBA3C\uC800 \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC744 \uC0DD\uC131\uD574\uC8FC\uC138\uC694'); return; }
     var name = prompt('\uB2E4\uC774\uC5B4\uADF8\uB7A8 \uC774\uB984:');
     if (!name) return;
     var diagrams = loadDiagrams();
     diagrams.unshift({
       id: 'dg-' + uid(),
       name: name.trim(),
-      type: dgLastAiFormat,
-      code: dgLastAiCode,
+      code: dgLastCode,
+      prompt: dgLastPrompt,
       createdAt: new Date().toISOString()
     });
     saveDiagrams(diagrams);
@@ -4026,12 +4000,11 @@
       return;
     }
     list.innerHTML = diagrams.map(function (d) {
-      var typeLabel = d.type === 'mermaid' ? 'Mermaid' : 'HTML';
       var dateStr = d.createdAt ? new Date(d.createdAt).toLocaleDateString('ko-KR') : '';
       return '<div class="dg-gallery-item" data-id="' + d.id + '">' +
         '<div class="dg-gallery-item-info">' +
           '<span class="dg-gallery-item-name">' + escapeHtml(d.name) + '</span>' +
-          '<span class="dg-gallery-item-meta">' + typeLabel + ' \xB7 ' + dateStr + '</span>' +
+          '<span class="dg-gallery-item-meta">' + dateStr + (d.prompt ? ' \xB7 ' + escapeHtml(d.prompt.substring(0, 40)) : '') + '</span>' +
         '</div>' +
         '<div class="dg-gallery-item-actions">' +
           '<button class="btn btn-small btn-ghost" data-action="load" data-id="' + d.id + '">\uC5F4\uAE30</button>' +
@@ -4047,9 +4020,7 @@
     panel.style.display = vis ? 'none' : '';
     if (!vis) renderGallery();
   });
-  $('#dg-gallery-close').addEventListener('click', function () {
-    $('#dg-gallery-panel').style.display = 'none';
-  });
+  $('#dg-gallery-close').addEventListener('click', function () { $('#dg-gallery-panel').style.display = 'none'; });
 
   $('#dg-gallery-list').addEventListener('click', function (e) {
     var btn = e.target.closest('[data-action]');
@@ -4065,64 +4036,57 @@
     } else if (action === 'load') {
       var dg = diagrams.find(function (d) { return d.id === id; });
       if (!dg) return;
-      if (dg.type === 'mermaid') {
-        // Mermaid 모드로 전환 후 코드 로드
-        document.querySelectorAll('.dg-mode-btn').forEach(function (b) { b.classList.remove('active'); });
-        document.querySelector('.dg-mode-btn[data-mode="mermaid"]').classList.add('active');
-        $('#dg-mode-mermaid').style.display = '';
-        $('#dg-mode-ai').style.display = 'none';
-        dgCurrentMode = 'mermaid';
-        $('#dg-code').value = dg.code;
-        renderMermaidPreview();
-      } else {
-        // AI HTML 모드로 전환 후 렌더링
-        document.querySelectorAll('.dg-mode-btn').forEach(function (b) { b.classList.remove('active'); });
-        document.querySelector('.dg-mode-btn[data-mode="ai"]').classList.add('active');
-        $('#dg-mode-mermaid').style.display = 'none';
-        $('#dg-mode-ai').style.display = '';
-        dgCurrentMode = 'ai';
-        dgLastAiCode = dg.code;
-        dgLastAiFormat = dg.type;
-        renderHtmlToEl(dg.code, $('#dg-ai-preview'));
-        $('#dg-ai-result-actions').style.display = '';
-      }
+      dgLastCode = dg.code;
+      dgLastPrompt = dg.prompt || '';
+      renderDgResult(dg.code, $('#dg-result-preview'));
+      $('#dg-result-card').style.display = '';
+      $('#dg-result-title').textContent = dg.name;
       $('#dg-gallery-panel').style.display = 'none';
+      if (dg.prompt) $('#dg-ai-prompt').value = dg.prompt;
       toast('"' + dg.name + '" \uB85C\uB4DC\uB428');
     }
   });
 
-  // ── PNG 내보내기 ──
+  // ── 이미지 저장 (HTML2Canvas 방식) ──
   $('#dg-export-png').addEventListener('click', function () {
-    var svgEl = document.querySelector('#dg-preview .dg-rendered-svg svg') ||
-                document.querySelector('#dg-ai-preview .dg-rendered-svg svg');
-    if (!svgEl) {
-      toast('\uB0B4\uBCF4\uB0BC \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uBA3C\uC800 \uB80C\uB354\uB9C1\uD574\uC8FC\uC138\uC694.');
+    var preview = $('#dg-result-preview');
+    var svgEl = preview.querySelector('.dg-rendered-svg svg');
+    if (svgEl) {
+      // SVG → PNG
+      var svgData = new XMLSerializer().serializeToString(svgEl);
+      var blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () {
+        var c = document.createElement('canvas');
+        c.width = img.width * 2; c.height = img.height * 2;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob(function (b) {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(b);
+          a.download = 'diagram-' + new Date().toISOString().slice(0, 10) + '.png';
+          a.click();
+        });
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+      toast('PNG \uC800\uC7A5 \uC644\uB8CC');
       return;
     }
-    var svgData = new XMLSerializer().serializeToString(svgEl);
-    var svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-    var url = URL.createObjectURL(svgBlob);
-    var img = new Image();
-    img.onload = function () {
-      var canvas = document.createElement('canvas');
-      var scale = 2;
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      var ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(function (blob) {
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'diagram-' + new Date().toISOString().slice(0, 10) + '.png';
-        a.click();
-        URL.revokeObjectURL(a.href);
-        toast('PNG \uB0B4\uBCF4\uB0B4\uAE30 \uC644\uB8CC');
-      });
-      URL.revokeObjectURL(url);
-    };
-    img.src = url;
+    // iframe → 스크린샷 불가, HTML 파일로 대체 저장
+    if (dgLastCode) {
+      var htmlContent = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}body{margin:20px;font-family:sans-serif;background:#fff;color:#1a1a2e;line-height:1.5}</style></head><body>' + dgLastCode + '</body></html>';
+      var blob2 = new Blob([htmlContent], { type: 'text/html' });
+      var a2 = document.createElement('a');
+      a2.href = URL.createObjectURL(blob2);
+      a2.download = 'diagram-' + new Date().toISOString().slice(0, 10) + '.html';
+      a2.click();
+      toast('HTML \uD30C\uC77C\uB85C \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+    } else {
+      toast('\uC800\uC7A5\uD560 \uB2E4\uC774\uC5B4\uADF8\uB7A8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4');
+    }
   });
 
   // 초기화
