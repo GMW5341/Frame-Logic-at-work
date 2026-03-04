@@ -218,79 +218,130 @@
             </div>
           </div>
 
-          <div class="mtg-two-col">
-            <div class="mtg-col-main">
-              <div class="form-row">
-                <div class="form-group flex-1">
-                  <label for="mtg-title">회의명</label>
-                  <input type="text" id="mtg-title" placeholder="예: 주간 스프린트 리뷰">
-                </div>
-                <div class="form-group">
-                  <label for="mtg-date">일시</label>
-                  <input type="datetime-local" id="mtg-date">
-                </div>
+          <!-- 기본 정보 -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="mtg-title">회의명</label>
+              <input type="text" id="mtg-title" placeholder="예: 주간 스프린트 리뷰">
+            </div>
+            <div class="form-group">
+              <label for="mtg-date">일시</label>
+              <input type="datetime-local" id="mtg-date">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="mtg-attendees">참석자</label>
+              <input type="text" id="mtg-attendees" placeholder="쉼표로 구분">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>안건</label>
+            <div id="mtg-agenda-list" class="mtg-agenda-list"></div>
+            <div class="mtg-agenda-add">
+              <input type="text" id="mtg-agenda-input" placeholder="안건 주제 입력 후 추가">
+              <button class="btn btn-secondary btn-small" id="mtg-agenda-add-btn">+ 추가</button>
+            </div>
+          </div>
+
+          <!-- 녹음 영역 (메인) -->
+          <div class="mtg-record-section">
+            <div class="mtg-voice-bar">
+              <button class="btn btn-primary mtg-voice-btn" id="mtg-rec-btn" title="음성 녹음">🎙 녹음 시작</button>
+              <button class="btn btn-secondary" id="mtg-upload-btn" title="녹음 파일 업로드">📂 파일 업로드</button>
+              <input type="file" id="mtg-upload-input" accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg,.flac,.mp4" style="display:none">
+              <span class="mtg-rec-status" id="mtg-rec-status"></span>
+              <span class="mtg-rec-timer" id="mtg-rec-timer"></span>
+              <span class="mtg-rec-stt-status" id="mtg-rec-stt-status"></span>
+            </div>
+            <div class="mtg-recordings" id="mtg-recordings"></div>
+          </div>
+
+          <!-- AI 분석 버튼 -->
+          <div class="btn-row" style="margin:16px 0">
+            <button class="btn btn-primary" id="mtg-ai-summary" style="flex:1">🤖 AI 회의록 분석</button>
+          </div>
+
+          <!-- AI 분석 결과: 구조화된 섹션들 -->
+          <div class="mtg-sections">
+            <div class="mtg-section" id="mtg-sec-summary">
+              <div class="mtg-section-header">
+                <h3>핵심 요약</h3>
+                <button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-summary-body" title="복사">📋</button>
               </div>
-              <div class="form-group">
-                <label for="mtg-attendees">참석자</label>
-                <input type="text" id="mtg-attendees" placeholder="쉼표로 구분">
+              <div class="mtg-section-body" id="mtg-sec-summary-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다"></div>
+            </div>
+            <div class="mtg-section" id="mtg-sec-discussion">
+              <div class="mtg-section-header">
+                <h3>주요 논의 내용</h3>
+                <button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-discussion-body" title="복사">📋</button>
               </div>
-              <div class="form-group">
-                <label>안건</label>
-                <div id="mtg-agenda-list" class="mtg-agenda-list"></div>
-                <div class="mtg-agenda-add">
-                  <input type="text" id="mtg-agenda-input" placeholder="안건 주제 입력 후 추가">
-                  <button class="btn btn-secondary btn-small" id="mtg-agenda-add-btn">+ 추가</button>
-                </div>
+              <div class="mtg-section-body" id="mtg-sec-discussion-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다"></div>
+            </div>
+            <div class="mtg-section" id="mtg-sec-decisions">
+              <div class="mtg-section-header">
+                <h3>결정 사항</h3>
+                <button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-decisions-body" title="복사">📋</button>
               </div>
-              <div class="form-group">
-                <label for="mtg-notes">회의 내용</label>
-                <!-- 음성 녹음 컨트롤 -->
-                <div class="mtg-voice-bar">
-                  <button class="btn btn-secondary btn-small mtg-voice-btn" id="mtg-rec-btn" title="음성 녹음">🎙 녹음</button>
-                  <button class="btn btn-secondary btn-small" id="mtg-upload-btn" title="녹음 파일 업로드">📂 파일 업로드</button>
-                  <input type="file" id="mtg-upload-input" accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg,.flac,.mp4" style="display:none">
-                  <span class="mtg-rec-status" id="mtg-rec-status"></span>
-                  <span class="mtg-rec-timer" id="mtg-rec-timer"></span>
-                  <span class="mtg-rec-stt-status" id="mtg-rec-stt-status"></span>
-                </div>
-                <textarea id="mtg-notes" rows="20" placeholder="회의 중 기록 (음성 녹음 시 자동 텍스트 변환)" data-rich></textarea>
-                <!-- 녹음 파일 목록 -->
-                <div class="mtg-recordings" id="mtg-recordings"></div>
+              <div class="mtg-section-body" id="mtg-sec-decisions-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다"></div>
+            </div>
+            <div class="mtg-section" id="mtg-sec-actions">
+              <div class="mtg-section-header">
+                <h3>액션 아이템</h3>
+                <button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-actions-body" title="복사">📋</button>
+              </div>
+              <div class="mtg-section-body" id="mtg-sec-actions-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다"></div>
+            </div>
+            <div class="mtg-section" id="mtg-sec-followup">
+              <div class="mtg-section-header">
+                <h3>후속 조치 사항</h3>
+                <button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-followup-body" title="복사">📋</button>
+              </div>
+              <div class="mtg-section-body" id="mtg-sec-followup-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다"></div>
+            </div>
+          </div>
+
+          <!-- 수동 메모 -->
+          <div class="mtg-section mtg-memo-section">
+            <div class="mtg-section-header">
+              <h3>수동 메모</h3>
+            </div>
+            <textarea id="mtg-notes" rows="6" placeholder="직접 기록할 내용을 입력하세요" data-rich></textarea>
+          </div>
+
+          <!-- 하단 액션 -->
+          <div class="mtg-bottom-actions">
+            <div class="btn-row">
+              <button class="btn btn-primary" id="mtg-save" style="flex:1">저장</button>
+              <button class="btn btn-secondary" id="mtg-copy">📋 복사</button>
+              <button class="btn btn-ghost" id="mtg-clear">초기화</button>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-secondary" id="mtg-to-idea" style="flex:1">💡 아이디어로 보내기</button>
+              <button class="btn btn-secondary" id="mtg-export-excel">📊 Excel</button>
+              <button class="btn btn-secondary" id="mtg-export-pdf">📄 PDF</button>
+            </div>
+          </div>
+
+          <!-- 텍스트 원문 팝업 모달 -->
+          <div class="modal-overlay" id="mtg-transcript-overlay">
+            <div class="modal-content mtg-transcript-modal">
+              <div class="modal-header">
+                <h3>텍스트 원문</h3>
+                <button class="btn btn-ghost btn-small" id="mtg-transcript-close">✕</button>
+              </div>
+              <div class="mtg-transcript-content" id="mtg-transcript-content"></div>
+              <div class="btn-row" style="margin-top:12px">
+                <button class="btn btn-secondary btn-small" id="mtg-transcript-copy">📋 전체 복사</button>
               </div>
             </div>
-            <div class="mtg-col-side">
-              <div class="form-group">
-                <label for="mtg-decisions">결정 사항</label>
-                <textarea id="mtg-decisions" rows="10" placeholder="합의된 내용" data-rich></textarea>
-              </div>
-              <div class="form-group">
-                <label for="mtg-actions">액션 플랜</label>
-                <textarea id="mtg-actions" rows="10" placeholder="누가 무엇을 언제까지&#10;(한 줄에 하나씩)" data-rich></textarea>
-              </div>
-              <div class="btn-row mtg-side-actions">
-                <button class="btn btn-primary" id="mtg-save" style="flex:1">저장</button>
-                <button class="btn btn-secondary" id="mtg-copy">📋 복사</button>
-                <button class="btn btn-ghost" id="mtg-clear">초기화</button>
-              </div>
-              <div class="btn-row">
-                <button class="btn btn-secondary" id="mtg-ai-summary" style="flex:1">🤖 AI 요약</button>
-              </div>
-              <div class="btn-row">
-                <button class="btn btn-secondary" id="mtg-to-idea" style="flex:1">💡 아이디어로 보내기</button>
-              </div>
-              <div class="btn-row">
-                <button class="btn btn-secondary" id="mtg-export-excel" style="flex:1">📊 Excel</button>
-                <button class="btn btn-secondary" id="mtg-export-pdf" style="flex:1">📄 PDF</button>
-              </div>
-              <!-- AI 요약 결과 -->
-              <div class="mtg-ai-result" id="mtg-ai-result" style="display:none">
-                <div class="mtg-ai-result-header">
-                  <strong>AI 요약</strong>
-                  <button class="btn btn-small btn-ghost" id="mtg-ai-result-copy" title="복사">📋</button>
-                </div>
-                <div class="mtg-ai-result-body" id="mtg-ai-result-body"></div>
-              </div>
-            </div>
+          </div>
+
+          <!-- 기존 호환용 숨김 필드 -->
+          <textarea id="mtg-decisions" style="display:none"></textarea>
+          <textarea id="mtg-actions" style="display:none"></textarea>
+          <div class="mtg-ai-result" id="mtg-ai-result" style="display:none">
+            <div class="mtg-ai-result-body" id="mtg-ai-result-body"></div>
           </div>
         </div>
       </section>
