@@ -1468,7 +1468,16 @@
 
     var btn = $('#mtg-ai-summary');
     btn.disabled = true;
-    btn.textContent = '분석 중...';
+    btn.innerHTML = '<span class="mtg-ai-spinner"></span> AI 분석 중...';
+
+    // 섹션에 로딩 상태 표시
+    var sectionIds = ['mtg-sec-summary', 'mtg-sec-discussion', 'mtg-sec-decisions', 'mtg-sec-actions', 'mtg-sec-followup'];
+    sectionIds.forEach(function (id) {
+      var sec = $('#' + id);
+      if (sec) sec.classList.add('mtg-analyzing');
+      var body = $('#' + id + '-body');
+      if (body && !body.textContent.trim()) body.setAttribute('data-placeholder', '분석 중...');
+    });
 
     var systemPrompt = '당신은 회의 내용을 구조적으로 분석하는 전문 비서입니다. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 순수 JSON만 출력하세요.';
     var userPrompt = '아래 회의 내용을 분석하여 다음 JSON 형식으로 응답해주세요:\n\n' +
@@ -1540,6 +1549,15 @@
     .finally(function () {
       btn.disabled = false;
       btn.textContent = '🤖 AI 회의록 분석';
+      // 로딩 상태 해제
+      sectionIds.forEach(function (id) {
+        var sec = $('#' + id);
+        if (sec) sec.classList.remove('mtg-analyzing');
+        var body = $('#' + id + '-body');
+        if (body && body.getAttribute('data-placeholder') === '분석 중...') {
+          body.setAttribute('data-placeholder', 'AI 분석 후 자동 입력됩니다');
+        }
+      });
     });
   });
 

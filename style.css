@@ -767,6 +767,53 @@ body {
   white-space: pre-wrap;
 }
 
+/* ===== AI 분석 중 상태 ===== */
+.mtg-ai-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: mtg-spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+@keyframes mtg-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mtg-section.mtg-analyzing {
+  position: relative;
+  overflow: hidden;
+}
+
+.mtg-section.mtg-analyzing::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(74, 144, 226, 0.08), transparent);
+  animation: mtg-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes mtg-shimmer {
+  0%   { left: -100%; }
+  100% { left: 100%; }
+}
+
+.mtg-section.mtg-analyzing .mtg-section-header {
+  color: var(--accent, #4a90d9);
+}
+
+.mtg-section.mtg-analyzing .mtg-section-body:empty::before {
+  color: var(--accent, #4a90d9);
+  animation: mtg-pulse 1.2s ease-in-out infinite;
+}
+
 .mtg-transcript-content .mtg-utterance {
   padding: 6px 0;
 }
