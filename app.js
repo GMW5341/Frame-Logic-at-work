@@ -1146,7 +1146,7 @@
       if (!uploadData || !uploadData.upload_url) {
         throw new Error('업로드 응답에 upload_url이 없습니다');
       }
-      // Step 2: 변환 요청
+      // Step 2: 변환 요청 (한국어는 best/conformer-2 모델만 지원)
       return fetch('https://api.assemblyai.com/v2/transcript', {
         method: 'POST',
         headers: {
@@ -1155,7 +1155,8 @@
         },
         body: JSON.stringify({
           audio_url: uploadData.upload_url,
-          language_code: 'ko'
+          language_code: 'ko',
+          speech_model: 'best'
         })
       });
     })
