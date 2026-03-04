@@ -1004,15 +1004,13 @@
   });
 
   // ══════════════════════════════════════
-  // 3-B. 음성 녹음 & STT (Speech-to-Text)
+  // 3-B. 음성 녹음 & AssemblyAI STT
   // ══════════════════════════════════════
   var mtgMediaRecorder = null;
   var mtgAudioChunks = [];
-  var mtgRecordings = []; // { id, blob, url, duration, transcript }
+  var mtgRecordings = []; // { id, blob, url, duration, transcript, transcribing }
   var mtgRecTimerInterval = null;
   var mtgRecStartTime = 0;
-  var mtgSpeechRecognition = null;
-  var mtgSttText = '';
 
   function formatRecTime(sec) {
     var m = Math.floor(sec / 60);
@@ -1029,48 +1027,130 @@
     var container = $('#mtg-recordings');
     if (mtgRecordings.length === 0) { container.innerHTML = ''; return; }
     container.innerHTML = mtgRecordings.map(function (rec, i) {
+      var transcriptHtml = '';
+      if (rec.transcribing) {
+        transcriptHtml = '<div class="mtg-rec-transcript" style="color:var(--text-dim)">텍스트 변환 중...</div>';
+      } else if (rec.transcript) {
+        transcriptHtml = '<div class="mtg-rec-transcript">' + escapeHtml(rec.transcript) + '</div>';
+      }
       return '<div class="mtg-rec-item" data-idx="' + i + '">' +
-        '<span class="mtg-rec-label">#' + (i + 1) + ' (' + formatRecTime(rec.duration) + ')</span>' +
-        '<audio controls src="' + rec.url + '"></audio>' +
-        '<button class="btn btn-small btn-ghost" data-action="dl" title="다운로드">💾</button>' +
-        '<button class="btn btn-small btn-danger" data-action="del" title="삭제">✕</button>' +
+        '<div class="mtg-rec-item-top">' +
+          '<span class="mtg-rec-label">#' + (i + 1) + ' (' + formatRecTime(rec.duration) + ')</span>' +
+          '<audio controls src="' + rec.url + '"></audio>' +
+          (rec.transcript || rec.transcribing ? '' : '<button class="btn btn-small btn-secondary" data-action="stt" title="텍스트 변환">📝 변환</button>') +
+          '<button class="btn btn-small btn-ghost" data-action="dl" title="다운로드">💾</button>' +
+          '<button class="btn btn-small btn-danger" data-action="del" title="삭제">✕</button>' +
+        '</div>' +
+        transcriptHtml +
       '</div>';
     }).join('');
   }
 
-  // Web Speech API (STT) 설정
-  function startSpeechRecognition() {
-    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return null;
-    var recognition = new SpeechRecognition();
-    recognition.lang = 'ko-KR';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    mtgSttText = '';
+  // AssemblyAI: 오디오 업로드 → 변환 요청 → 폴링으로 결과 수신
+  function assemblyUploadAndTranscribe(blob, recIndex) {
+    var settings = loadSettings();
+    var apiKey = settings.assemblyKey;
+    if (!apiKey) {
+      toast('설정에서 AssemblyAI API 키를 입력해주세요');
+      $('#settings-overlay').classList.add('active');
+      return;
+    }
 
-    recognition.onresult = function (event) {
-      var transcript = '';
-      for (var i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
+    var rec = mtgRecordings[recIndex];
+    if (!rec) return;
+    rec.transcribing = true;
+    renderRecordings();
+    $('#mtg-rec-stt-status').textContent = '변환 중...';
+
+    // Step 1: 오디오 파일 업로드
+    fetch('https://api.assemblyai.com/v2/upload', {
+      method: 'POST',
+      headers: { 'Authorization': apiKey },
+      body: blob
+    })
+    .then(function (res) {
+      if (!res.ok) throw new Error('업로드 실패 (HTTP ' + res.status + ')');
+      return res.json();
+    })
+    .then(function (uploadData) {
+      // Step 2: 변환 요청
+      return fetch('https://api.assemblyai.com/v2/transcript', {
+        method: 'POST',
+        headers: {
+          'Authorization': apiKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          audio_url: uploadData.upload_url,
+          language_code: 'ko'
+        })
+      });
+    })
+    .then(function (res) {
+      if (!res.ok) throw new Error('변환 요청 실패 (HTTP ' + res.status + ')');
+      return res.json();
+    })
+    .then(function (transcriptData) {
+      // Step 3: 폴링으로 결과 대기
+      return assemblyPollResult(apiKey, transcriptData.id);
+    })
+    .then(function (result) {
+      rec.transcribing = false;
+      rec.transcript = result.text || '';
+      renderRecordings();
+      $('#mtg-rec-stt-status').textContent = '';
+
+      // 회의 내용에 자동 삽입
+      if (rec.transcript) {
+        var editor = getRich('mtg-notes');
+        if (editor) {
+          var currentHtml = editor.getHTML();
+          var separator = currentHtml && currentHtml !== '<p></p>' ? '<br><br>' : '';
+          var tag = '<p><em>[녹음 #' + (recIndex + 1) + ' AssemblyAI 변환]</em></p><p>' + escapeHtml(rec.transcript) + '</p>';
+          editor.setHTML(currentHtml + separator + tag);
+        }
+        toast('텍스트 변환 완료');
+      } else {
+        toast('변환 완료 (인식된 텍스트 없음)');
       }
-      mtgSttText = transcript;
-    };
+    })
+    .catch(function (err) {
+      rec.transcribing = false;
+      renderRecordings();
+      $('#mtg-rec-stt-status').textContent = '';
+      toast('변환 실패: ' + err.message);
+    });
+  }
 
-    recognition.onerror = function (e) {
-      if (e.error !== 'no-speech' && e.error !== 'aborted') {
-        console.warn('STT error:', e.error);
+  function assemblyPollResult(apiKey, transcriptId) {
+    return new Promise(function (resolve, reject) {
+      var attempts = 0;
+      var maxAttempts = 60; // 최대 5분 (5초 간격 × 60회)
+
+      function poll() {
+        fetch('https://api.assemblyai.com/v2/transcript/' + transcriptId, {
+          headers: { 'Authorization': apiKey }
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data.status === 'completed') {
+            resolve(data);
+          } else if (data.status === 'error') {
+            reject(new Error(data.error || '변환 오류'));
+          } else {
+            attempts++;
+            if (attempts >= maxAttempts) {
+              reject(new Error('변환 시간 초과'));
+            } else {
+              setTimeout(poll, 5000);
+            }
+          }
+        })
+        .catch(reject);
       }
-    };
 
-    recognition.onend = function () {
-      // 녹음 중이면 자동 재시작 (브라우저가 끊었을 때)
-      if (mtgMediaRecorder && mtgMediaRecorder.state === 'recording') {
-        try { recognition.start(); } catch (e) {}
-      }
-    };
-
-    try { recognition.start(); } catch (e) {}
-    return recognition;
+      poll();
+    });
   }
 
   // 녹음 시작/중지 토글
@@ -1080,10 +1160,6 @@
     // 녹음 중지
     if (mtgMediaRecorder && mtgMediaRecorder.state === 'recording') {
       mtgMediaRecorder.stop();
-      if (mtgSpeechRecognition) {
-        try { mtgSpeechRecognition.stop(); } catch (e) {}
-        mtgSpeechRecognition = null;
-      }
       clearInterval(mtgRecTimerInterval);
       btn.classList.remove('recording');
       btn.textContent = '🎙 녹음';
@@ -1106,26 +1182,21 @@
         var url = URL.createObjectURL(blob);
         var duration = Math.floor((Date.now() - mtgRecStartTime) / 1000);
 
-        var rec = { id: uid(), blob: blob, url: url, duration: duration, transcript: mtgSttText || '' };
+        var rec = { id: uid(), blob: blob, url: url, duration: duration, transcript: '', transcribing: false };
         mtgRecordings.push(rec);
         renderRecordings();
 
-        // STT 결과를 회의 내용에 추가
-        if (rec.transcript) {
-          var editor = getRich('mtg-notes');
-          if (editor) {
-            var currentHtml = editor.getHTML();
-            var separator = currentHtml && currentHtml !== '<p></p>' ? '<br><br>' : '';
-            var tag = '<p><em>[녹음 #' + mtgRecordings.length + ' 음성 변환]</em></p><p>' + escapeHtml(rec.transcript) + '</p>';
-            editor.setHTML(currentHtml + separator + tag);
-          }
-          toast('녹음 저장 + 텍스트 변환 완료');
+        // AssemblyAI 키가 있으면 자동 변환 시작
+        var settings = loadSettings();
+        if (settings.assemblyKey) {
+          assemblyUploadAndTranscribe(blob, mtgRecordings.length - 1);
+          toast('녹음 저장 완료 — 텍스트 변환 시작');
         } else {
-          toast('녹음이 저장되었습니다');
+          toast('녹음이 저장되었습니다 (변환하려면 📝 변환 클릭)');
         }
       };
 
-      mtgMediaRecorder.start(1000); // 1초 간격 chunk
+      mtgMediaRecorder.start(1000);
       mtgRecStartTime = Date.now();
       mtgRecTimerInterval = setInterval(updateRecTimer, 1000);
 
@@ -1134,22 +1205,23 @@
       $('#mtg-rec-status').textContent = '● 녹음 중';
       $('#mtg-rec-timer').textContent = '00:00';
 
-      // STT 병행 시작
-      mtgSpeechRecognition = startSpeechRecognition();
-
       toast('녹음을 시작합니다');
     }).catch(function (err) {
       toast('마이크 접근 실패: ' + err.message);
     });
   });
 
-  // 녹음 목록 - 다운로드/삭제
+  // 녹음 목록 - 변환/다운로드/삭제
   $('#mtg-recordings').addEventListener('click', function (e) {
     var item = e.target.closest('.mtg-rec-item');
     if (!item) return;
     var idx = parseInt(item.dataset.idx, 10);
     var rec = mtgRecordings[idx];
     if (!rec) return;
+
+    if (e.target.closest('[data-action="stt"]')) {
+      assemblyUploadAndTranscribe(rec.blob, idx);
+    }
 
     if (e.target.closest('[data-action="dl"]')) {
       var a = document.createElement('a');
@@ -1678,6 +1750,7 @@
   $('#open-settings').addEventListener('click', function () {
     var settings = loadSettings();
     $('#setting-api-key').value = settings.apiKey || '';
+    $('#setting-assembly-key').value = settings.assemblyKey || '';
     $('#setting-ai-prompt').value = settings.aiPrompt || DEFAULT_AI_PROMPT;
     $('#setting-jnl-prompt').value = settings.jnlPrompt || DEFAULT_JNL_PROMPT;
     $('#api-key-status').textContent = settings.apiKey ? '키가 설정되어 있습니다' : '';
@@ -1695,10 +1768,12 @@
 
   $('#settings-save').addEventListener('click', function () {
     var key = $('#setting-api-key').value.trim();
+    var assemblyKey = $('#setting-assembly-key').value.trim();
     var prompt = $('#setting-ai-prompt').value.trim();
     var jnlPrompt = $('#setting-jnl-prompt').value.trim();
     var settings = loadSettings();
     settings.apiKey = key;
+    settings.assemblyKey = assemblyKey;
     settings.aiPrompt = prompt || '';
     settings.jnlPrompt = jnlPrompt || '';
     saveSettingsData(settings);
@@ -1725,8 +1800,10 @@
   $('#settings-clear-key').addEventListener('click', function () {
     var settings = loadSettings();
     settings.apiKey = '';
+    settings.assemblyKey = '';
     saveSettingsData(settings);
     $('#setting-api-key').value = '';
+    $('#setting-assembly-key').value = '';
     $('#api-key-status').textContent = '';
     toast('API 키가 삭제되었습니다');
   });

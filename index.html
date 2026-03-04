@@ -249,6 +249,7 @@
                   <button class="btn btn-secondary btn-small mtg-voice-btn" id="mtg-rec-btn" title="음성 녹음">🎙 녹음</button>
                   <span class="mtg-rec-status" id="mtg-rec-status"></span>
                   <span class="mtg-rec-timer" id="mtg-rec-timer"></span>
+                  <span class="mtg-rec-stt-status" id="mtg-rec-stt-status"></span>
                 </div>
                 <textarea id="mtg-notes" rows="20" placeholder="회의 중 기록 (음성 녹음 시 자동 텍스트 변환)" data-rich></textarea>
                 <!-- 녹음 파일 목록 -->
@@ -605,6 +606,11 @@
         <input type="password" id="setting-api-key" placeholder="sk-ant-..." class="settings-input">
         <p class="form-hint">키는 이 브라우저의 localStorage에만 저장됩니다. 서버로 전송되지 않습니다.</p>
         <p class="form-hint">Anthropic Console에서 발급받으세요: console.anthropic.com</p>
+      </div>
+      <div class="form-group">
+        <label for="setting-assembly-key">AssemblyAI API 키 (음성 변환)</label>
+        <input type="password" id="setting-assembly-key" placeholder="AssemblyAI API Key" class="settings-input">
+        <p class="form-hint">회의 녹음 음성을 텍스트로 변환합니다. assemblyai.com에서 발급받으세요.</p>
       </div>
       <div class="form-group" style="margin-top:20px">
         <label for="setting-ai-prompt">🗂 회의 분류 AI 프롬프트</label>

@@ -778,16 +778,22 @@ body {
 
 .mtg-rec-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-size: 0.82rem;
 }
 
-.mtg-rec-item audio {
+.mtg-rec-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mtg-rec-item-top audio {
   flex: 1;
   height: 32px;
   min-width: 0;
@@ -799,8 +805,24 @@ body {
   font-size: 0.75rem;
 }
 
-.mtg-rec-item .btn {
+.mtg-rec-item-top .btn {
   flex-shrink: 0;
+}
+
+.mtg-rec-transcript {
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.mtg-rec-stt-status {
+  font-size: 0.78rem;
+  color: var(--accent);
+  margin-left: auto;
 }
 
 /* ===== AI Summary Result ===== */
