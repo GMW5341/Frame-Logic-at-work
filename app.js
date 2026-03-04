@@ -583,6 +583,7 @@
   // 3. 회의 메모 탭
   // ══════════════════════════════════════
   var MTG_KEY = 'fl_meetings';
+  var MTG_DRAFT_KEY = 'fl_mtg_draft';
 
   var MTG_TYPE_LABELS = {
     regular: '📅 정기 회의',
@@ -768,6 +769,63 @@
     if (aiResult) aiResult.style.display = 'none';
   }
 
+  // ── 회의 임시 저장 (Draft) ──
+  function saveMeetingDraft() {
+    // 회의 폼이 열려 있을 때만 저장
+    if ($('#mtg-form-view').style.display === 'none') return;
+    var draft = {
+      type: currentMtgType,
+      editId: currentMtgEditId,
+      title: ($('#mtg-title') && $('#mtg-title').value) || '',
+      date: ($('#mtg-date') && $('#mtg-date').value) || '',
+      attendees: ($('#mtg-attendees') && $('#mtg-attendees').value) || '',
+      agenda: mtgAgendaItems.slice(),
+      notes: getRich('mtg-notes') ? getRich('mtg-notes').getHTML() : '',
+      decisions: getRich('mtg-decisions') ? getRich('mtg-decisions').getHTML() : '',
+      actions: getRich('mtg-actions') ? getRich('mtg-actions').getHTML() : '',
+      folder: ($('#mtg-folder') && $('#mtg-folder').value) || '',
+      savedAt: Date.now()
+    };
+    // 내용이 있을 때만 저장
+    if (draft.title || htmlToText(draft.notes).trim() || htmlToText(draft.decisions).trim() || draft.agenda.length) {
+      localStorage.setItem(MTG_DRAFT_KEY, JSON.stringify(draft));
+    }
+  }
+
+  function loadMeetingDraft() {
+    try {
+      var raw = localStorage.getItem(MTG_DRAFT_KEY);
+      if (!raw) return null;
+      var draft = JSON.parse(raw);
+      // 24시간 이상 된 draft는 무시
+      if (draft.savedAt && Date.now() - draft.savedAt > 86400000) {
+        localStorage.removeItem(MTG_DRAFT_KEY);
+        return null;
+      }
+      return draft;
+    } catch (e) { return null; }
+  }
+
+  function restoreMeetingDraft(draft) {
+    if (!draft) return;
+    currentMtgEditId = draft.editId || null;
+    showMtgForm(draft.type || 'regular');
+    populateFolderSelect('#mtg-folder', draft.folder || '');
+    if ($('#mtg-title')) $('#mtg-title').value = draft.title || '';
+    if ($('#mtg-date')) $('#mtg-date').value = draft.date || '';
+    if ($('#mtg-attendees')) $('#mtg-attendees').value = draft.attendees || '';
+    mtgAgendaItems = Array.isArray(draft.agenda) ? draft.agenda.slice() : [];
+    renderAgendaList();
+    if (getRich('mtg-notes')) getRich('mtg-notes').setHTML(draft.notes || '');
+    if (getRich('mtg-decisions')) getRich('mtg-decisions').setHTML(draft.decisions || '');
+    if (getRich('mtg-actions')) getRich('mtg-actions').setHTML(draft.actions || '');
+    toast('임시 저장된 회의를 복원했습니다');
+  }
+
+  function clearMeetingDraft() {
+    localStorage.removeItem(MTG_DRAFT_KEY);
+  }
+
   function renderMeetingItem(item) {
     var typeBadge = MTG_TYPE_LABELS[item.type] || '';
     return '<div class="saved-item" data-id="' + item.id + '">' +
@@ -841,6 +899,7 @@
       try {
         var type = card.dataset.mtgType;
         if (!type) return;
+        clearMeetingDraft();
         clearMeetingForm();
         showMtgForm(type);
       } catch (err) {
@@ -850,7 +909,10 @@
     });
   });
 
-  $('#mtg-back').addEventListener('click', function () { showMtgTypeSelect(); });
+  $('#mtg-back').addEventListener('click', function () {
+    saveMeetingDraft();
+    showMtgTypeSelect();
+  });
 
   $('#mtg-agenda-add-btn').addEventListener('click', function () {
     var input = $('#mtg-agenda-input');
@@ -886,6 +948,7 @@
     }
     items.unshift(data);
     save(MTG_KEY, items);
+    clearMeetingDraft();
     renderMeetingList();
     showMtgTypeSelect();
     toast('회의 메모가 저장되었습니다');
@@ -1065,14 +1128,24 @@
     // Step 1: 오디오 파일 업로드
     fetch('https://api.assemblyai.com/v2/upload', {
       method: 'POST',
-      headers: { 'Authorization': apiKey },
+      headers: {
+        'Authorization': apiKey,
+        'Content-Type': 'application/octet-stream'
+      },
       body: blob
     })
     .then(function (res) {
-      if (!res.ok) throw new Error('업로드 실패 (HTTP ' + res.status + ')');
+      if (!res.ok) {
+        return res.text().then(function (body) {
+          throw new Error('업로드 실패 (HTTP ' + res.status + '): ' + body);
+        });
+      }
       return res.json();
     })
     .then(function (uploadData) {
+      if (!uploadData || !uploadData.upload_url) {
+        throw new Error('업로드 응답에 upload_url이 없습니다');
+      }
       // Step 2: 변환 요청
       return fetch('https://api.assemblyai.com/v2/transcript', {
         method: 'POST',
@@ -1087,7 +1160,11 @@
       });
     })
     .then(function (res) {
-      if (!res.ok) throw new Error('변환 요청 실패 (HTTP ' + res.status + ')');
+      if (!res.ok) {
+        return res.text().then(function (body) {
+          throw new Error('변환 요청 실패 (HTTP ' + res.status + '): ' + body);
+        });
+      }
       return res.json();
     })
     .then(function (transcriptData) {
@@ -1118,6 +1195,7 @@
       rec.transcribing = false;
       renderRecordings();
       $('#mtg-rec-stt-status').textContent = '';
+      console.error('[AssemblyAI] 변환 오류:', err);
       toast('변환 실패: ' + err.message);
     });
   }
@@ -1237,6 +1315,46 @@
       renderRecordings();
       toast('녹음이 삭제되었습니다');
     }
+  });
+
+  // 녹음 파일 업로드 → 텍스트 변환
+  $('#mtg-upload-btn').addEventListener('click', function () {
+    $('#mtg-upload-input').click();
+  });
+
+  $('#mtg-upload-input').addEventListener('change', function () {
+    var file = this.files[0];
+    if (!file) return;
+    this.value = ''; // 같은 파일 재선택 허용
+
+    var settings = loadSettings();
+    if (!settings.assemblyKey) {
+      toast('설정에서 AssemblyAI API 키를 입력해주세요');
+      $('#settings-overlay').classList.add('active');
+      return;
+    }
+
+    var url = URL.createObjectURL(file);
+    // 오디오 길이 계산
+    var audio = new Audio();
+    audio.src = url;
+    audio.addEventListener('loadedmetadata', function () {
+      var duration = Math.floor(audio.duration) || 0;
+      var rec = { id: uid(), blob: file, url: url, duration: duration, transcript: '', transcribing: false };
+      mtgRecordings.push(rec);
+      renderRecordings();
+      // 자동 변환 시작
+      assemblyUploadAndTranscribe(file, mtgRecordings.length - 1);
+      toast('파일 업로드 완료 — 텍스트 변환 시작');
+    });
+    audio.addEventListener('error', function () {
+      // metadata 로드 실패해도 변환은 시도
+      var rec = { id: uid(), blob: file, url: url, duration: 0, transcript: '', transcribing: false };
+      mtgRecordings.push(rec);
+      renderRecordings();
+      assemblyUploadAndTranscribe(file, mtgRecordings.length - 1);
+      toast('파일 업로드 완료 — 텍스트 변환 시작');
+    });
   });
 
   // ══════════════════════════════════════
@@ -6279,6 +6397,24 @@
     addStickyNote();
   });
 
+  // ── 회의 Draft 자동 저장 (뒤로가기/탭 전환/페이지 이탈) ──
+  window.addEventListener('beforeunload', function () {
+    saveMeetingDraft();
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') {
+      saveMeetingDraft();
+    }
+  });
+
+  // 탭 전환 시에도 draft 저장
+  $$('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      saveMeetingDraft();
+    });
+  });
+
   // ── Init ──
   function init() {
     renderContextList();
@@ -6293,6 +6429,30 @@
     populateJnlCategoryFilter();
     populateJnlColFilters();
     renderAllStickies();
+
+    // 임시 저장된 회의 draft 복원
+    var draft = loadMeetingDraft();
+    if (draft) {
+      // 회의 탭에 draft 복원 알림 표시
+      var restoreBar = document.createElement('div');
+      restoreBar.id = 'mtg-draft-bar';
+      restoreBar.className = 'mtg-draft-bar';
+      restoreBar.innerHTML = '<span>임시 저장된 회의가 있습니다</span>' +
+        '<button class="btn btn-primary btn-small" id="mtg-draft-restore">이어서 작성</button>' +
+        '<button class="btn btn-ghost btn-small" id="mtg-draft-discard">삭제</button>';
+      var typeSelect = $('#mtg-type-select');
+      typeSelect.insertBefore(restoreBar, typeSelect.firstChild);
+
+      $('#mtg-draft-restore').addEventListener('click', function () {
+        restoreBar.remove();
+        restoreMeetingDraft(draft);
+      });
+      $('#mtg-draft-discard').addEventListener('click', function () {
+        clearMeetingDraft();
+        restoreBar.remove();
+        toast('임시 저장이 삭제되었습니다');
+      });
+    }
   }
 
   init();
