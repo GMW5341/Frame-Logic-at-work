@@ -1093,6 +1093,11 @@
       var transcriptHtml = '';
       if (rec.transcribing) {
         transcriptHtml = '<div class="mtg-rec-transcript" style="color:var(--text-dim)">텍스트 변환 중...</div>';
+      } else if (rec.utterances && rec.utterances.length > 0) {
+        transcriptHtml = '<div class="mtg-rec-transcript">' +
+          rec.utterances.map(function (u) {
+            return '<div class="mtg-utterance"><span class="mtg-speaker">' + escapeHtml(u.speaker) + '</span> ' + escapeHtml(u.text) + '</div>';
+          }).join('') + '</div>';
       } else if (rec.transcript) {
         transcriptHtml = '<div class="mtg-rec-transcript">' + escapeHtml(rec.transcript) + '</div>';
       }
@@ -1156,7 +1161,8 @@
         body: JSON.stringify({
           audio_url: uploadData.upload_url,
           language_code: 'ko',
-          speech_models: ['universal-2']
+          speech_models: ['universal-2'],
+          speaker_labels: true
         })
       });
     })
@@ -1174,7 +1180,19 @@
     })
     .then(function (result) {
       rec.transcribing = false;
-      rec.transcript = result.text || '';
+
+      // 발화자별 utterances가 있으면 발화자별로 구성
+      if (result.utterances && result.utterances.length > 0) {
+        rec.utterances = result.utterances.map(function (u) {
+          return { speaker: u.speaker, text: u.text };
+        });
+        rec.transcript = result.utterances.map(function (u) {
+          return '[' + u.speaker + '] ' + u.text;
+        }).join('\n');
+      } else {
+        rec.utterances = null;
+        rec.transcript = result.text || '';
+      }
       renderRecordings();
       $('#mtg-rec-stt-status').textContent = '';
 
@@ -1184,7 +1202,14 @@
         if (editor) {
           var currentHtml = editor.getHTML();
           var separator = currentHtml && currentHtml !== '<p></p>' ? '<br><br>' : '';
-          var tag = '<p><em>[녹음 #' + (recIndex + 1) + ' AssemblyAI 변환]</em></p><p>' + escapeHtml(rec.transcript) + '</p>';
+          var tag = '<p><em>[녹음 #' + (recIndex + 1) + ' AssemblyAI 변환]</em></p>';
+          if (rec.utterances) {
+            tag += rec.utterances.map(function (u) {
+              return '<p><strong>' + escapeHtml(u.speaker) + ':</strong> ' + escapeHtml(u.text) + '</p>';
+            }).join('');
+          } else {
+            tag += '<p>' + escapeHtml(rec.transcript) + '</p>';
+          }
           editor.setHTML(currentHtml + separator + tag);
         }
         toast('텍스트 변환 완료');

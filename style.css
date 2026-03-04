@@ -836,6 +836,23 @@ body {
   white-space: pre-wrap;
 }
 
+.mtg-utterance {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border, #eee);
+}
+
+.mtg-utterance:last-child {
+  border-bottom: none;
+}
+
+.mtg-speaker {
+  display: inline-block;
+  font-weight: 600;
+  color: var(--accent, #4a90d9);
+  min-width: 70px;
+  margin-right: 6px;
+}
+
 .mtg-rec-stt-status {
   font-size: 0.78rem;
   color: var(--accent);
