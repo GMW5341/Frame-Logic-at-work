@@ -1156,7 +1156,7 @@
         body: JSON.stringify({
           audio_url: uploadData.upload_url,
           language_code: 'ko',
-          speech_model: 'best'
+          speech_models: ['best']
         })
       });
     })
