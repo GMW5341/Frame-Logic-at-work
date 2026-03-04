@@ -244,7 +244,15 @@
               </div>
               <div class="form-group">
                 <label for="mtg-notes">회의 내용</label>
-                <textarea id="mtg-notes" rows="20" placeholder="회의 중 기록" data-rich></textarea>
+                <!-- 음성 녹음 컨트롤 -->
+                <div class="mtg-voice-bar">
+                  <button class="btn btn-secondary btn-small mtg-voice-btn" id="mtg-rec-btn" title="음성 녹음">🎙 녹음</button>
+                  <span class="mtg-rec-status" id="mtg-rec-status"></span>
+                  <span class="mtg-rec-timer" id="mtg-rec-timer"></span>
+                </div>
+                <textarea id="mtg-notes" rows="20" placeholder="회의 중 기록 (음성 녹음 시 자동 텍스트 변환)" data-rich></textarea>
+                <!-- 녹음 파일 목록 -->
+                <div class="mtg-recordings" id="mtg-recordings"></div>
               </div>
             </div>
             <div class="mtg-col-side">
@@ -262,11 +270,22 @@
                 <button class="btn btn-ghost" id="mtg-clear">초기화</button>
               </div>
               <div class="btn-row">
+                <button class="btn btn-secondary" id="mtg-ai-summary" style="flex:1">🤖 AI 요약</button>
+              </div>
+              <div class="btn-row">
                 <button class="btn btn-secondary" id="mtg-to-idea" style="flex:1">💡 아이디어로 보내기</button>
               </div>
               <div class="btn-row">
                 <button class="btn btn-secondary" id="mtg-export-excel" style="flex:1">📊 Excel</button>
                 <button class="btn btn-secondary" id="mtg-export-pdf" style="flex:1">📄 PDF</button>
+              </div>
+              <!-- AI 요약 결과 -->
+              <div class="mtg-ai-result" id="mtg-ai-result" style="display:none">
+                <div class="mtg-ai-result-header">
+                  <strong>AI 요약</strong>
+                  <button class="btn btn-small btn-ghost" id="mtg-ai-result-copy" title="복사">📋</button>
+                </div>
+                <div class="mtg-ai-result-body" id="mtg-ai-result-body"></div>
               </div>
             </div>
           </div>

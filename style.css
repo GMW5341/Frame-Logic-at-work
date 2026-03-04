@@ -732,6 +732,105 @@ body {
   color: var(--text-dim);
 }
 
+/* ===== Voice Recording Bar ===== */
+.mtg-voice-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.mtg-voice-btn {
+  transition: all var(--transition);
+}
+
+.mtg-voice-btn.recording {
+  background: #e74c3c !important;
+  color: #fff !important;
+  border-color: #e74c3c !important;
+  animation: mtg-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mtg-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(231, 76, 60, 0); }
+}
+
+.mtg-rec-status {
+  font-size: 0.8rem;
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+.mtg-rec-timer {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== Recording List ===== */
+.mtg-recordings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.mtg-rec-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+}
+
+.mtg-rec-item audio {
+  flex: 1;
+  height: 32px;
+  min-width: 0;
+}
+
+.mtg-rec-item .mtg-rec-label {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+.mtg-rec-item .btn {
+  flex-shrink: 0;
+}
+
+/* ===== AI Summary Result ===== */
+.mtg-ai-result {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.mtg-ai-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--accent-subtle);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.mtg-ai-result-body {
+  padding: 14px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
 /* ===== Presentation Overlay ===== */
 .pres-overlay {
   position: fixed;

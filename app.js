@@ -757,6 +757,15 @@
     if (dateEl) dateEl.value = nowLocalISO();
     var folderEl = $('#mtg-folder');
     if (folderEl) populateFolderSelect('#mtg-folder', '');
+    // 녹음 & AI 요약 초기화
+    if (typeof mtgRecordings !== 'undefined') {
+      mtgRecordings.forEach(function (r) { if (r.url) URL.revokeObjectURL(r.url); });
+      mtgRecordings = [];
+    }
+    var recContainer = $('#mtg-recordings');
+    if (recContainer) recContainer.innerHTML = '';
+    var aiResult = $('#mtg-ai-result');
+    if (aiResult) aiResult.style.display = 'none';
   }
 
   function renderMeetingItem(item) {
@@ -992,6 +1001,252 @@
     if (data.decisions) html += '<h2>결정 사항</h2><div>' + data.decisions + '</div>';
     if (data.actions) html += '<h2>액션 플랜</h2><div>' + data.actions + '</div>';
     exportAsPDF(data.title || '회의메모', html);
+  });
+
+  // ══════════════════════════════════════
+  // 3-B. 음성 녹음 & STT (Speech-to-Text)
+  // ══════════════════════════════════════
+  var mtgMediaRecorder = null;
+  var mtgAudioChunks = [];
+  var mtgRecordings = []; // { id, blob, url, duration, transcript }
+  var mtgRecTimerInterval = null;
+  var mtgRecStartTime = 0;
+  var mtgSpeechRecognition = null;
+  var mtgSttText = '';
+
+  function formatRecTime(sec) {
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function updateRecTimer() {
+    var elapsed = Math.floor((Date.now() - mtgRecStartTime) / 1000);
+    $('#mtg-rec-timer').textContent = formatRecTime(elapsed);
+  }
+
+  function renderRecordings() {
+    var container = $('#mtg-recordings');
+    if (mtgRecordings.length === 0) { container.innerHTML = ''; return; }
+    container.innerHTML = mtgRecordings.map(function (rec, i) {
+      return '<div class="mtg-rec-item" data-idx="' + i + '">' +
+        '<span class="mtg-rec-label">#' + (i + 1) + ' (' + formatRecTime(rec.duration) + ')</span>' +
+        '<audio controls src="' + rec.url + '"></audio>' +
+        '<button class="btn btn-small btn-ghost" data-action="dl" title="다운로드">💾</button>' +
+        '<button class="btn btn-small btn-danger" data-action="del" title="삭제">✕</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Web Speech API (STT) 설정
+  function startSpeechRecognition() {
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return null;
+    var recognition = new SpeechRecognition();
+    recognition.lang = 'ko-KR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    mtgSttText = '';
+
+    recognition.onresult = function (event) {
+      var transcript = '';
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      mtgSttText = transcript;
+    };
+
+    recognition.onerror = function (e) {
+      if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        console.warn('STT error:', e.error);
+      }
+    };
+
+    recognition.onend = function () {
+      // 녹음 중이면 자동 재시작 (브라우저가 끊었을 때)
+      if (mtgMediaRecorder && mtgMediaRecorder.state === 'recording') {
+        try { recognition.start(); } catch (e) {}
+      }
+    };
+
+    try { recognition.start(); } catch (e) {}
+    return recognition;
+  }
+
+  // 녹음 시작/중지 토글
+  $('#mtg-rec-btn').addEventListener('click', function () {
+    var btn = this;
+
+    // 녹음 중지
+    if (mtgMediaRecorder && mtgMediaRecorder.state === 'recording') {
+      mtgMediaRecorder.stop();
+      if (mtgSpeechRecognition) {
+        try { mtgSpeechRecognition.stop(); } catch (e) {}
+        mtgSpeechRecognition = null;
+      }
+      clearInterval(mtgRecTimerInterval);
+      btn.classList.remove('recording');
+      btn.textContent = '🎙 녹음';
+      $('#mtg-rec-status').textContent = '';
+      return;
+    }
+
+    // 녹음 시작 - 마이크 권한 요청
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      mtgAudioChunks = [];
+      mtgMediaRecorder = new MediaRecorder(stream);
+
+      mtgMediaRecorder.ondataavailable = function (e) {
+        if (e.data.size > 0) mtgAudioChunks.push(e.data);
+      };
+
+      mtgMediaRecorder.onstop = function () {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        var blob = new Blob(mtgAudioChunks, { type: 'audio/webm' });
+        var url = URL.createObjectURL(blob);
+        var duration = Math.floor((Date.now() - mtgRecStartTime) / 1000);
+
+        var rec = { id: uid(), blob: blob, url: url, duration: duration, transcript: mtgSttText || '' };
+        mtgRecordings.push(rec);
+        renderRecordings();
+
+        // STT 결과를 회의 내용에 추가
+        if (rec.transcript) {
+          var editor = getRich('mtg-notes');
+          if (editor) {
+            var currentHtml = editor.getHTML();
+            var separator = currentHtml && currentHtml !== '<p></p>' ? '<br><br>' : '';
+            var tag = '<p><em>[녹음 #' + mtgRecordings.length + ' 음성 변환]</em></p><p>' + escapeHtml(rec.transcript) + '</p>';
+            editor.setHTML(currentHtml + separator + tag);
+          }
+          toast('녹음 저장 + 텍스트 변환 완료');
+        } else {
+          toast('녹음이 저장되었습니다');
+        }
+      };
+
+      mtgMediaRecorder.start(1000); // 1초 간격 chunk
+      mtgRecStartTime = Date.now();
+      mtgRecTimerInterval = setInterval(updateRecTimer, 1000);
+
+      btn.classList.add('recording');
+      btn.textContent = '⏹ 중지';
+      $('#mtg-rec-status').textContent = '● 녹음 중';
+      $('#mtg-rec-timer').textContent = '00:00';
+
+      // STT 병행 시작
+      mtgSpeechRecognition = startSpeechRecognition();
+
+      toast('녹음을 시작합니다');
+    }).catch(function (err) {
+      toast('마이크 접근 실패: ' + err.message);
+    });
+  });
+
+  // 녹음 목록 - 다운로드/삭제
+  $('#mtg-recordings').addEventListener('click', function (e) {
+    var item = e.target.closest('.mtg-rec-item');
+    if (!item) return;
+    var idx = parseInt(item.dataset.idx, 10);
+    var rec = mtgRecordings[idx];
+    if (!rec) return;
+
+    if (e.target.closest('[data-action="dl"]')) {
+      var a = document.createElement('a');
+      a.href = rec.url;
+      a.download = 'recording-' + (idx + 1) + '-' + new Date().toISOString().slice(0, 10) + '.webm';
+      a.click();
+      toast('녹음 파일 다운로드');
+    }
+
+    if (e.target.closest('[data-action="del"]')) {
+      URL.revokeObjectURL(rec.url);
+      mtgRecordings.splice(idx, 1);
+      renderRecordings();
+      toast('녹음이 삭제되었습니다');
+    }
+  });
+
+  // ══════════════════════════════════════
+  // 3-C. AI 요약
+  // ══════════════════════════════════════
+  $('#mtg-ai-summary').addEventListener('click', function () {
+    var settings = loadSettings();
+    if (!settings.apiKey) {
+      toast('설정에서 API 키를 입력해주세요');
+      $('#settings-overlay').classList.add('active');
+      return;
+    }
+
+    var data = getMeetingData();
+    var textContent = buildMeetingText(data);
+    if (!textContent || textContent.length < 20) {
+      toast('요약할 회의 내용이 부족합니다');
+      return;
+    }
+
+    // 녹음 텍스트도 포함
+    var recTexts = mtgRecordings.filter(function (r) { return r.transcript; })
+      .map(function (r, i) { return '[녹음 #' + (i + 1) + '] ' + r.transcript; }).join('\n');
+    if (recTexts) {
+      textContent += '\n\n## 음성 녹음 텍스트\n' + recTexts;
+    }
+
+    var btn = $('#mtg-ai-summary');
+    btn.disabled = true;
+    btn.textContent = '요약 중...';
+
+    var systemPrompt = '당신은 회의 내용을 구조적으로 요약하는 전문 비서입니다. 한국어로 답변하세요.';
+    var userPrompt = '아래 회의 내용을 다음 형식으로 요약해주세요:\n\n' +
+      '1. **핵심 요약** (3줄 이내)\n' +
+      '2. **주요 논의 사항** (불릿 포인트)\n' +
+      '3. **결정 사항** (있으면)\n' +
+      '4. **액션 아이템** (담당자-할일-기한 형태)\n' +
+      '5. **후속 조치 필요 사항**\n\n' +
+      '---\n\n' + textContent;
+
+    var modelId = 'claude-sonnet-4-20250514';
+    fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': settings.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: modelId,
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    })
+    .then(function (res) {
+      if (!res.ok) return res.json().then(function (d) { throw new Error(d.error && d.error.message || 'API 오류'); });
+      return res.json();
+    })
+    .then(function (respData) {
+      trackApiUsage(modelId, respData.usage);
+      var summary = respData.content[0].text;
+      var resultEl = $('#mtg-ai-result');
+      var bodyEl = $('#mtg-ai-result-body');
+      bodyEl.textContent = summary;
+      resultEl.style.display = '';
+      toast('AI 요약이 완료되었습니다');
+    })
+    .catch(function (err) {
+      toast('요약 실패: ' + err.message);
+    })
+    .finally(function () {
+      btn.disabled = false;
+      btn.textContent = '🤖 AI 요약';
+    });
+  });
+
+  // AI 요약 결과 복사
+  $('#mtg-ai-result-copy').addEventListener('click', function () {
+    var text = $('#mtg-ai-result-body').textContent;
+    if (text) copyToClipboard(text);
   });
 
   // ── AI 프롬프트 기본값 ──
