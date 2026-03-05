@@ -601,13 +601,20 @@
   function showMtgTypeSelect() {
     $('#mtg-type-select').style.display = '';
     $('#mtg-form-view').style.display = 'none';
+    renderMeetingList();
   }
 
   function showMtgForm(type) {
-    currentMtgType = type;
+    currentMtgType = type || '';
     $('#mtg-type-select').style.display = 'none';
     $('#mtg-form-view').style.display = '';
-    $('#mtg-type-badge').textContent = MTG_TYPE_LABELS[type] || type;
+    var badge = $('#mtg-type-badge');
+    if (type && MTG_TYPE_LABELS[type]) {
+      badge.textContent = MTG_TYPE_LABELS[type];
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
   }
 
   // -- Folder helpers --
@@ -637,7 +644,7 @@
     var sel = $('#mtg-folder-filter');
     var current = sel.value;
     var folders = getMeetingFolders();
-    var html = '<option value="">전체 회의</option>';
+    var html = '<option value="">전체 폴더</option>';
     Object.keys(folders).sort().forEach(function (f) {
       html += '<option value="' + escapeHtml(f) + '"' + (f === current ? ' selected' : '') + '>' + escapeHtml(f) + ' (' + folders[f] + ')</option>';
     });
@@ -693,6 +700,12 @@
   }
 
   function getMeetingData() {
+    // 기존 aiTag 보존
+    var existingAiTag = '';
+    if (currentMtgEditId) {
+      var existing = load(MTG_KEY).find(function (m) { return m.id === currentMtgEditId; });
+      if (existing) existingAiTag = existing.aiTag || '';
+    }
     return {
       id: currentMtgEditId || uid(),
       type: currentMtgType,
@@ -707,6 +720,7 @@
       actions: getMtgSectionText('mtg-sec-actions-body'),
       followup: getMtgSectionText('mtg-sec-followup-body'),
       folder: $('#mtg-folder').value || '',
+      aiTag: existingAiTag,
       createdAt: new Date().toISOString()
     };
   }
@@ -737,7 +751,7 @@
 
   function loadMeetingToForm(item) {
     currentMtgEditId = item.id;
-    showMtgForm(item.type || 'regular');
+    showMtgForm(item.type || '');
     populateFolderSelect('#mtg-folder', item.folder || '');
     $('#mtg-title').value = item.title || '';
     $('#mtg-date').value = item.date || '';
@@ -834,7 +848,7 @@
   function restoreMeetingDraft(draft) {
     if (!draft) return;
     currentMtgEditId = draft.editId || null;
-    showMtgForm(draft.type || 'regular');
+    showMtgForm(draft.type || '');
     populateFolderSelect('#mtg-folder', draft.folder || '');
     if ($('#mtg-title')) $('#mtg-title').value = draft.title || '';
     if ($('#mtg-date')) $('#mtg-date').value = draft.date || '';
@@ -855,11 +869,13 @@
   }
 
   function renderMeetingItem(item) {
-    var typeBadge = MTG_TYPE_LABELS[item.type] || '';
+    var aiTag = item.aiTag || '';
+    var typeBadge = aiTag || MTG_TYPE_LABELS[item.type] || '';
     return '<div class="saved-item" data-id="' + item.id + '">' +
       '<div class="saved-item-info" data-action="load">' +
         '<div class="saved-item-title">' + escapeHtml(item.title || '(제목 없음)') +
-          (typeBadge ? ' <span class="tag" style="margin-left:6px">' + escapeHtml(typeBadge) + '</span>' : '') +
+          (typeBadge ? ' <span class="mtg-ai-tag">' + escapeHtml(typeBadge) + '</span>' : '') +
+          (item.folder ? ' <span class="tag" style="margin-left:4px">' + escapeHtml(item.folder) + '</span>' : '') +
         '</div>' +
         '<div class="saved-item-date">' + formatDate(item.date || item.createdAt) + '</div>' +
       '</div>' +
@@ -869,73 +885,93 @@
     '</div>';
   }
 
-  function renderMeetingList(filterFolder) {
+  function getMtgAiTags() {
+    var meetings = load(MTG_KEY);
+    var tags = {};
+    meetings.forEach(function (m) {
+      if (m.aiTag) {
+        if (!tags[m.aiTag]) tags[m.aiTag] = 0;
+        tags[m.aiTag]++;
+      }
+    });
+    return tags;
+  }
+
+  function populateAiTagFilter() {
+    var sel = $('#mtg-ai-tag-filter');
+    var current = sel.value;
+    var tags = getMtgAiTags();
+    var html = '<option value="">전체 분류</option>';
+    Object.keys(tags).sort().forEach(function (t) {
+      html += '<option value="' + escapeHtml(t) + '"' + (t === current ? ' selected' : '') + '>' + escapeHtml(t) + ' (' + tags[t] + ')</option>';
+    });
+    sel.innerHTML = html;
+  }
+
+  function renderMeetingList() {
     var items = load(MTG_KEY);
     var container = $('#mtg-items');
+    var filterFolder = $('#mtg-folder-filter').value;
+    var filterTag = $('#mtg-ai-tag-filter').value;
+    var searchTerm = ($('#mtg-search').value || '').trim().toLowerCase();
+
+    populateFolderFilter();
+    populateAiTagFilter();
 
     if (items.length === 0) {
       container.innerHTML = '<div class="empty-state">저장된 회의 메모가 없습니다</div>';
-      populateFolderFilter();
       return;
     }
 
+    // 필터링
     if (filterFolder) {
       items = items.filter(function (m) { return (m.folder || '') === filterFolder; });
     }
-
-    var hasFolders = items.some(function (m) { return m.folder; });
-
-    if (!hasFolders || filterFolder) {
-      container.innerHTML = items.map(renderMeetingItem).join('');
-    } else {
-      // Group by folder
-      var groups = {};
-      var order = [];
-      items.forEach(function (m) {
-        var f = m.folder || '미분류';
-        if (!groups[f]) { groups[f] = []; order.push(f); }
-        groups[f].push(m);
+    if (filterTag) {
+      items = items.filter(function (m) { return (m.aiTag || '') === filterTag; });
+    }
+    if (searchTerm) {
+      items = items.filter(function (m) {
+        return (m.title || '').toLowerCase().indexOf(searchTerm) !== -1 ||
+          (m.attendees || '').toLowerCase().indexOf(searchTerm) !== -1 ||
+          (m.summary || '').toLowerCase().indexOf(searchTerm) !== -1;
       });
-      // Sort: named folders first, 미분류 last
-      order.sort(function (a, b) {
-        if (a === '미분류') return 1;
-        if (b === '미분류') return -1;
-        return a.localeCompare(b, 'ko');
-      });
-
-      var html = '';
-      order.forEach(function (folder) {
-        html += '<div class="folder-group">' +
-          '<div class="folder-header">' +
-            '<span class="folder-name">📁 ' + escapeHtml(folder) + '</span>' +
-            '<span class="folder-count">' + groups[folder].length + '</span>' +
-          '</div>' +
-          '<div class="folder-items">' +
-            groups[folder].map(renderMeetingItem).join('') +
-          '</div>' +
-        '</div>';
-      });
-      container.innerHTML = html;
     }
 
-    populateFolderFilter();
+    if (items.length === 0) {
+      container.innerHTML = '<div class="empty-state">일치하는 회의가 없습니다</div>';
+      return;
+    }
+
+    // 날짜별 그룹핑 (최신 먼저)
+    var groups = {};
+    var order = [];
+    items.forEach(function (m) {
+      var d = (m.date || m.createdAt || '').slice(0, 10) || '날짜 없음';
+      if (!groups[d]) { groups[d] = []; order.push(d); }
+      groups[d].push(m);
+    });
+    order.sort(function (a, b) { return b.localeCompare(a); });
+
+    var html = '';
+    order.forEach(function (date) {
+      html += '<div class="mtg-date-group">' +
+        '<div class="mtg-date-header">' + date + ' (' + groups[date].length + '건)</div>' +
+        groups[date].map(renderMeetingItem).join('') +
+      '</div>';
+    });
+    container.innerHTML = html;
   }
 
   // -- Event listeners --
-  $$('.mtg-type-card').forEach(function (card) {
-    card.addEventListener('click', function () {
-      try {
-        var type = card.dataset.mtgType;
-        if (!type) return;
-        clearMeetingDraft();
-        clearMeetingForm();
-        showMtgForm(type);
-      } catch (err) {
-        console.error('회의 유형 선택 오류:', err);
-        toast('회의 양식 열기 실패: ' + err.message);
-      }
-    });
+  $('#mtg-new-btn').addEventListener('click', function () {
+    clearMeetingDraft();
+    clearMeetingForm();
+    showMtgForm('');
   });
+
+  $('#mtg-search').addEventListener('input', function () { renderMeetingList(); });
+  $('#mtg-ai-tag-filter').addEventListener('change', function () { renderMeetingList(); });
 
   $('#mtg-back').addEventListener('click', function () {
     saveMeetingDraft();
@@ -977,7 +1013,6 @@
     items.unshift(data);
     save(MTG_KEY, items);
     clearMeetingDraft();
-    renderMeetingList();
     showMtgTypeSelect();
     toast('회의 메모가 저장되었습니다');
   });
@@ -992,7 +1027,7 @@
   $('#mtg-clear').addEventListener('click', function () { clearMeetingForm(); toast('초기화되었습니다'); });
 
   $('#mtg-folder-filter').addEventListener('change', function () {
-    renderMeetingList(this.value);
+    renderMeetingList();
   });
 
   $('#mtg-items').addEventListener('click', function (e) {
@@ -1002,7 +1037,7 @@
     var items = load(MTG_KEY);
     if (e.target.closest('[data-action="delete"]')) {
       save(MTG_KEY, items.filter(function (i) { return i.id !== id; }));
-      renderMeetingList($('#mtg-folder-filter').value);
+      renderMeetingList();
       toast('삭제되었습니다');
     } else {
       var found = items.find(function (i) { return i.id === id; });
@@ -1569,11 +1604,12 @@
 
   // ── AI 자동 분류 ──
   var DEFAULT_AI_PROMPT =
-    '아래 회의 목록을 분석하여 주제별 폴더로 분류해주세요.\n\n' +
+    '아래 회의 목록을 분석하여 회의 성격별로 분류(태그)해주세요.\n\n' +
     '규칙:\n' +
-    '- 2~5개의 의미 있는 폴더명을 만들어주세요\n' +
-    '- 폴더명은 간결하게 (2~4글자)\n' +
-    '- JSON 배열로만 응답: [{"index": 0, "folder": "폴더명"}, ...]\n' +
+    '- 각 회의에 가장 적합한 분류 태그를 하나 붙여주세요\n' +
+    '- 태그 예시: 정기회의, 브레인스토밍, 의사결정, 프로젝트킥오프, 1:1면담, 스프린트리뷰, 전략회의, 교육/세미나, 고객미팅, 팀빌딩 등\n' +
+    '- 회의 내용에 맞게 자유롭게 태그를 만들어도 됩니다\n' +
+    '- JSON 배열로만 응답: [{"index": 0, "tag": "분류태그"}, ...]\n' +
     '- 다른 설명 없이 JSON만 출력\n\n' +
     '회의 목록:\n{{meetings}}';
 
@@ -1596,12 +1632,12 @@
       return JSON.stringify({
         index: i,
         title: m.title || '',
-        type: MTG_TYPE_LABELS[m.type] || '',
-        notes: (m.notes || '').slice(0, 200)
+        summary: (m.summary || '').slice(0, 200),
+        notes: (m.notes || '').slice(0, 200),
+        attendees: m.attendees || ''
       });
     }).join('\n');
 
-    // 사용자 커스텀 프롬프트 또는 기본 프롬프트 사용
     var promptTemplate = settings.aiPrompt || DEFAULT_AI_PROMPT;
     var finalPrompt = promptTemplate.replace('{{meetings}}', meetingList);
 
@@ -1614,7 +1650,7 @@
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-20250514',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 1024,
         messages: [{
           role: 'user',
@@ -1627,21 +1663,20 @@
       return res.json();
     })
     .then(function (data) {
-      trackApiUsage('claude-opus-4-20250514', data.usage);
+      trackApiUsage('claude-sonnet-4-20250514', data.usage);
       var text = data.content[0].text;
       var jsonMatch = text.match(/\[[\s\S]*\]/);
       if (!jsonMatch) throw new Error('AI 응답 파싱 실패');
 
       var classifications = JSON.parse(jsonMatch[0]);
       classifications.forEach(function (c) {
-        if (typeof c.index === 'number' && c.folder && meetings[c.index]) {
-          meetings[c.index].folder = c.folder;
+        if (typeof c.index === 'number' && c.tag && meetings[c.index]) {
+          meetings[c.index].aiTag = c.tag;
         }
       });
 
       save(MTG_KEY, meetings);
-      populateFolderFilter();
-      renderMeetingList($('#mtg-folder-filter').value);
+      renderMeetingList();
       toast('AI 분류가 완료되었습니다!');
     })
     .catch(function (err) {
@@ -6678,7 +6713,6 @@
     renderMeetingList();
     renderAgendaList();
     renderProposalList();
-    populateFolderFilter();
     renderTaskList();
     renderJnlHeader();
     renderJnlTable();

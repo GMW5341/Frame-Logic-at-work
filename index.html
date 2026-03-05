@@ -155,51 +155,23 @@
           <div class="live-clock" data-clock></div>
         </div>
 
-        <!-- 목록 뷰: 유형 선택 + 저장 목록 -->
+        <!-- 목록 뷰: 날짜별 히스토리 + AI 분류 필터 -->
         <div id="mtg-type-select" class="mtg-step">
-          <p class="panel-desc">회의 종류를 선택하면 맞춤 양식이 열립니다.</p>
-          <div class="mtg-type-grid">
-            <button class="mtg-type-card" data-mtg-type="regular">
-              <span class="mtg-type-icon">📅</span>
-              <span class="mtg-type-name">정기 회의</span>
-              <span class="mtg-type-desc">주간/월간 정기 미팅</span>
-            </button>
-            <button class="mtg-type-card" data-mtg-type="brainstorm">
-              <span class="mtg-type-icon">🧠</span>
-              <span class="mtg-type-name">브레인스토밍</span>
-              <span class="mtg-type-desc">아이디어 발산 회의</span>
-            </button>
-            <button class="mtg-type-card" data-mtg-type="sprint">
-              <span class="mtg-type-icon">🏃</span>
-              <span class="mtg-type-name">스프린트 리뷰</span>
-              <span class="mtg-type-desc">스프린트 회고/리뷰</span>
-            </button>
-            <button class="mtg-type-card" data-mtg-type="decision">
-              <span class="mtg-type-icon">⚖️</span>
-              <span class="mtg-type-name">의사결정</span>
-              <span class="mtg-type-desc">안건 검토 및 결정</span>
-            </button>
-            <button class="mtg-type-card" data-mtg-type="kickoff">
-              <span class="mtg-type-icon">🚀</span>
-              <span class="mtg-type-name">킥오프</span>
-              <span class="mtg-type-desc">프로젝트 시작 회의</span>
-            </button>
-            <button class="mtg-type-card" data-mtg-type="oneone">
-              <span class="mtg-type-icon">👥</span>
-              <span class="mtg-type-name">1:1 미팅</span>
-              <span class="mtg-type-desc">개인 면담/피드백</span>
-            </button>
-          </div>
+          <p class="panel-desc">회의를 녹음하고 AI가 자동으로 분류/정리합니다.</p>
 
           <div class="mtg-list-toolbar" id="mtg-list-toolbar">
-            <button class="btn btn-secondary btn-small" id="mtg-ai-classify">🤖 AI 자동 분류</button>
-            <select id="mtg-folder-filter" class="folder-filter-select">
-              <option value="">전체 회의</option>
+            <button class="btn btn-primary btn-small" id="mtg-new-btn">+ 새 회의</button>
+            <input type="text" class="mtg-history-search" id="mtg-search" placeholder="검색...">
+            <select id="mtg-ai-tag-filter" class="folder-filter-select">
+              <option value="">전체 분류</option>
             </select>
+            <select id="mtg-folder-filter" class="folder-filter-select">
+              <option value="">전체 폴더</option>
+            </select>
+            <button class="btn btn-secondary btn-small" id="mtg-ai-classify">AI 자동 분류</button>
           </div>
 
           <div class="saved-list" id="mtg-saved-list">
-            <h3>저장된 회의 메모</h3>
             <div id="mtg-items"></div>
           </div>
         </div>
@@ -208,7 +180,7 @@
         <div id="mtg-form-view" class="mtg-step" style="display:none">
           <div class="mtg-form-header">
             <button class="btn btn-secondary btn-small" id="mtg-back">← 회의 목록</button>
-            <span class="mtg-type-badge" id="mtg-type-badge"></span>
+            <span class="mtg-type-badge" id="mtg-type-badge" style="display:none"></span>
             <div class="folder-selector">
               <select id="mtg-folder" class="folder-select">
                 <option value="">미분류</option>
