@@ -4030,6 +4030,7 @@
   // 7.5  할 일 목록 탭
   // ══════════════════════════════════════
   var TASKS_KEY = 'fl_tasks';
+  var STAGE_LABELS = { todo: '진행 전', in_progress: '진행 중', review: '검토', done: '완료' };
 
   function loadTasks() {
     try { return JSON.parse(localStorage.getItem(TASKS_KEY)) || []; }
@@ -4045,14 +4046,30 @@
     renderTaskList();
   }
 
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
+
   // 초기 날짜 설정
   (function () {
-    $('#task-date').value = new Date().toISOString().slice(0, 10);
+    $('#task-date').value = todayStr();
   })();
 
   function getTasksForDate(date) {
     var all = loadTasks();
     return all.filter(function (t) { return t.date === date; });
+  }
+
+  // 마감일 뱃지 HTML
+  function dueBadgeHtml(task) {
+    if (!task.dueDate) return '';
+    var today = todayStr();
+    var overdue = !task.done && task.stage !== 'done' && task.dueDate < today;
+    return '<span class="task-due' + (overdue ? ' task-overdue' : '') + '">' + task.dueDate + '</span>';
+  }
+
+  // 단계 뱃지 HTML
+  function stageBadgeHtml(stage) {
+    var s = stage || 'todo';
+    return '<span class="task-stage-badge task-stage-' + s + '">' + (STAGE_LABELS[s] || s) + '</span>';
   }
 
   function renderTaskList() {
@@ -4062,22 +4079,28 @@
     var showDone = $('#task-show-done').checked;
     var container = $('#task-list');
 
-    // 진행률 업데이트
+    // 진행률 업데이트 (done 단계 기준)
     var total = tasks.length;
-    var done = tasks.filter(function (t) { return t.done; }).length;
+    var done = tasks.filter(function (t) { return t.done || t.stage === 'done'; }).length;
     var pct = total > 0 ? Math.round(done / total * 100) : 0;
     $('#task-progress-fill').style.width = pct + '%';
     $('#task-progress-text').textContent = done + '/' + total + ' (' + pct + '%)';
 
     if (tasks.length === 0) {
-      container.innerHTML = '<div class="task-empty">\uD560 \uC77C\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uC0C8 \uD560 \uC77C\uC744 \uCD94\uAC00\uD574\uBCF4\uC138\uC694!</div>';
+      container.innerHTML = '<div class="task-empty">할 일이 없습니다. 새 할 일을 추가해보세요!</div>';
       return;
     }
 
     // 우선순위 순서 정렬: urgent > high > normal, 미완료 먼저
     var priorityOrder = { urgent: 0, high: 1, normal: 2 };
+    var stageOrder = { in_progress: 0, review: 1, todo: 2, done: 3 };
     var sorted = tasks.slice().sort(function (a, b) {
-      if (a.done !== b.done) return a.done ? 1 : -1;
+      var da = (a.done || a.stage === 'done') ? 1 : 0;
+      var db = (b.done || b.stage === 'done') ? 1 : 0;
+      if (da !== db) return da - db;
+      var sa = stageOrder[a.stage] !== undefined ? stageOrder[a.stage] : 2;
+      var sb = stageOrder[b.stage] !== undefined ? stageOrder[b.stage] : 2;
+      if (sa !== sb) return sa - sb;
       var pa = priorityOrder[a.priority] || 2;
       var pb = priorityOrder[b.priority] || 2;
       if (pa !== pb) return pa - pb;
@@ -4086,24 +4109,29 @@
 
     var html = '';
     sorted.forEach(function (task) {
-      if (!showDone && task.done) return;
+      var isDone = task.done || task.stage === 'done';
+      if (!showDone && isDone) return;
       var priClass = 'task-pri-' + (task.priority || 'normal');
-      var doneClass = task.done ? ' task-item-done' : '';
+      var doneClass = isDone ? ' task-item-done' : '';
       var priLabel = task.priority === 'urgent' ? '\uD83D\uDD34' : task.priority === 'high' ? '\uD83D\uDFE0' : '';
 
       html += '<div class="task-item' + doneClass + '" data-id="' + task.id + '" draggable="true">' +
         '<div class="task-item-left">' +
-          '<input type="checkbox" class="task-check" data-id="' + task.id + '"' + (task.done ? ' checked' : '') + '>' +
+          '<input type="checkbox" class="task-check" data-id="' + task.id + '"' + (isDone ? ' checked' : '') + '>' +
           '<span class="task-pri-dot ' + priClass + '">' + priLabel + '</span>' +
         '</div>' +
         '<div class="task-item-center">' +
           '<span class="task-item-text" data-id="' + task.id + '">' + escapeHtml(task.text) + '</span>' +
-          (task.memo ? '<span class="task-item-memo">' + escapeHtml(task.memo) + '</span>' : '') +
+          '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
+            stageBadgeHtml(task.stage) +
+            dueBadgeHtml(task) +
+            (task.memo ? '<span class="task-item-memo">' + escapeHtml(task.memo) + '</span>' : '') +
+          '</div>' +
         '</div>' +
         '<div class="task-item-right">' +
-          '<button class="task-action-btn" data-action="edit" data-id="' + task.id + '" title="\uD3B8\uC9D1">\u270F</button>' +
-          '<button class="task-action-btn" data-action="copy-tomorrow" data-id="' + task.id + '" title="\uB0B4\uC77C\uB85C \uBCF5\uC0AC">\u27A1</button>' +
-          '<button class="task-action-btn task-del-btn" data-action="del" data-id="' + task.id + '" title="\uC0AD\uC81C">\u2715</button>' +
+          '<button class="task-action-btn" data-action="edit" data-id="' + task.id + '" title="편집">✏</button>' +
+          '<button class="task-action-btn" data-action="copy-tomorrow" data-id="' + task.id + '" title="내일로 복사">➡</button>' +
+          '<button class="task-action-btn task-del-btn" data-action="del" data-id="' + task.id + '" title="삭제">✕</button>' +
         '</div>' +
       '</div>';
     });
@@ -4121,7 +4149,6 @@
       item.addEventListener('dragend', function () {
         item.classList.remove('task-dragging');
         dragItem = null;
-        // 순서 저장
         var items = container.querySelectorAll('.task-item');
         var allT = loadTasks();
         items.forEach(function (el, idx) {
@@ -4150,6 +4177,8 @@
     var text = input.value.trim();
     if (!text) return;
     var priority = $('#task-add-priority').value;
+    var stage = $('#task-add-stage').value;
+    var dueDate = $('#task-add-due').value || '';
     var date = getTaskDate();
     var all = loadTasks();
     var dateItems = all.filter(function (t) { return t.date === date; });
@@ -4158,6 +4187,8 @@
       text: text,
       date: date,
       priority: priority,
+      stage: stage,
+      dueDate: dueDate,
       done: false,
       memo: '',
       order: dateItems.length,
@@ -4166,6 +4197,8 @@
     saveTasks(all);
     input.value = '';
     $('#task-add-priority').value = 'normal';
+    $('#task-add-stage').value = 'todo';
+    $('#task-add-due').value = '';
     renderTaskList();
   }
 
@@ -4187,7 +4220,7 @@
     setTaskDate(d.toISOString().slice(0, 10));
   });
   $('#task-today').addEventListener('click', function () {
-    setTaskDate(new Date().toISOString().slice(0, 10));
+    setTaskDate(todayStr());
   });
 
   // 완료 체크 / 삭제 / 편집 / 내일로 복사
@@ -4196,7 +4229,13 @@
       var id = e.target.dataset.id;
       var all = loadTasks();
       var t = all.find(function (x) { return x.id === id; });
-      if (t) { t.done = e.target.checked; saveTasks(all); renderTaskList(); }
+      if (t) {
+        var checked = e.target.checked;
+        t.done = checked;
+        t.stage = checked ? 'done' : 'todo';
+        saveTasks(all);
+        renderTaskList();
+      }
     }
   });
 
@@ -4210,7 +4249,7 @@
     if (action === 'del') {
       saveTasks(all.filter(function (x) { return x.id !== id; }));
       renderTaskList();
-      toast('\uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+      toast('삭제되었습니다');
     } else if (action === 'copy-tomorrow') {
       var t = all.find(function (x) { return x.id === id; });
       if (t) {
@@ -4222,13 +4261,15 @@
           text: t.text,
           date: tDate,
           priority: t.priority,
+          stage: t.stage === 'done' ? 'todo' : t.stage,
+          dueDate: t.dueDate || '',
           done: false,
           memo: t.memo,
           order: all.filter(function (x) { return x.date === tDate; }).length,
           createdAt: new Date().toISOString()
         });
         saveTasks(all);
-        toast('\uB0B4\uC77C(' + tDate + ')\uC73C\uB85C \uBCF5\uC0AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+        toast('내일(' + tDate + ')으로 복사되었습니다');
       }
     } else if (action === 'edit') {
       openTaskEditDialog(id);
@@ -4275,26 +4316,42 @@
     overlay.className = 'jnl-link-overlay';
     var dialog = document.createElement('div');
     dialog.className = 'jnl-link-dialog';
-    dialog.style.width = '400px';
+    dialog.style.width = '420px';
+
+    function stageOpt(val, label) {
+      return '<option value="' + val + '"' + ((t.stage || 'todo') === val ? ' selected' : '') + '>' + label + '</option>';
+    }
+
     dialog.innerHTML =
-      '<div class="jnl-link-title">\uD560 \uC77C \uD3B8\uC9D1</div>' +
-      '<label style="font-size:0.8rem;color:var(--text-muted);margin-bottom:2px;display:block">\uD560 \uC77C</label>' +
+      '<div class="jnl-link-title">할 일 편집</div>' +
+      '<label style="font-size:0.8rem;color:var(--text-muted);margin-bottom:2px;display:block">할 일</label>' +
       '<input type="text" class="jnl-link-input" id="task-edit-text" value="' + escapeHtml(t.text) + '">' +
-      '<label style="font-size:0.8rem;color:var(--text-muted);margin-bottom:2px;display:block">\uBA54\uBAA8</label>' +
+      '<label style="font-size:0.8rem;color:var(--text-muted);margin-bottom:2px;display:block">메모</label>' +
       '<textarea class="jnl-link-input" id="task-edit-memo" rows="3" style="resize:vertical">' + escapeHtml(t.memo || '') + '</textarea>' +
       '<div style="display:flex;gap:8px;margin-bottom:8px">' +
-        '<div style="flex:1"><label style="font-size:0.8rem;color:var(--text-muted)">\uC6B0\uC120\uC21C\uC704</label>' +
+        '<div style="flex:1"><label style="font-size:0.8rem;color:var(--text-muted)">우선순위</label>' +
           '<select class="task-priority-select" id="task-edit-priority" style="width:100%">' +
-            '<option value="normal"' + (t.priority === 'normal' ? ' selected' : '') + '>\uBCF4\uD1B5</option>' +
-            '<option value="high"' + (t.priority === 'high' ? ' selected' : '') + '>\uB192\uC74C</option>' +
-            '<option value="urgent"' + (t.priority === 'urgent' ? ' selected' : '') + '>\uAE34\uAE09</option>' +
+            '<option value="normal"' + (t.priority === 'normal' ? ' selected' : '') + '>보통</option>' +
+            '<option value="high"' + (t.priority === 'high' ? ' selected' : '') + '>높음</option>' +
+            '<option value="urgent"' + (t.priority === 'urgent' ? ' selected' : '') + '>긴급</option>' +
           '</select></div>' +
-        '<div style="flex:1"><label style="font-size:0.8rem;color:var(--text-muted)">\uB0A0\uC9DC</label>' +
+        '<div style="flex:1"><label style="font-size:0.8rem;color:var(--text-muted)">진행 단계</label>' +
+          '<select class="task-stage-select" id="task-edit-stage" style="width:100%">' +
+            stageOpt('todo', '진행 전') +
+            stageOpt('in_progress', '진행 중') +
+            stageOpt('review', '검토') +
+            stageOpt('done', '완료') +
+          '</select></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+        '<div style="flex:1"><label style="font-size:0.8rem;color:var(--text-muted)">날짜</label>' +
           '<input type="date" class="jnl-link-input" id="task-edit-date" value="' + t.date + '" style="margin-bottom:0"></div>' +
+        '<div style="flex:1"><label style="font-size:0.8rem;color:var(--text-muted)">마감일</label>' +
+          '<input type="date" class="jnl-link-input" id="task-edit-due" value="' + (t.dueDate || '') + '" style="margin-bottom:0"></div>' +
       '</div>' +
       '<div class="jnl-link-btns">' +
-        '<button class="btn btn-small btn-ghost" id="task-edit-cancel">\uCDE8\uC18C</button>' +
-        '<button class="btn btn-small btn-primary" id="task-edit-save">\uC800\uC7A5</button>' +
+        '<button class="btn btn-small btn-ghost" id="task-edit-cancel">취소</button>' +
+        '<button class="btn btn-small btn-primary" id="task-edit-save">저장</button>' +
       '</div>';
 
     overlay.appendChild(dialog);
@@ -4312,11 +4369,14 @@
       t.text = nText;
       t.memo = dialog.querySelector('#task-edit-memo').value.trim();
       t.priority = dialog.querySelector('#task-edit-priority').value;
+      t.stage = dialog.querySelector('#task-edit-stage').value;
       t.date = dialog.querySelector('#task-edit-date').value;
+      t.dueDate = dialog.querySelector('#task-edit-due').value || '';
+      t.done = t.stage === 'done';
       saveTasks(all);
       doClose();
       renderTaskList();
-      toast('\uC218\uC815\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+      toast('수정되었습니다');
     });
 
     dialog.querySelector('#task-edit-text').addEventListener('keydown', function (ev) {
@@ -4327,6 +4387,80 @@
 
   // 완료 항목 보기 토글
   $('#task-show-done').addEventListener('change', renderTaskList);
+
+  // ── 뷰 토글 (일간 / 히스토리) ──
+  document.querySelectorAll('.task-view-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.task-view-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      var view = btn.dataset.view;
+      $('#task-daily-view').style.display = view === 'daily' ? '' : 'none';
+      $('#task-history-view').style.display = view === 'history' ? '' : 'none';
+      if (view === 'history') renderTaskHistory();
+    });
+  });
+
+  // ── 히스토리 뷰 렌더링 ──
+  function renderTaskHistory() {
+    var all = loadTasks();
+    var search = ($('#task-history-search').value || '').trim().toLowerCase();
+    var stageFilter = $('#task-history-stage-filter').value;
+
+    // 필터링
+    var filtered = all.filter(function (t) {
+      if (stageFilter !== 'all') {
+        var ts = t.stage || (t.done ? 'done' : 'todo');
+        if (ts !== stageFilter) return false;
+      }
+      if (search && t.text.toLowerCase().indexOf(search) === -1 &&
+          (t.memo || '').toLowerCase().indexOf(search) === -1) return false;
+      return true;
+    });
+
+    // 날짜별 그룹핑 (최신 날짜 먼저)
+    var groups = {};
+    filtered.forEach(function (t) {
+      var d = t.date || 'unknown';
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(t);
+    });
+    var dates = Object.keys(groups).sort(function (a, b) { return b.localeCompare(a); });
+
+    var container = $('#task-history-list');
+    if (dates.length === 0) {
+      container.innerHTML = '<div class="task-history-empty">일치하는 항목이 없습니다.</div>';
+      return;
+    }
+
+    var html = '';
+    dates.forEach(function (date) {
+      var items = groups[date];
+      html += '<div class="task-history-date-group">';
+      html += '<div class="task-history-date-header">' + date + ' (' + items.length + '건)</div>';
+      items.forEach(function (task) {
+        var isDone = task.done || task.stage === 'done';
+        html += '<div class="task-history-item' + (isDone ? ' task-history-item-done' : '') + '" data-id="' + task.id + '">' +
+          stageBadgeHtml(task.stage || (task.done ? 'done' : 'todo')) +
+          '<span class="task-history-item-text">' + escapeHtml(task.text) + '</span>' +
+          dueBadgeHtml(task) +
+        '</div>';
+      });
+      html += '</div>';
+    });
+
+    container.innerHTML = html;
+
+    // 히스토리 아이템 클릭 → 편집 다이얼로그
+    container.querySelectorAll('.task-history-item').forEach(function (el) {
+      el.addEventListener('click', function () {
+        openTaskEditDialog(el.dataset.id);
+      });
+    });
+  }
+
+  // 히스토리 필터 이벤트
+  $('#task-history-search').addEventListener('input', renderTaskHistory);
+  $('#task-history-stage-filter').addEventListener('change', renderTaskHistory);
 
   // ══════════════════════════════════════
   // 7.8  도식화 탭 (AI 시각화)

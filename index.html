@@ -399,43 +399,73 @@
           <h2>할 일 목록</h2>
           <div class="live-clock" data-clock></div>
         </div>
-        <p class="panel-desc">오늘의 업무 목표와 할 일을 관리하세요. 완료 여부를 체크하며 진행 상황을 추적합니다.</p>
+        <p class="panel-desc">업무 목표와 할 일을 관리하세요. 진행 단계와 마감일을 추적합니다.</p>
 
-        <!-- 날짜 선택 + 진행률 -->
-        <div class="task-top-bar">
-          <div class="task-date-nav">
-            <button class="btn btn-ghost btn-small" id="task-prev-day">←</button>
-            <input type="date" id="task-date" class="task-date-input">
-            <button class="btn btn-ghost btn-small" id="task-next-day">→</button>
-            <button class="btn btn-ghost btn-small" id="task-today">오늘</button>
-          </div>
-          <div class="task-progress-wrap">
-            <div class="task-progress-bar">
-              <div class="task-progress-fill" id="task-progress-fill"></div>
+        <!-- 뷰 토글: 일간 / 히스토리 -->
+        <div class="task-view-toggle">
+          <button class="task-view-btn active" data-view="daily">일간 보기</button>
+          <button class="task-view-btn" data-view="history">히스토리</button>
+        </div>
+
+        <!-- ── 일간 뷰 ── -->
+        <div id="task-daily-view">
+          <!-- 날짜 선택 + 진행률 -->
+          <div class="task-top-bar">
+            <div class="task-date-nav">
+              <button class="btn btn-ghost btn-small" id="task-prev-day">←</button>
+              <input type="date" id="task-date" class="task-date-input">
+              <button class="btn btn-ghost btn-small" id="task-next-day">→</button>
+              <button class="btn btn-ghost btn-small" id="task-today">오늘</button>
             </div>
-            <span class="task-progress-text" id="task-progress-text">0/0</span>
+            <div class="task-progress-wrap">
+              <div class="task-progress-bar">
+                <div class="task-progress-fill" id="task-progress-fill"></div>
+              </div>
+              <span class="task-progress-text" id="task-progress-text">0/0</span>
+            </div>
+          </div>
+
+          <!-- 새 할 일 입력 -->
+          <div class="task-add-row">
+            <input type="text" class="task-add-input" id="task-add-input" placeholder="새 할 일을 입력하세요...">
+            <select class="task-priority-select" id="task-add-priority">
+              <option value="normal">보통</option>
+              <option value="high">높음</option>
+              <option value="urgent">긴급</option>
+            </select>
+            <select class="task-stage-select" id="task-add-stage">
+              <option value="todo">진행 전</option>
+              <option value="in_progress">진행 중</option>
+              <option value="review">검토</option>
+            </select>
+            <input type="date" class="task-date-input" id="task-add-due" title="마감일 (선택)">
+            <button class="btn btn-primary btn-small" id="task-add-btn">추가</button>
+          </div>
+
+          <!-- 할 일 목록 -->
+          <div class="task-list-container" id="task-list"></div>
+
+          <!-- 완료된 항목 토글 -->
+          <div class="task-done-toggle">
+            <label>
+              <input type="checkbox" id="task-show-done" checked> 완료된 항목 보기
+            </label>
           </div>
         </div>
 
-        <!-- 새 할 일 입력 -->
-        <div class="task-add-row">
-          <input type="text" class="task-add-input" id="task-add-input" placeholder="새 할 일을 입력하세요...">
-          <select class="task-priority-select" id="task-add-priority">
-            <option value="normal">보통</option>
-            <option value="high">높음</option>
-            <option value="urgent">긴급</option>
-          </select>
-          <button class="btn btn-primary btn-small" id="task-add-btn">추가</button>
-        </div>
-
-        <!-- 카테고리별 할 일 목록 -->
-        <div class="task-list-container" id="task-list"></div>
-
-        <!-- 완료된 항목 토글 -->
-        <div class="task-done-toggle">
-          <label>
-            <input type="checkbox" id="task-show-done" checked> 완료된 항목 보기
-          </label>
+        <!-- ── 히스토리 뷰 ── -->
+        <div id="task-history-view" style="display:none">
+          <div class="task-history-controls">
+            <input type="text" class="task-add-input" id="task-history-search" placeholder="검색...">
+            <select class="task-stage-select" id="task-history-stage-filter">
+              <option value="all">전체 단계</option>
+              <option value="todo">진행 전</option>
+              <option value="in_progress">진행 중</option>
+              <option value="review">검토</option>
+              <option value="done">완료</option>
+            </select>
+          </div>
+          <div class="task-history-list" id="task-history-list"></div>
         </div>
       </section>
 

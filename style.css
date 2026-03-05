@@ -3735,6 +3735,137 @@ body {
   accent-color: var(--accent);
 }
 
+/* ── 뷰 토글 ── */
+.task-view-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  width: fit-content;
+}
+.task-view-btn {
+  padding: 6px 16px;
+  border: none;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.task-view-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+.task-view-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── 진행 단계 셀렉트 & 뱃지 ── */
+.task-stage-select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.82rem;
+}
+.task-stage-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.task-stage-todo       { background: #e5e7eb; color: #374151; }
+.task-stage-in_progress { background: #dbeafe; color: #1d4ed8; }
+.task-stage-review     { background: #fef3c7; color: #92400e; }
+.task-stage-done       { background: #d1fae5; color: #065f46; }
+
+/* ── 마감일 표시 ── */
+.task-due {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.task-due.task-overdue {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+/* ── 히스토리 뷰 ── */
+.task-history-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.task-history-controls .task-add-input {
+  flex: 1;
+  min-width: 140px;
+}
+.task-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+.task-history-date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.task-history-date-header {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+  z-index: 1;
+}
+.task-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  transition: background 0.12s;
+  cursor: pointer;
+}
+.task-history-item:hover {
+  background: var(--bg-elevated);
+}
+.task-history-item-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-history-item-done .task-history-item-text {
+  text-decoration: line-through;
+  color: var(--text-dim);
+}
+.task-history-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
 /* ===== 포스트잇 메모 (자유 배치) ===== */
 .sticky-toggle-btn {
   position: fixed;
