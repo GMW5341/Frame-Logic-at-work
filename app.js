@@ -4239,7 +4239,14 @@
   function renderTaskList() {
     var date = getTaskDate();
     var allTasks = loadTasks();
-    var tasks = allTasks.filter(function (t) { return t.date === date; });
+    var tasks = allTasks.filter(function (t) {
+      if (t.date === date) return true;
+      // 마감일이 있고 미완료인 태스크: 생성일~마감일 사이면 표시
+      if (t.dueDate && !(t.done || t.stage === 'done')) {
+        return t.date <= date && date <= t.dueDate;
+      }
+      return false;
+    });
     var showDone = $('#task-show-done').checked;
     var container = $('#task-list');
 
