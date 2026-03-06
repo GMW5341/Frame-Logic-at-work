@@ -654,9 +654,19 @@
     </div>
   </div>
 
-  <!-- 포스트잇 메모 -->
+  <!-- 메모 위젯 -->
   <button class="sticky-toggle-btn" id="sticky-toggle" title="메모 보이기/숨기기">📌</button>
-  <div class="sticky-float-container" id="sticky-container"></div>
+  <div class="memo-widget" id="memo-widget" style="display:none;">
+    <div class="memo-widget-header">
+      <span class="memo-widget-title">📌 메모</span>
+      <button class="memo-widget-close" id="memo-widget-close" title="닫기">✕</button>
+    </div>
+    <div class="memo-widget-input-row">
+      <input type="text" class="memo-widget-input" id="memo-input" placeholder="메모를 입력하세요..." />
+      <button class="memo-widget-add" id="memo-add" title="추가">+</button>
+    </div>
+    <ul class="memo-widget-list" id="memo-list"></ul>
+  </div>
 
   <div class="toast" id="toast"></div>
 

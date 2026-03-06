@@ -6536,264 +6536,82 @@
   });
 
   // ══════════════════════════════════════
-  // 11. 포스트잇 메모 (자유 배치 드래그)
+  // 11. 메모 위젯 (리스트 형태)
   // ══════════════════════════════════════
-  var STICKY_KEY = 'fl_sticky_notes';
-  var STICKY_VIS_KEY = 'fl_sticky_visible';
-  var stickyColors = ['#fff9c4', '#c8e6c9', '#bbdefb', '#f8bbd0', '#ffe0b2', '#e1bee7'];
-  var stickyZBase = 8100;
-  var stickyZTop = stickyZBase;
+  var MEMO_KEY = 'fl_memo_notes';
 
-  function loadStickies() {
-    try { return JSON.parse(localStorage.getItem(STICKY_KEY)) || []; }
+  function loadMemos() {
+    try { return JSON.parse(localStorage.getItem(MEMO_KEY)) || []; }
     catch (e) { return []; }
   }
-  function saveStickies(list) { localStorage.setItem(STICKY_KEY, JSON.stringify(list)); }
-  function isStickyVisible() { return localStorage.getItem(STICKY_VIS_KEY) !== 'false'; }
-  function setStickyVisible(v) { localStorage.setItem(STICKY_VIS_KEY, v ? 'true' : 'false'); }
+  function saveMemos(list) { localStorage.setItem(MEMO_KEY, JSON.stringify(list)); }
 
-  function clampPos(x, y, w, h) {
-    var vw = window.innerWidth, vh = window.innerHeight;
-    return {
-      x: Math.max(0, Math.min(x, vw - Math.min(w, 60))),
-      y: Math.max(0, Math.min(y, vh - 30))
-    };
-  }
-
-  function renderAllStickies() {
-    var container = $('#sticky-container');
-    container.innerHTML = '';
-    var notes = loadStickies();
-    var visible = isStickyVisible();
-    notes.forEach(function (n, i) { createStickyEl(n, i, container, visible); });
-  }
-
-  function createStickyEl(note, idx, container, visible) {
-    var el = document.createElement('div');
-    el.className = 'sticky-float-note' + (note.minimized ? ' sticky-minimized' : '');
-    el.dataset.idx = idx;
-    var bg = note.color || stickyColors[idx % stickyColors.length];
-    el.style.background = bg;
-    el.style.left = (note.x || 100 + idx * 30) + 'px';
-    el.style.top = (note.y || 100 + idx * 30) + 'px';
-    el.style.width = (note.w || 220) + 'px';
-    el.style.zIndex = stickyZBase + idx;
-    if (!visible) el.style.display = 'none';
-
-    el.innerHTML =
-      '<div class="sticky-float-header" data-drag="header">' +
-        '<span class="sticky-float-title">\uD83D\uDCCC</span>' +
-        '<div class="sticky-float-btns">' +
-          '<button class="sticky-fbtn" data-action="color" title="색상 변경">\uD83C\uDFA8</button>' +
-          '<button class="sticky-fbtn" data-action="minimize" title="최소화">\u2500</button>' +
-          '<button class="sticky-fbtn" data-action="add" title="새 메모">+</button>' +
-          '<button class="sticky-fbtn sticky-fbtn-del" data-action="del" title="삭제">\u2715</button>' +
-        '</div>' +
-      '</div>' +
-      '<div class="sticky-float-body">' +
-        '<div class="sticky-float-text" contenteditable="true">' + sanitizeJnlHtml(note.text || '') + '</div>' +
-      '</div>' +
-      '<div class="sticky-float-resize" data-drag="resize"></div>';
-
-    container.appendChild(el);
-
-    // ── 드래그 이동 ──
-    var header = el.querySelector('[data-drag="header"]');
-    header.addEventListener('mousedown', startDrag);
-    header.addEventListener('touchstart', startDragTouch, { passive: false });
-
-    function startDrag(e) {
-      if (e.target.closest('.sticky-fbtn')) return;
-      e.preventDefault();
-      bringToFront(el, idx);
-      var startX = e.clientX, startY = e.clientY;
-      var origLeft = el.offsetLeft, origTop = el.offsetTop;
-      function onMove(ev) {
-        var dx = ev.clientX - startX, dy = ev.clientY - startY;
-        var p = clampPos(origLeft + dx, origTop + dy, el.offsetWidth, el.offsetHeight);
-        el.style.left = p.x + 'px';
-        el.style.top = p.y + 'px';
+  function renderMemoList() {
+    var memos = loadMemos();
+    var listEl = $('#memo-list');
+    listEl.innerHTML = '';
+    memos.forEach(function (m, i) {
+      var li = document.createElement('li');
+      li.className = 'memo-widget-item';
+      var timeStr = '';
+      if (m.createdAt) {
+        var d = new Date(m.createdAt);
+        timeStr = (d.getMonth() + 1) + '/' + d.getDate() + ' ' +
+          String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
       }
-      function onUp() {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        saveStickyPos(idx, el);
-      }
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    }
-
-    function startDragTouch(e) {
-      if (e.target.closest('.sticky-fbtn')) return;
-      e.preventDefault();
-      bringToFront(el, idx);
-      var t = e.touches[0];
-      var startX = t.clientX, startY = t.clientY;
-      var origLeft = el.offsetLeft, origTop = el.offsetTop;
-      function onMove(ev) {
-        var ct = ev.touches[0];
-        var dx = ct.clientX - startX, dy = ct.clientY - startY;
-        var p = clampPos(origLeft + dx, origTop + dy, el.offsetWidth, el.offsetHeight);
-        el.style.left = p.x + 'px';
-        el.style.top = p.y + 'px';
-      }
-      function onEnd() {
-        document.removeEventListener('touchmove', onMove);
-        document.removeEventListener('touchend', onEnd);
-        saveStickyPos(idx, el);
-      }
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onEnd);
-    }
-
-    // ── 리사이즈 ──
-    var resizeHandle = el.querySelector('[data-drag="resize"]');
-    resizeHandle.addEventListener('mousedown', startResize);
-    resizeHandle.addEventListener('touchstart', startResizeTouch, { passive: false });
-
-    function startResize(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      bringToFront(el, idx);
-      var startX = e.clientX, startW = el.offsetWidth;
-      function onMove(ev) {
-        var nw = Math.max(160, startW + (ev.clientX - startX));
-        el.style.width = nw + 'px';
-      }
-      function onUp() {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        saveStickyPos(idx, el);
-      }
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    }
-
-    function startResizeTouch(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      bringToFront(el, idx);
-      var t = e.touches[0];
-      var startX = t.clientX, startW = el.offsetWidth;
-      function onMove(ev) {
-        var ct = ev.touches[0];
-        var nw = Math.max(160, startW + (ct.clientX - startX));
-        el.style.width = nw + 'px';
-      }
-      function onEnd() {
-        document.removeEventListener('touchmove', onMove);
-        document.removeEventListener('touchend', onEnd);
-        saveStickyPos(idx, el);
-      }
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onEnd);
-    }
-
-    // ── 포커스 시 맨 앞으로 ──
-    el.addEventListener('mousedown', function () { bringToFront(el, idx); });
-
-    // ── 텍스트 편집 blur → 저장 ──
-    var textEl = el.querySelector('.sticky-float-text');
-    textEl.addEventListener('blur', function () {
-      var notes = loadStickies();
-      if (notes[idx]) { notes[idx].text = textEl.innerHTML; saveStickies(notes); }
+      li.innerHTML =
+        '<span class="memo-widget-item-text">' + escapeHtml(m.text) + '</span>' +
+        '<span class="memo-widget-item-time">' + timeStr + '</span>' +
+        '<button class="memo-widget-item-del" data-idx="' + i + '" title="삭제">✕</button>';
+      listEl.appendChild(li);
     });
-
-    // ── 버튼 동작 ──
-    el.querySelectorAll('.sticky-fbtn').forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        var action = btn.dataset.action;
-        var notes = loadStickies();
-        if (action === 'del') {
-          if (notes.length > 0) {
-            notes.splice(idx, 1);
-            saveStickies(notes);
-            renderAllStickies();
-          }
-        } else if (action === 'color') {
-          if (notes[idx]) {
-            var curColor = notes[idx].color || stickyColors[idx % stickyColors.length];
-            var ci = stickyColors.indexOf(curColor);
-            notes[idx].color = stickyColors[(ci + 1) % stickyColors.length];
-            saveStickies(notes);
-            el.style.background = notes[idx].color;
-          }
-        } else if (action === 'minimize') {
-          if (notes[idx]) {
-            notes[idx].minimized = !notes[idx].minimized;
-            saveStickies(notes);
-            el.classList.toggle('sticky-minimized', notes[idx].minimized);
-          }
-        } else if (action === 'add') {
-          addStickyNote();
-        }
+    // 삭제 버튼 이벤트
+    listEl.querySelectorAll('.memo-widget-item-del').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = parseInt(btn.dataset.idx, 10);
+        var memos = loadMemos();
+        memos.splice(idx, 1);
+        saveMemos(memos);
+        renderMemoList();
       });
     });
   }
 
-  function bringToFront(el) {
-    stickyZTop++;
-    el.style.zIndex = stickyZTop;
+  function addMemo() {
+    var input = $('#memo-input');
+    var text = input.value.trim();
+    if (!text) return;
+    var memos = loadMemos();
+    memos.unshift({ text: text, createdAt: new Date().toISOString() });
+    saveMemos(memos);
+    input.value = '';
+    renderMemoList();
   }
 
-  function saveStickyPos(idx, el) {
-    var notes = loadStickies();
-    if (!notes[idx]) return;
-    notes[idx].x = el.offsetLeft;
-    notes[idx].y = el.offsetTop;
-    notes[idx].w = el.offsetWidth;
-    saveStickies(notes);
-  }
-
-  function addStickyNote() {
-    var notes = loadStickies();
-    var offset = notes.length * 25;
-    var cx = Math.min(window.innerWidth - 260, 200 + offset);
-    var cy = Math.min(window.innerHeight - 200, 120 + offset);
-    notes.push({
-      text: '',
-      x: cx, y: cy, w: 220,
-      color: stickyColors[notes.length % stickyColors.length],
-      minimized: false,
-      createdAt: new Date().toISOString()
-    });
-    saveStickies(notes);
-    setStickyVisible(true);
-    renderAllStickies();
-    // 새 메모에 포커스
-    var allNotes = document.querySelectorAll('.sticky-float-note');
-    var last = allNotes[allNotes.length - 1];
-    if (last) {
-      bringToFront(last);
-      var txt = last.querySelector('.sticky-float-text');
-      if (txt) txt.focus();
+  function toggleMemoWidget() {
+    var widget = $('#memo-widget');
+    var isVisible = widget.style.display !== 'none';
+    widget.style.display = isVisible ? 'none' : '';
+    if (!isVisible) {
+      renderMemoList();
+      $('#memo-input').focus();
     }
   }
 
-  // ── 토글 버튼 (좌클릭=토글, 우클릭=새 메모) ──
-  var _stickyClickTimer = null;
-  $('#sticky-toggle').addEventListener('click', function () {
-    // 싱글 클릭 → 토글
-    var notes = loadStickies();
-    if (notes.length === 0) {
-      addStickyNote();
-      return;
-    }
-    var vis = isStickyVisible();
-    setStickyVisible(!vis);
-    var allEls = document.querySelectorAll('.sticky-float-note');
-    allEls.forEach(function (n) { n.style.display = vis ? 'none' : ''; });
+  // 토글 버튼 → 위젯 열기/닫기
+  $('#sticky-toggle').addEventListener('click', toggleMemoWidget);
+
+  // 닫기 버튼
+  $('#memo-widget-close').addEventListener('click', function () {
+    $('#memo-widget').style.display = 'none';
   });
 
-  $('#sticky-toggle').addEventListener('dblclick', function (e) {
-    e.preventDefault();
-    addStickyNote();
-  });
+  // 추가 버튼
+  $('#memo-add').addEventListener('click', addMemo);
 
-  $('#sticky-toggle').addEventListener('contextmenu', function (e) {
-    e.preventDefault();
-    addStickyNote();
+  // Enter 키로 추가
+  $('#memo-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); addMemo(); }
   });
 
   // ── 회의 Draft 자동 저장 (뒤로가기/탭 전환/페이지 이탈) ──
@@ -6825,7 +6643,7 @@
     renderJnlTable();
     populateJnlCategoryFilter();
     populateJnlColFilters();
-    renderAllStickies();
+    renderMemoList();
 
     // 임시 저장된 회의 draft 복원
     var draft = loadMeetingDraft();
