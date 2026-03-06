@@ -59,46 +59,52 @@
           <h2>AI 컨텍스트</h2>
           <div class="live-clock" data-clock></div>
         </div>
-        <div id="ctx-list-view">
-          <p class="panel-desc">AI에게 전달할 배경, 목표, 제약 조건을 구조화하세요.</p>
-          <button class="btn btn-primary btn-new" id="ctx-new">+ 새 컨텍스트 작성</button>
-          <div class="saved-list">
-            <h3>저장된 컨텍스트</h3>
-            <ul id="ctx-items"></ul>
-          </div>
-        </div>
-        <div id="ctx-form-view" style="display:none">
-          <div class="view-form-header">
-            <button class="btn btn-secondary btn-small" id="ctx-back">← 목록</button>
-            <div class="form-group form-datetime-group">
-              <label for="ctx-datetime">작성 시간</label>
-              <input type="datetime-local" id="ctx-datetime">
+        <div class="tab-two-col">
+          <div class="tab-col-side">
+            <div class="mini-cal" data-cal="context"></div>
+            <button class="side-new-btn" id="ctx-new">+ 새 컨텍스트 작성</button>
+            <div class="side-history" data-side-history="context">
+              <div class="side-history-header">
+                <span class="side-history-title">히스토리</span>
+                <span class="side-history-count" data-count></span>
+              </div>
+              <div data-list></div>
             </div>
           </div>
-          <div class="form-group">
-            <label for="ctx-project">프로젝트 / 주제</label>
-            <input type="text" id="ctx-project" placeholder="예: 신규 온보딩 플로우 개선">
-          </div>
-          <div class="form-group">
-            <label for="ctx-background">배경 설명</label>
-            <textarea id="ctx-background" rows="6" placeholder="현재 상황과 배경을 설명하세요" data-rich></textarea>
-          </div>
-          <div class="form-group">
-            <label for="ctx-goal">목표</label>
-            <textarea id="ctx-goal" rows="5" placeholder="AI에게 요청하고 싶은 결과물" data-rich></textarea>
-          </div>
-          <div class="form-group">
-            <label for="ctx-constraints">제약 조건 / 참고 사항</label>
-            <textarea id="ctx-constraints" rows="4" placeholder="톤, 분량, 형식 등 제약 조건" data-rich></textarea>
-          </div>
-          <div class="form-group">
-            <label for="ctx-reference">참고 자료</label>
-            <textarea id="ctx-reference" rows="4" placeholder="링크, 인용, 관련 문서 등" data-rich></textarea>
-          </div>
-          <div class="btn-row">
-            <button class="btn btn-primary" id="ctx-copy">📋 프롬프트 복사</button>
-            <button class="btn btn-secondary" id="ctx-save">저장</button>
-            <button class="btn btn-ghost" id="ctx-clear">초기화</button>
+          <div class="tab-col-main">
+            <div id="ctx-form-view">
+              <div class="view-form-header">
+                <div class="form-group form-datetime-group">
+                  <label for="ctx-datetime">작성 시간</label>
+                  <input type="datetime-local" id="ctx-datetime">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="ctx-project">프로젝트 / 주제</label>
+                <input type="text" id="ctx-project" placeholder="예: 신규 온보딩 플로우 개선">
+              </div>
+              <div class="form-group">
+                <label for="ctx-background">배경 설명</label>
+                <textarea id="ctx-background" rows="6" placeholder="현재 상황과 배경을 설명하세요" data-rich></textarea>
+              </div>
+              <div class="form-group">
+                <label for="ctx-goal">목표</label>
+                <textarea id="ctx-goal" rows="5" placeholder="AI에게 요청하고 싶은 결과물" data-rich></textarea>
+              </div>
+              <div class="form-group">
+                <label for="ctx-constraints">제약 조건 / 참고 사항</label>
+                <textarea id="ctx-constraints" rows="4" placeholder="톤, 분량, 형식 등 제약 조건" data-rich></textarea>
+              </div>
+              <div class="form-group">
+                <label for="ctx-reference">참고 자료</label>
+                <textarea id="ctx-reference" rows="4" placeholder="링크, 인용, 관련 문서 등" data-rich></textarea>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" id="ctx-copy">📋 프롬프트 복사</button>
+                <button class="btn btn-secondary" id="ctx-save">저장</button>
+                <button class="btn btn-ghost" id="ctx-clear">초기화</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -109,41 +115,47 @@
           <h2>아이디어 보드</h2>
           <div class="live-clock" data-clock></div>
         </div>
-        <div id="idea-list-view">
-          <p class="panel-desc">떠오르는 아이디어를 빠르게 캡처하세요. 태그로 분류하고 나중에 찾기 쉽게 정리합니다.</p>
-          <button class="btn btn-primary btn-new" id="idea-new">+ 새 아이디어 작성</button>
-          <div class="idea-filter">
-            <input type="text" id="idea-search" placeholder="🔍 아이디어 검색...">
-          </div>
-          <div class="idea-board" id="idea-board"></div>
-        </div>
-        <div id="idea-form-view" style="display:none">
-          <div class="view-form-header">
-            <button class="btn btn-secondary btn-small" id="idea-back">← 목록</button>
-            <div class="form-group form-datetime-group">
-              <label for="idea-datetime">작성 시간</label>
-              <input type="datetime-local" id="idea-datetime">
+        <div class="tab-two-col">
+          <div class="tab-col-side">
+            <div class="mini-cal" data-cal="ideas"></div>
+            <button class="side-new-btn" id="idea-new">+ 새 아이디어 작성</button>
+            <div class="side-history" data-side-history="ideas">
+              <div class="side-history-header">
+                <span class="side-history-title">히스토리</span>
+                <span class="side-history-count" data-count></span>
+              </div>
+              <div data-list></div>
             </div>
           </div>
-          <div id="idea-source-link" class="source-link" style="display:none">
-            📋 <span id="idea-source-text"></span>
-          </div>
-          <div class="form-group">
-            <label for="idea-title">아이디어 한 줄 요약</label>
-            <input type="text" id="idea-title" placeholder="핵심 아이디어를 한 문장으로">
-          </div>
-          <div class="form-group">
-            <label for="idea-detail">상세 내용</label>
-            <textarea id="idea-detail" rows="10" placeholder="아이디어를 자세히 설명하세요" data-rich></textarea>
-          </div>
-          <div class="form-group">
-            <label for="idea-tags">태그</label>
-            <input type="text" id="idea-tags" placeholder="쉼표로 구분 (예: UX, 마케팅, 기술)">
-          </div>
-          <div class="btn-row">
-            <button class="btn btn-primary" id="idea-add">저장</button>
-            <button class="btn btn-secondary" id="idea-to-proposal">📨 문서로 만들기</button>
-            <button class="btn btn-ghost" id="idea-form-clear">초기화</button>
+          <div class="tab-col-main">
+            <div id="idea-form-view">
+              <div class="view-form-header">
+                <div class="form-group form-datetime-group">
+                  <label for="idea-datetime">작성 시간</label>
+                  <input type="datetime-local" id="idea-datetime">
+                </div>
+              </div>
+              <div id="idea-source-link" class="source-link" style="display:none">
+                📋 <span id="idea-source-text"></span>
+              </div>
+              <div class="form-group">
+                <label for="idea-title">아이디어 한 줄 요약</label>
+                <input type="text" id="idea-title" placeholder="핵심 아이디어를 한 문장으로">
+              </div>
+              <div class="form-group">
+                <label for="idea-detail">상세 내용</label>
+                <textarea id="idea-detail" rows="10" placeholder="아이디어를 자세히 설명하세요" data-rich></textarea>
+              </div>
+              <div class="form-group">
+                <label for="idea-tags">태그</label>
+                <input type="text" id="idea-tags" placeholder="쉼표로 구분 (예: UX, 마케팅, 기술)">
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" id="idea-add">저장</button>
+                <button class="btn btn-secondary" id="idea-to-proposal">📨 문서로 만들기</button>
+                <button class="btn btn-ghost" id="idea-form-clear">초기화</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -154,33 +166,33 @@
           <h2>회의 메모</h2>
           <div class="live-clock" data-clock></div>
         </div>
-
-        <!-- 목록 뷰: 날짜별 히스토리 + AI 분류 필터 -->
-        <div id="mtg-type-select" class="mtg-step">
-          <p class="panel-desc">회의를 녹음하고 AI가 자동으로 분류/정리합니다.</p>
-
-          <div class="mtg-list-toolbar" id="mtg-list-toolbar">
-            <button class="btn btn-primary btn-small" id="mtg-new-btn">+ 새 회의</button>
-            <input type="text" class="mtg-history-search" id="mtg-search" placeholder="검색...">
-            <select id="mtg-ai-tag-filter" class="folder-filter-select">
-              <option value="">전체 분류</option>
-            </select>
-            <select id="mtg-folder-filter" class="folder-filter-select">
-              <option value="">전체 폴더</option>
-            </select>
-            <button class="btn btn-secondary btn-small" id="mtg-ai-classify">AI 자동 분류</button>
+        <div class="tab-two-col">
+          <div class="tab-col-side">
+            <div class="mini-cal" data-cal="meeting"></div>
+            <button class="side-new-btn" id="mtg-new-btn">+ 새 회의</button>
+            <div class="mtg-side-filters" style="display:flex;gap:4px;flex-wrap:wrap">
+              <input type="text" class="mtg-history-search" id="mtg-search" placeholder="검색..." style="flex:1;min-width:80px;font-size:0.78rem;padding:4px 8px">
+              <select id="mtg-ai-tag-filter" class="folder-filter-select" style="font-size:0.78rem;padding:4px">
+                <option value="">전체 분류</option>
+              </select>
+              <select id="mtg-folder-filter" class="folder-filter-select" style="font-size:0.78rem;padding:4px">
+                <option value="">전체 폴더</option>
+              </select>
+            </div>
+            <div class="side-history" data-side-history="meeting">
+              <div class="side-history-header">
+                <span class="side-history-title">히스토리</span>
+                <button class="btn btn-ghost btn-small" id="mtg-ai-classify" style="font-size:0.7rem;padding:2px 6px">AI 분류</button>
+              </div>
+              <div id="mtg-items" data-list></div>
+            </div>
           </div>
-
-          <div class="saved-list" id="mtg-saved-list">
-            <div id="mtg-items"></div>
-          </div>
-        </div>
-
-        <!-- 작성 뷰 -->
-        <div id="mtg-form-view" class="mtg-step" style="display:none">
-          <div class="mtg-form-header">
-            <button class="btn btn-secondary btn-small" id="mtg-back">← 회의 목록</button>
-            <span class="mtg-type-badge" id="mtg-type-badge" style="display:none"></span>
+          <div class="tab-col-main">
+            <!-- 빈 폼 또는 기존 mtg-type-select 대체 -->
+            <div id="mtg-type-select" class="mtg-step" style="display:none"></div>
+            <div id="mtg-form-view" class="mtg-step">
+              <div class="mtg-form-header">
+                <span class="mtg-type-badge" id="mtg-type-badge" style="display:none"></span>
             <div class="folder-selector">
               <select id="mtg-folder" class="folder-select">
                 <option value="">미분류</option>
@@ -324,22 +336,26 @@
           <h2>브리핑 양식</h2>
           <div class="live-clock" data-clock></div>
         </div>
-        <div id="prop-list-view">
-          <p class="panel-desc">자유롭게 항목을 추가하여 나만의 문서를 작성하세요.</p>
-          <button class="btn btn-primary btn-new" id="prop-new">+ 새 문서 작성</button>
-          <div class="saved-list">
-            <h3>저장된 문서</h3>
-            <ul id="prop-items"></ul>
-          </div>
-        </div>
-        <div id="prop-form-view" style="display:none">
-          <div class="view-form-header">
-            <button class="btn btn-secondary btn-small" id="prop-back">← 목록</button>
-            <div class="form-group form-datetime-group">
-              <label for="prop-datetime">작성 시간</label>
-              <input type="datetime-local" id="prop-datetime">
+        <div class="tab-two-col">
+          <div class="tab-col-side">
+            <div class="mini-cal" data-cal="proposal"></div>
+            <button class="side-new-btn" id="prop-new">+ 새 문서 작성</button>
+            <div class="side-history" data-side-history="proposal">
+              <div class="side-history-header">
+                <span class="side-history-title">히스토리</span>
+                <span class="side-history-count" data-count></span>
+              </div>
+              <div data-list></div>
             </div>
           </div>
+          <div class="tab-col-main">
+            <div id="prop-form-view">
+              <div class="view-form-header">
+                <div class="form-group form-datetime-group">
+                  <label for="prop-datetime">작성 시간</label>
+                  <input type="datetime-local" id="prop-datetime">
+                </div>
+              </div>
           <div id="prop-source-link" class="source-link" style="display:none">
             💡 <span id="prop-source-text"></span>
           </div>
@@ -361,6 +377,8 @@
             <button class="btn btn-secondary" id="prop-export-excel">📊 Excel 내보내기</button>
             <button class="btn btn-secondary" id="prop-export-pdf">📄 PDF 내보내기</button>
           </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -371,73 +389,66 @@
           <h2>할 일 목록</h2>
           <div class="live-clock" data-clock></div>
         </div>
-        <p class="panel-desc">업무 목표와 할 일을 관리하세요. 진행 단계와 마감일을 추적합니다.</p>
-
-        <!-- 뷰 토글: 일간 / 히스토리 -->
-        <div class="task-view-toggle">
-          <button class="task-view-btn active" data-view="daily">일간 보기</button>
-          <button class="task-view-btn" data-view="history">히스토리</button>
-        </div>
-
-        <!-- ── 일간 뷰 ── -->
-        <div id="task-daily-view">
-          <!-- 날짜 선택 + 진행률 -->
-          <div class="task-top-bar">
-            <div class="task-date-nav">
-              <button class="btn btn-ghost btn-small" id="task-prev-day">←</button>
-              <input type="date" id="task-date" class="task-date-input">
-              <button class="btn btn-ghost btn-small" id="task-next-day">→</button>
-              <button class="btn btn-ghost btn-small" id="task-today">오늘</button>
-            </div>
-            <div class="task-progress-wrap">
-              <div class="task-progress-bar">
-                <div class="task-progress-fill" id="task-progress-fill"></div>
+        <div class="tab-two-col">
+          <div class="tab-col-side">
+            <div class="mini-cal" data-cal="tasks"></div>
+            <div class="side-history" data-side-history="tasks">
+              <div class="side-history-header">
+                <span class="side-history-title">히스토리</span>
+                <span class="side-history-count" data-count></span>
               </div>
-              <span class="task-progress-text" id="task-progress-text">0/0</span>
+              <div class="task-history-controls" style="margin-bottom:8px">
+                <select class="task-stage-select" id="task-history-stage-filter" style="width:100%;font-size:0.78rem;padding:4px">
+                  <option value="all">전체 단계</option>
+                  <option value="todo">진행 전</option>
+                  <option value="in_progress">진행 중</option>
+                  <option value="review">검토</option>
+                  <option value="done">완료</option>
+                </select>
+              </div>
+              <div class="task-history-list" id="task-history-list" data-list></div>
             </div>
           </div>
+          <div class="tab-col-main">
+            <!-- 진행률 -->
+            <div class="task-top-bar">
+              <div class="task-progress-wrap">
+                <div class="task-progress-bar">
+                  <div class="task-progress-fill" id="task-progress-fill"></div>
+                </div>
+                <span class="task-progress-text" id="task-progress-text">0/0</span>
+              </div>
+            </div>
+            <!-- 날짜 선택 (hidden, 캘린더와 연동) -->
+            <input type="date" id="task-date" class="task-date-input" style="display:none">
 
-          <!-- 새 할 일 입력 -->
-          <div class="task-add-row">
-            <input type="text" class="task-add-input" id="task-add-input" placeholder="새 할 일을 입력하세요...">
-            <select class="task-priority-select" id="task-add-priority">
-              <option value="normal">보통</option>
-              <option value="high">높음</option>
-              <option value="urgent">긴급</option>
-            </select>
-            <select class="task-stage-select" id="task-add-stage">
-              <option value="todo">진행 전</option>
-              <option value="in_progress">진행 중</option>
-              <option value="review">검토</option>
-            </select>
-            <input type="date" class="task-date-input" id="task-add-due" title="마감일 (선택)">
-            <button class="btn btn-primary btn-small" id="task-add-btn">추가</button>
+            <!-- 새 할 일 입력 -->
+            <div class="task-add-row">
+              <input type="text" class="task-add-input" id="task-add-input" placeholder="새 할 일을 입력하세요...">
+              <select class="task-priority-select" id="task-add-priority">
+                <option value="normal">보통</option>
+                <option value="high">높음</option>
+                <option value="urgent">긴급</option>
+              </select>
+              <select class="task-stage-select" id="task-add-stage">
+                <option value="todo">진행 전</option>
+                <option value="in_progress">진행 중</option>
+                <option value="review">검토</option>
+              </select>
+              <input type="date" class="task-date-input" id="task-add-due" title="마감일 (선택)">
+              <button class="btn btn-primary btn-small" id="task-add-btn">추가</button>
+            </div>
+
+            <!-- 할 일 목록 -->
+            <div class="task-list-container" id="task-list"></div>
+
+            <!-- 완료된 항목 토글 -->
+            <div class="task-done-toggle">
+              <label>
+                <input type="checkbox" id="task-show-done" checked> 완료된 항목 보기
+              </label>
+            </div>
           </div>
-
-          <!-- 할 일 목록 -->
-          <div class="task-list-container" id="task-list"></div>
-
-          <!-- 완료된 항목 토글 -->
-          <div class="task-done-toggle">
-            <label>
-              <input type="checkbox" id="task-show-done" checked> 완료된 항목 보기
-            </label>
-          </div>
-        </div>
-
-        <!-- ── 히스토리 뷰 ── -->
-        <div id="task-history-view" style="display:none">
-          <div class="task-history-controls">
-            <input type="text" class="task-add-input" id="task-history-search" placeholder="검색...">
-            <select class="task-stage-select" id="task-history-stage-filter">
-              <option value="all">전체 단계</option>
-              <option value="todo">진행 전</option>
-              <option value="in_progress">진행 중</option>
-              <option value="review">검토</option>
-              <option value="done">완료</option>
-            </select>
-          </div>
-          <div class="task-history-list" id="task-history-list"></div>
         </div>
       </section>
 
@@ -447,24 +458,22 @@
           <h2>도식화</h2>
           <div class="live-clock" data-clock></div>
         </div>
-        <p class="panel-desc">AI에게 설명하면 워크플로우, 프로세스, 조직도 등 전문적인 시각화를 자동으로 생성합니다.</p>
-
-        <!-- 상단: 갤러리 토글 -->
-        <div class="dg-top-bar">
-          <button class="btn btn-ghost btn-small" id="dg-gallery-toggle">📁 저장됨 (<span id="dg-gallery-count">0</span>)</button>
-          <button class="btn btn-ghost btn-small" id="dg-export-png" title="PNG 저장">📷 PNG</button>
-          <button class="btn btn-ghost btn-small" id="dg-export-jpeg" title="JPEG 저장">🖼 JPEG</button>
-        </div>
-
-        <!-- 갤러리 패널 -->
-        <div class="dg-gallery-panel" id="dg-gallery-panel" style="display:none">
-          <div class="dg-gallery-header">
-            <span class="dg-gallery-title">저장된 다이어그램</span>
-            <button class="btn btn-small btn-ghost" id="dg-gallery-close">✕</button>
+        <div class="tab-two-col">
+          <div class="tab-col-side">
+            <div class="mini-cal" data-cal="diagram"></div>
+            <div class="side-history" data-side-history="diagram">
+              <div class="side-history-header">
+                <span class="side-history-title">저장된 다이어그램</span>
+                <span class="side-history-count" data-count></span>
+              </div>
+              <div class="dg-gallery-list" id="dg-gallery-list" data-list></div>
+            </div>
+            <div class="dg-top-bar" style="display:flex;gap:4px">
+              <button class="btn btn-ghost btn-small" id="dg-export-png" title="PNG 저장" style="flex:1">📷 PNG</button>
+              <button class="btn btn-ghost btn-small" id="dg-export-jpeg" title="JPEG 저장" style="flex:1">🖼 JPEG</button>
+            </div>
           </div>
-          <div class="dg-gallery-list" id="dg-gallery-list"></div>
-        </div>
-
+          <div class="tab-col-main">
         <!-- 빠른 템플릿 버튼 -->
         <div class="dg-quick-templates">
           <button class="dg-tpl-btn" data-tpl="workflow">🔄 워크플로우</button>
@@ -511,6 +520,8 @@
           <textarea class="dg-refine-input" id="dg-refine-input" rows="2" placeholder="수정할 부분을 설명하세요... 예: '색상을 파란 계열로 바꿔줘', '항목을 3개 더 추가해줘'"></textarea>
           <button class="btn btn-primary btn-small" id="dg-refine-go">🔄 수정 적용</button>
         </div>
+          </div>
+        </div>
       </section>
 
       <!-- ==================== 업무일지 탭 ==================== -->
@@ -519,10 +530,21 @@
           <h2>업무일지</h2>
           <div class="live-clock" data-clock></div>
         </div>
+        <div class="tab-two-col">
+          <div class="tab-col-side">
+            <div class="mini-cal" data-cal="journal"></div>
+            <button class="side-new-btn" id="jnl-new">+ 새 항목 추가</button>
+            <div class="side-history" data-side-history="journal">
+              <div class="side-history-header">
+                <span class="side-history-title">히스토리</span>
+                <span class="side-history-count" data-count></span>
+              </div>
+              <div data-list></div>
+            </div>
+          </div>
+          <div class="tab-col-main">
         <div id="jnl-list-view">
-          <p class="panel-desc">전략기획팀 업무일지를 작성하고 관리하세요. Excel/CSV 파일을 업로드하거나 내보낼 수 있습니다.</p>
           <div class="jnl-toolbar">
-            <button class="btn btn-primary" id="jnl-new">+ 새 항목 추가</button>
             <button class="btn btn-secondary" id="jnl-import-excel">📥 Excel/CSV 업로드</button>
             <button class="btn btn-secondary" id="jnl-export-excel">📊 Excel 내보내기</button>
             <button class="btn btn-secondary" id="jnl-export-csv">📄 CSV 내보내기</button>
@@ -576,7 +598,7 @@
         </div>
 
         <!-- 업무일지 작성/수정 폼 -->
-        <div id="jnl-form-view" style="display:none">
+        <div id="jnl-form-view"
           <div class="view-form-header">
             <button class="btn btn-secondary btn-small" id="jnl-back">← 목록</button>
             <span id="jnl-form-title-label" style="font-weight:600;font-size:0.9rem;color:var(--text-muted)">새 항목 추가</span>
@@ -622,6 +644,8 @@
           <div class="btn-row">
             <button class="btn btn-primary" id="jnl-save">저장</button>
             <button class="btn btn-ghost" id="jnl-form-clear">초기화</button>
+          </div>
+        </div>
           </div>
         </div>
       </section>

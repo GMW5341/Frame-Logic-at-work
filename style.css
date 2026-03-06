@@ -179,6 +179,239 @@ body {
   margin-bottom: 20px;
 }
 
+/* ===== 2-Column Layout (1:2 ratio) ===== */
+.tab-two-col {
+  display: flex;
+  gap: 24px;
+  min-height: 0;
+}
+.tab-col-side {
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+.tab-col-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Mini Calendar ── */
+.mini-cal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  user-select: none;
+}
+.mini-cal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.mini-cal-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.mini-cal-nav {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mini-cal-nav:hover {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+.mini-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  text-align: center;
+}
+.mini-cal-dow, .mini-cal-weekday {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  padding: 4px 0;
+}
+.mini-cal-day {
+  font-size: 0.75rem;
+  padding: 4px 0;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.12s, color 0.12s;
+  position: relative;
+}
+.mini-cal-day:hover {
+  background: var(--bg-elevated);
+}
+.mini-cal-day.today {
+  font-weight: 700;
+  color: var(--accent);
+}
+.mini-cal-day.selected {
+  background: var(--accent);
+  color: #fff;
+}
+.mini-cal-day.has-items::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.mini-cal-day.selected.has-items::after {
+  background: #fff;
+}
+.mini-cal-day.other-month {
+  color: var(--border);
+}
+
+/* ── Side History List ── */
+.side-history {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.side-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.side-history-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.side-history-count {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+.side-history-empty {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 20px 8px;
+}
+.side-history-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.12s;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.side-history-item:last-child {
+  border-bottom: none;
+}
+.side-history-item:hover {
+  background: var(--bg-elevated);
+}
+.side-history-item.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+.side-history-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.side-history-item-time, .side-history-item-date {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.side-history-item-del {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.side-history-item:hover .side-history-item-del {
+  opacity: 1;
+}
+.side-history-item-del:hover {
+  background: rgba(220,38,38,0.1);
+  color: #dc2626;
+}
+
+/* ── Side New Button ── */
+.side-new-btn {
+  width: 100%;
+  padding: 10px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: none;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.side-new-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+@media (max-width: 820px) {
+  .tab-two-col {
+    flex-direction: column;
+  }
+  .tab-col-side {
+    flex: none;
+    position: static;
+    max-height: none;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 8px;
+  }
+  .mini-cal { min-width: 260px; }
+  .side-history { min-width: 240px; min-height: 160px; }
+}
+
 .panel-top h2 {
   font-size: 1.25rem;
   font-weight: 600;

@@ -145,9 +145,249 @@
   updateClocks();
   setInterval(updateClocks, 1000);
 
+  // ── Mini Calendar + Side History System ──
+  var CAL_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+  var calStates = {}; // { tabName: { year, month, selectedDate } }
+
+  function getCalState(tab) {
+    if (!calStates[tab]) {
+      var now = new Date();
+      calStates[tab] = { year: now.getFullYear(), month: now.getMonth(), selectedDate: null };
+    }
+    return calStates[tab];
+  }
+
+  function getItemDatesForTab(tab) {
+    var dates = {};
+    var items;
+    switch (tab) {
+      case 'context': items = load(CTX_KEY); items.forEach(function (i) { var d = (i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
+      case 'ideas': items = load(IDEA_KEY); items.forEach(function (i) { var d = (i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
+      case 'meeting': items = load(MTG_KEY); items.forEach(function (i) { var d = (i.date || i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
+      case 'proposal': items = load(PROP_KEY); items.forEach(function (i) { var d = (i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
+      case 'tasks': items = loadTasks(); items.forEach(function (i) { var d = i.date || ''; if (d) dates[d] = (dates[d] || 0) + 1; }); break;
+      case 'diagram': items = loadDiagrams(); items.forEach(function (i) { var d = (i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
+      case 'journal': items = load(JNL_KEY); items.forEach(function (i) { var d = (i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
+    }
+    return dates;
+  }
+
+  function renderMiniCal(tab) {
+    var container = document.querySelector('[data-cal="' + tab + '"]');
+    if (!container) return;
+    var state = getCalState(tab);
+    var y = state.year, m = state.month;
+    var todayStr = new Date().toISOString().slice(0, 10);
+    var itemDates = getItemDatesForTab(tab);
+
+    var firstDay = new Date(y, m, 1).getDay();
+    var daysInMonth = new Date(y, m + 1, 0).getDate();
+    var monthLabel = y + '년 ' + (m + 1) + '월';
+
+    var html = '<div class="mini-cal-header">' +
+      '<button class="mini-cal-nav" data-dir="-1">&lsaquo;</button>' +
+      '<span class="mini-cal-title">' + monthLabel + '</span>' +
+      '<button class="mini-cal-nav" data-dir="1">&rsaquo;</button>' +
+    '</div>';
+    html += '<div class="mini-cal-grid">';
+    CAL_WEEKDAYS.forEach(function (w) { html += '<div class="mini-cal-weekday">' + w + '</div>'; });
+    for (var i = 0; i < firstDay; i++) html += '<div class="mini-cal-day empty"></div>';
+    for (var d = 1; d <= daysInMonth; d++) {
+      var dateStr = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      var cls = 'mini-cal-day';
+      if (dateStr === todayStr) cls += ' today';
+      if (dateStr === state.selectedDate) cls += ' selected';
+      if (itemDates[dateStr]) cls += ' has-items';
+      html += '<div class="' + cls + '" data-date="' + dateStr + '">' + d + '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Nav events
+    container.querySelectorAll('.mini-cal-nav').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var dir = parseInt(btn.dataset.dir);
+        state.month += dir;
+        if (state.month < 0) { state.month = 11; state.year--; }
+        if (state.month > 11) { state.month = 0; state.year++; }
+        renderMiniCal(tab);
+      });
+    });
+
+    // Day click
+    container.querySelectorAll('.mini-cal-day:not(.empty)').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var date = el.dataset.date;
+        state.selectedDate = (state.selectedDate === date) ? null : date;
+        renderMiniCal(tab);
+        renderSideHistory(tab);
+        onCalendarDateSelect(tab, state.selectedDate);
+      });
+    });
+  }
+
+  function onCalendarDateSelect(tab, date) {
+    if (tab === 'tasks' && date) {
+      $('#task-date').value = date;
+      renderTaskList();
+    }
+  }
+
+  function renderSideHistory(tab) {
+    var historyEl = document.querySelector('[data-side-history="' + tab + '"]');
+    if (!historyEl) return;
+    var listEl = historyEl.querySelector('[data-list]');
+    var countEl = historyEl.querySelector('[data-count]');
+    if (!listEl) return;
+
+    var state = getCalState(tab);
+    var selDate = state.selectedDate;
+    var items = [];
+    var titleFn, dateFn, idFn;
+
+    switch (tab) {
+      case 'context':
+        items = load(CTX_KEY);
+        titleFn = function (i) { return i.project || '(제목 없음)'; };
+        dateFn = function (i) { return i.createdAt; };
+        idFn = function (i) { return i.id; };
+        break;
+      case 'ideas':
+        items = load(IDEA_KEY);
+        titleFn = function (i) { return i.title || '(제목 없음)'; };
+        dateFn = function (i) { return i.createdAt; };
+        idFn = function (i) { return i.id; };
+        break;
+      case 'meeting':
+        // meeting has its own renderMeetingList; just update count
+        var mtgItems = load(MTG_KEY);
+        if (countEl) countEl.textContent = mtgItems.length + '건';
+        renderMeetingList();
+        return;
+      case 'proposal':
+        items = load(PROP_KEY);
+        titleFn = function (i) { return i.title || '(제목 없음)'; };
+        dateFn = function (i) { return i.createdAt; };
+        idFn = function (i) { return i.id; };
+        break;
+      case 'tasks':
+        // tasks has its own renderTaskHistory
+        renderTaskHistory();
+        var allTasks = loadTasks();
+        if (countEl) countEl.textContent = allTasks.length + '건';
+        return;
+      case 'diagram':
+        // diagram has its own gallery render
+        renderGallery();
+        var dgs = loadDiagrams();
+        if (countEl) countEl.textContent = dgs.length + '건';
+        return;
+      case 'journal':
+        items = load(JNL_KEY);
+        titleFn = function (i) {
+          var cols = loadJnlColumns();
+          var first = cols[0];
+          return first ? (i[first.key] || '(내용 없음)') : (i.category || '(내용 없음)');
+        };
+        dateFn = function (i) { return i.createdAt; };
+        idFn = function (i) { return i.id; };
+        break;
+    }
+
+    // Filter by selected date
+    if (selDate) {
+      items = items.filter(function (i) {
+        var d = (dateFn(i) || '').slice(0, 10);
+        return d === selDate;
+      });
+    }
+
+    // Sort newest first
+    items.sort(function (a, b) {
+      return (dateFn(b) || '').localeCompare(dateFn(a) || '');
+    });
+
+    if (countEl) countEl.textContent = items.length + '건';
+
+    if (items.length === 0) {
+      listEl.innerHTML = '<div class="side-history-empty">' + (selDate ? selDate + ' 항목 없음' : '저장된 항목이 없습니다') + '</div>';
+      return;
+    }
+
+    listEl.innerHTML = items.map(function (item) {
+      var dateLabel = dateFn(item) ? formatDate(dateFn(item)) : '';
+      return '<div class="side-history-item" data-id="' + idFn(item) + '" data-tab="' + tab + '">' +
+        '<div class="side-history-item-title">' + escapeHtml(titleFn(item)) + '</div>' +
+        '<div class="side-history-item-date">' + dateLabel + '</div>' +
+        '<button class="side-history-item-del" data-action="delete" title="삭제">&times;</button>' +
+      '</div>';
+    }).join('');
+
+    // Click handlers
+    listEl.querySelectorAll('.side-history-item').forEach(function (el) {
+      el.addEventListener('click', function (e) {
+        if (e.target.closest('[data-action="delete"]')) {
+          handleSideHistoryDelete(tab, el.dataset.id);
+          return;
+        }
+        handleSideHistoryLoad(tab, el.dataset.id);
+      });
+    });
+  }
+
+  function handleSideHistoryLoad(tab, id) {
+    switch (tab) {
+      case 'context':
+        var ctxItems = load(CTX_KEY);
+        var ctxItem = ctxItems.find(function (i) { return i.id === id; });
+        if (ctxItem) { loadContextToForm(ctxItem); toast('불러왔습니다'); }
+        break;
+      case 'ideas':
+        var ideaItems = load(IDEA_KEY);
+        var ideaItem = ideaItems.find(function (i) { return i.id === id; });
+        if (ideaItem) { loadIdeaToForm(ideaItem); toast('불러왔습니다'); }
+        break;
+      case 'proposal':
+        var propItems = load(PROP_KEY);
+        var propItem = propItems.find(function (i) { return i.id === id; });
+        if (propItem) { loadProposalToForm(propItem); toast('불러왔습니다'); }
+        break;
+      case 'journal':
+        var jnlItems = load(JNL_KEY);
+        var jnlItem = jnlItems.find(function (i) { return i.id === id; });
+        if (jnlItem) { loadJnlToForm(jnlItem); toast('불러왔습니다'); }
+        break;
+    }
+  }
+
+  function handleSideHistoryDelete(tab, id) {
+    if (!confirm('삭제하시겠습니까?')) return;
+    var key;
+    switch (tab) {
+      case 'context': key = CTX_KEY; break;
+      case 'ideas': key = IDEA_KEY; break;
+      case 'proposal': key = PROP_KEY; break;
+      case 'journal': key = JNL_KEY; break;
+      default: return;
+    }
+    var items = load(key);
+    save(key, items.filter(function (i) { return i.id !== id; }));
+    renderMiniCal(tab);
+    renderSideHistory(tab);
+    toast('삭제되었습니다');
+  }
+
+  function refreshSidePanel(tab) {
+    renderMiniCal(tab);
+    renderSideHistory(tab);
+  }
+
   // ── Tab Navigation ──
   var tabBtns = $$('.tab-btn');
   var tabPanels = $$('.tab-panel');
+
+  var TAB_TO_CAL = { context: 'context', ideas: 'ideas', meeting: 'meeting', proposal: 'proposal', tasks: 'tasks', diagram: 'diagram', journal: 'journal' };
 
   function switchTab(tabName) {
     tabBtns.forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
@@ -156,6 +396,8 @@
     if (btn) { btn.classList.add('active'); btn.setAttribute('aria-selected', 'true'); }
     var panel = $('#tab-' + tabName);
     if (panel) panel.classList.add('active');
+    var calTab = TAB_TO_CAL[tabName];
+    if (calTab) refreshSidePanel(calTab);
   }
 
   tabBtns.forEach(function (btn) {
@@ -283,13 +525,10 @@
   var currentCtxEditId = null;
 
   function showCtxList() {
-    $('#ctx-list-view').style.display = '';
-    $('#ctx-form-view').style.display = 'none';
+    renderContextList();
   }
 
   function showCtxForm() {
-    $('#ctx-list-view').style.display = 'none';
-    $('#ctx-form-view').style.display = '';
   }
 
   function clearContextForm() {
@@ -345,28 +584,10 @@
   }
 
   function renderContextList() {
-    var items = load(CTX_KEY);
-    var ul = $('#ctx-items');
-    if (items.length === 0) {
-      ul.innerHTML = '<li class="empty-state">저장된 컨텍스트가 없습니다</li>';
-      return;
-    }
-    ul.innerHTML = items.map(function (item) {
-      return '<li class="saved-item" data-id="' + item.id + '">' +
-        '<div class="saved-item-info" data-action="load">' +
-          '<div class="saved-item-title">' + escapeHtml(item.project || '(제목 없음)') + '</div>' +
-          '<div class="saved-item-date">' + formatDate(item.createdAt) + '</div>' +
-        '</div>' +
-        '<div class="saved-item-actions">' +
-          '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
-        '</div>' +
-      '</li>';
-    }).join('');
+    refreshSidePanel('context');
   }
 
   $('#ctx-new').addEventListener('click', function () { clearContextForm(); showCtxForm(); });
-  $('#ctx-back').addEventListener('click', function () { showCtxList(); });
-
   $('#ctx-copy').addEventListener('click', function () {
     var text = buildContextPrompt();
     if (!text) { toast('내용을 입력해주세요'); return; }
@@ -392,20 +613,7 @@
 
   $('#ctx-clear').addEventListener('click', function () { clearContextForm(); toast('초기화되었습니다'); });
 
-  $('#ctx-items').addEventListener('click', function (e) {
-    var li = e.target.closest('.saved-item');
-    if (!li) return;
-    var id = li.dataset.id;
-    var items = load(CTX_KEY);
-    if (e.target.closest('[data-action="delete"]')) {
-      save(CTX_KEY, items.filter(function (i) { return i.id !== id; }));
-      renderContextList();
-      toast('삭제되었습니다');
-    } else {
-      var item = items.find(function (i) { return i.id === id; });
-      if (item) { loadContextToForm(item); toast('불러왔습니다'); }
-    }
-  });
+  // ctx-items click handling is now done via side history
 
   // ══════════════════════════════════════
   // 2. 아이디어 보드 탭
@@ -415,13 +623,10 @@
   var currentIdeaSource = null; // { meetingId, meetingTitle }
 
   function showIdeaList() {
-    $('#idea-list-view').style.display = '';
-    $('#idea-form-view').style.display = 'none';
+    renderIdeaBoard();
   }
 
   function showIdeaForm() {
-    $('#idea-list-view').style.display = 'none';
-    $('#idea-form-view').style.display = '';
   }
 
   function clearIdeaForm() {
@@ -475,47 +680,10 @@
   }
 
   function renderIdeaBoard(filter) {
-    var items = load(IDEA_KEY);
-    if (filter) {
-      var q = filter.toLowerCase();
-      items = items.filter(function (i) {
-        return i.title.toLowerCase().includes(q) ||
-          (i.detail && i.detail.toLowerCase().includes(q)) ||
-          i.tags.some(function (t) { return t.toLowerCase().includes(q); });
-      });
-    }
-    var board = $('#idea-board');
-    if (items.length === 0) {
-      board.innerHTML = '<div class="empty-state">아이디어를 추가해보세요</div>';
-      return;
-    }
-    board.innerHTML = items.map(function (item) {
-      var sourceTag = item.sourceMeetingTitle
-        ? '<span class="tag" style="background:rgba(22,163,74,0.1);color:#16a34a">📋 ' + escapeHtml(item.sourceMeetingTitle) + '</span>'
-        : '';
-      return '<div class="idea-card" data-id="' + item.id + '">' +
-        '<div class="idea-card-header">' +
-          '<div class="idea-card-title">' + escapeHtml(item.title) + '</div>' +
-          '<div class="idea-card-actions">' +
-            '<button class="btn btn-small btn-secondary" data-action="edit" title="편집">✎</button>' +
-            '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
-          '</div>' +
-        '</div>' +
-        (item.detail ? '<div class="idea-card-detail">' + escapeHtml(htmlToText(item.detail).slice(0, 200)) + '</div>' : '') +
-        '<div class="idea-card-footer">' +
-          '<div class="idea-tags">' +
-            sourceTag +
-            (item.tags || []).map(function (t) { return '<span class="tag">' + escapeHtml(t) + '</span>'; }).join('') +
-          '</div>' +
-          '<div class="idea-card-date">' + formatDate(item.createdAt) + '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
+    refreshSidePanel('ideas');
   }
 
   $('#idea-new').addEventListener('click', function () { clearIdeaForm(); showIdeaForm(); });
-  $('#idea-back').addEventListener('click', function () { showIdeaList(); });
-
   $('#idea-add').addEventListener('click', function () {
     var data = getIdeaData();
     if (!data.title) { toast('아이디어 제목을 입력해주세요'); return; }
@@ -526,32 +694,14 @@
     items.unshift(data);
     save(IDEA_KEY, items);
     clearIdeaForm();
-    renderIdeaBoard($('#idea-search').value);
+    renderIdeaBoard();
     showIdeaList();
     toast('아이디어가 저장되었습니다');
   });
 
   $('#idea-form-clear').addEventListener('click', function () { clearIdeaForm(); toast('초기화되었습니다'); });
 
-  $('#idea-search').addEventListener('input', function (e) { renderIdeaBoard(e.target.value); });
-
-  $('#idea-board').addEventListener('click', function (e) {
-    var card = e.target.closest('.idea-card');
-    if (!card) return;
-    var id = card.dataset.id;
-    if (e.target.closest('[data-action="delete"]')) {
-      var items = load(IDEA_KEY).filter(function (i) { return i.id !== id; });
-      save(IDEA_KEY, items);
-      renderIdeaBoard($('#idea-search').value);
-      toast('삭제되었습니다');
-    } else if (e.target.closest('[data-action="edit"]')) {
-      var item = load(IDEA_KEY).find(function (i) { return i.id === id; });
-      if (item) {
-        loadIdeaToForm(item);
-        toast('편집 모드');
-      }
-    }
-  });
+  // idea-board click handling is now done via side history
 
   // Idea → Proposal
   $('#idea-to-proposal').addEventListener('click', function () {
@@ -599,15 +749,11 @@
   var currentMtgEditId = null;
 
   function showMtgTypeSelect() {
-    $('#mtg-type-select').style.display = '';
-    $('#mtg-form-view').style.display = 'none';
     renderMeetingList();
   }
 
   function showMtgForm(type) {
     currentMtgType = type || '';
-    $('#mtg-type-select').style.display = 'none';
-    $('#mtg-form-view').style.display = '';
     var badge = $('#mtg-type-badge');
     if (type && MTG_TYPE_LABELS[type]) {
       badge.textContent = MTG_TYPE_LABELS[type];
@@ -926,6 +1072,8 @@
     var filterFolder = $('#mtg-folder-filter').value;
     var filterTag = $('#mtg-ai-tag-filter').value;
     var searchTerm = ($('#mtg-search').value || '').trim().toLowerCase();
+    var calState = getCalState('meeting');
+    var selDate = calState.selectedDate;
 
     populateFolderFilter();
     populateAiTagFilter();
@@ -935,6 +1083,13 @@
       return;
     }
 
+    // 캘린더 날짜 필터
+    if (selDate) {
+      items = items.filter(function (m) {
+        var d = (m.date || m.createdAt || '').slice(0, 10);
+        return d === selDate;
+      });
+    }
     // 필터링
     if (filterFolder) {
       items = items.filter(function (m) { return (m.folder || '') === filterFolder; });
@@ -985,11 +1140,6 @@
   $('#mtg-search').addEventListener('input', function () { renderMeetingList(); });
   $('#mtg-ai-tag-filter').addEventListener('change', function () { renderMeetingList(); });
 
-  $('#mtg-back').addEventListener('click', function () {
-    saveMeetingDraft();
-    showMtgTypeSelect();
-  });
-
   $('#mtg-agenda-add-btn').addEventListener('click', function () {
     var input = $('#mtg-agenda-input');
     addAgendaItem(input.value.trim());
@@ -1026,7 +1176,8 @@
     items.unshift(data);
     save(MTG_KEY, items);
     clearMeetingDraft();
-    showMtgTypeSelect();
+    currentMtgEditId = null;
+    refreshSidePanel('meeting');
     toast('회의 메모가 저장되었습니다');
   });
 
@@ -1050,6 +1201,7 @@
     var items = load(MTG_KEY);
     if (e.target.closest('[data-action="delete"]')) {
       save(MTG_KEY, items.filter(function (i) { return i.id !== id; }));
+      renderMiniCal('meeting');
       renderMeetingList();
       toast('삭제되었습니다');
     } else {
@@ -1709,13 +1861,10 @@
   var currentPropSource = null; // { ideaId, ideaTitle }
 
   function showPropList() {
-    $('#prop-list-view').style.display = '';
-    $('#prop-form-view').style.display = 'none';
+    renderProposalList();
   }
 
   function showPropForm() {
-    $('#prop-list-view').style.display = 'none';
-    $('#prop-form-view').style.display = '';
   }
 
   function showPropSourceLink(title) {
@@ -1868,30 +2017,10 @@
   }
 
   function renderProposalList() {
-    var items = load(PROP_KEY);
-    var ul = $('#prop-items');
-    if (items.length === 0) {
-      ul.innerHTML = '<li class="empty-state">저장된 문서가 없습니다</li>';
-      return;
-    }
-    ul.innerHTML = items.map(function (item) {
-      var sourceTag = item.sourceIdeaTitle
-        ? ' <span class="tag" style="background:rgba(22,163,74,0.1);color:#16a34a;margin-left:6px">💡 ' + escapeHtml(item.sourceIdeaTitle) + '</span>'
-        : '';
-      return '<li class="saved-item" data-id="' + item.id + '">' +
-        '<div class="saved-item-info" data-action="load">' +
-          '<div class="saved-item-title">' + escapeHtml(item.title || '(제목 없음)') + sourceTag + '</div>' +
-          '<div class="saved-item-date">' + formatDate(item.createdAt) + '</div>' +
-        '</div>' +
-        '<div class="saved-item-actions">' +
-          '<button class="btn btn-small btn-danger" data-action="delete" title="삭제">✕</button>' +
-        '</div>' +
-      '</li>';
-    }).join('');
+    refreshSidePanel('proposal');
   }
 
   $('#prop-new').addEventListener('click', function () { clearProposalForm(); showPropForm(); });
-  $('#prop-back').addEventListener('click', function () { showPropList(); });
   $('#prop-add-field').addEventListener('click', function () { addProposalField('', ''); });
 
   $('#prop-fields').addEventListener('click', function (e) {
@@ -1922,20 +2051,7 @@
 
   $('#prop-clear').addEventListener('click', function () { clearProposalForm(); toast('초기화되었습니다'); });
 
-  $('#prop-items').addEventListener('click', function (e) {
-    var li = e.target.closest('.saved-item');
-    if (!li) return;
-    var id = li.dataset.id;
-    var items = load(PROP_KEY);
-    if (e.target.closest('[data-action="delete"]')) {
-      save(PROP_KEY, items.filter(function (i) { return i.id !== id; }));
-      renderProposalList();
-      toast('삭제되었습니다');
-    } else {
-      var item = items.find(function (i) { return i.id === id; });
-      if (item) { loadProposalToForm(item); toast('불러왔습니다'); }
-    }
-  });
+  // prop-items click handling is now done via side history
 
   // Proposal → Excel
   $('#prop-export-excel').addEventListener('click', function () {
@@ -4257,19 +4373,6 @@
 
   // 날짜 이동
   $('#task-date').addEventListener('change', renderTaskList);
-  $('#task-prev-day').addEventListener('click', function () {
-    var d = new Date($('#task-date').value || new Date());
-    d.setDate(d.getDate() - 1);
-    setTaskDate(d.toISOString().slice(0, 10));
-  });
-  $('#task-next-day').addEventListener('click', function () {
-    var d = new Date($('#task-date').value || new Date());
-    d.setDate(d.getDate() + 1);
-    setTaskDate(d.toISOString().slice(0, 10));
-  });
-  $('#task-today').addEventListener('click', function () {
-    setTaskDate(todayStr());
-  });
 
   // 완료 체크 / 삭제 / 편집 / 내일로 복사
   $('#task-list').addEventListener('change', function (e) {
@@ -4436,26 +4539,20 @@
   // 완료 항목 보기 토글
   $('#task-show-done').addEventListener('change', renderTaskList);
 
-  // ── 뷰 토글 (일간 / 히스토리) ──
-  document.querySelectorAll('.task-view-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      document.querySelectorAll('.task-view-btn').forEach(function (b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      var view = btn.dataset.view;
-      $('#task-daily-view').style.display = view === 'daily' ? '' : 'none';
-      $('#task-history-view').style.display = view === 'history' ? '' : 'none';
-      if (view === 'history') renderTaskHistory();
-    });
-  });
+  // View toggle removed — task history is now in the side panel
 
   // ── 히스토리 뷰 렌더링 ──
   function renderTaskHistory() {
     var all = loadTasks();
-    var search = ($('#task-history-search').value || '').trim().toLowerCase();
+    var searchEl = $('#task-history-search');
+    var search = searchEl ? (searchEl.value || '').trim().toLowerCase() : '';
     var stageFilter = $('#task-history-stage-filter').value;
+    var calState = getCalState('tasks');
+    var selDate = calState.selectedDate;
 
     // 필터링
     var filtered = all.filter(function (t) {
+      if (selDate && t.date !== selDate) return false;
       if (stageFilter !== 'all') {
         var ts = t.stage || (t.done ? 'done' : 'todo');
         if (ts !== stageFilter) return false;
@@ -4507,7 +4604,8 @@
   }
 
   // 히스토리 필터 이벤트
-  $('#task-history-search').addEventListener('input', renderTaskHistory);
+  var taskHistSearchEl = $('#task-history-search');
+  if (taskHistSearchEl) taskHistSearchEl.addEventListener('input', renderTaskHistory);
   $('#task-history-stage-filter').addEventListener('change', renderTaskHistory);
 
   // ══════════════════════════════════════
@@ -4743,7 +4841,11 @@
   // ── 갤러리 ──
   function updateGalleryCount() {
     var d = loadDiagrams();
-    $('#dg-gallery-count').textContent = d.length;
+    var el = $('#dg-gallery-count');
+    if (el) el.textContent = d.length;
+    // Also update side history count
+    var countEl = document.querySelector('[data-side-history="diagram"] [data-count]');
+    if (countEl) countEl.textContent = d.length + '건';
   }
 
   function renderGallery() {
@@ -4768,14 +4870,6 @@
     }).join('');
   }
 
-  $('#dg-gallery-toggle').addEventListener('click', function () {
-    var panel = $('#dg-gallery-panel');
-    var vis = panel.style.display !== 'none';
-    panel.style.display = vis ? 'none' : '';
-    if (!vis) renderGallery();
-  });
-  $('#dg-gallery-close').addEventListener('click', function () { $('#dg-gallery-panel').style.display = 'none'; });
-
   $('#dg-gallery-list').addEventListener('click', function (e) {
     var btn = e.target.closest('[data-action]');
     if (!btn) return;
@@ -4795,7 +4889,6 @@
       renderDgResult(dg.code, $('#dg-result-preview'));
       $('#dg-result-card').style.display = '';
       $('#dg-result-title').textContent = dg.name;
-      $('#dg-gallery-panel').style.display = 'none';
       if (dg.prompt) $('#dg-ai-prompt').value = dg.prompt;
       toast('"' + dg.name + '" \uB85C\uB4DC\uB428');
     }
@@ -4936,13 +5029,11 @@
   }
 
   function showJnlList() {
-    $('#jnl-list-view').style.display = '';
-    $('#jnl-form-view').style.display = 'none';
+    renderJnlTable();
   }
 
   function showJnlForm() {
-    $('#jnl-list-view').style.display = 'none';
-    $('#jnl-form-view').style.display = '';
+    // no-op: form always visible in two-column layout
   }
 
   // ── 칼럼 설정 시스템 ──
@@ -5461,11 +5552,8 @@
     renderJnlTable();
     populateJnlCategoryFilter();
     populateJnlColFilters();
+    refreshSidePanel('journal');
     toast('새 항목이 추가되었습니다. 셀을 클릭하여 편집하세요.');
-  });
-
-  $('#jnl-back').addEventListener('click', function () {
-    showJnlList();
   });
 
   $('#jnl-form-clear').addEventListener('click', function () {
@@ -6721,11 +6809,10 @@
 
   // ── Init ──
   function init() {
-    renderContextList();
-    renderIdeaBoard();
+    // Initialize side panels for all tabs
+    refreshSidePanel('context');
     renderMeetingList();
     renderAgendaList();
-    renderProposalList();
     renderTaskList();
     renderJnlHeader();
     renderJnlTable();
@@ -6743,8 +6830,8 @@
       restoreBar.innerHTML = '<span>임시 저장된 회의가 있습니다</span>' +
         '<button class="btn btn-primary btn-small" id="mtg-draft-restore">이어서 작성</button>' +
         '<button class="btn btn-ghost btn-small" id="mtg-draft-discard">삭제</button>';
-      var typeSelect = $('#mtg-type-select');
-      typeSelect.insertBefore(restoreBar, typeSelect.firstChild);
+      var formView = $('#mtg-form-view');
+      formView.insertBefore(restoreBar, formView.firstChild);
 
       $('#mtg-draft-restore').addEventListener('click', function () {
         restoreBar.remove();
