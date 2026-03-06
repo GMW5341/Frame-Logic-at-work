@@ -167,7 +167,7 @@
       case 'proposal': items = load(PROP_KEY); items.forEach(function (i) { var d = (i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
       case 'tasks': items = loadTasks(); items.forEach(function (i) { var d = i.date || ''; if (d) dates[d] = (dates[d] || 0) + 1; }); break;
       case 'diagram': items = loadDiagrams(); items.forEach(function (i) { var d = (i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
-      case 'journal': items = load(JNL_KEY); items.forEach(function (i) { var d = (i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
+      case 'journal': items = load(JNL_KEY); items.forEach(function (i) { var d = (i.date || i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
     }
     return dates;
   }
@@ -290,7 +290,7 @@
           var first = cols[0];
           return first ? (i[first.key] || '(내용 없음)') : (i.category || '(내용 없음)');
         };
-        dateFn = function (i) { return i.createdAt; };
+        dateFn = function (i) { return i.date || i.createdAt; };
         idFn = function (i) { return i.id; };
         break;
     }
