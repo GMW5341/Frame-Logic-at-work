@@ -706,6 +706,10 @@
       var existing = load(MTG_KEY).find(function (m) { return m.id === currentMtgEditId; });
       if (existing) existingAiTag = existing.aiTag || '';
     }
+    // 녹음 텍스트 보존 (blob/url 제외, transcript만 저장)
+    var savedTranscripts = mtgRecordings.map(function (r) {
+      return { id: r.id, duration: r.duration, transcript: r.transcript || '' };
+    }).filter(function (r) { return r.transcript; });
     return {
       id: currentMtgEditId || uid(),
       type: currentMtgType,
@@ -721,6 +725,7 @@
       followup: getMtgSectionText('mtg-sec-followup-body'),
       folder: $('#mtg-folder').value || '',
       aiTag: existingAiTag,
+      transcripts: savedTranscripts,
       createdAt: new Date().toISOString()
     };
   }
@@ -771,6 +776,13 @@
     setMtgSectionText('mtg-sec-decisions-body', item.decisions || '');
     setMtgSectionText('mtg-sec-actions-body', item.actions || '');
     setMtgSectionText('mtg-sec-followup-body', item.followup || '');
+    // 저장된 녹음 텍스트 복원 (오디오 blob은 복원 불가, transcript만 복원)
+    if (Array.isArray(item.transcripts) && item.transcripts.length > 0) {
+      mtgRecordings = item.transcripts.map(function (t) {
+        return { id: t.id || uid(), duration: t.duration || 0, transcript: t.transcript, url: '', blob: null, transcribing: false };
+      });
+      renderRecordings();
+    }
   }
 
   function clearMeetingForm() {
@@ -1004,7 +1016,8 @@
 
   $('#mtg-save').addEventListener('click', function () {
     var data = getMeetingData();
-    if (!data.title && !htmlToText(data.notes).trim()) { toast('회의명 또는 내용을 입력해주세요'); return; }
+    var hasContent = data.title || htmlToText(data.notes).trim() || data.summary || data.discussion || data.decisions || data.actions || data.followup || (data.transcripts && data.transcripts.length > 0);
+    if (!hasContent) { toast('회의명 또는 내용을 입력해주세요'); return; }
     var items = load(MTG_KEY);
     // If editing existing, replace it
     if (currentMtgEditId) {
@@ -1161,13 +1174,13 @@
       } else if (rec.transcript) {
         statusHtml = '<button class="btn btn-small btn-secondary" data-action="view" title="텍스트 원문 보기">📄 원문 보기</button>';
       }
+      var audioHtml = rec.url ? '<audio controls src="' + rec.url + '"></audio>' : '<span style="font-size:0.75rem;color:var(--text-dim)">(저장된 텍스트)</span>';
+      var dlBtn = rec.url ? '<button class="btn btn-small btn-ghost" data-action="dl" title="다운로드">💾</button>' : '';
+      var sttBtn = (!rec.transcript && !rec.transcribing && rec.url) ? '<button class="btn btn-small btn-secondary" data-action="stt" title="텍스트 변환">📝 변환</button>' : '';
       return '<div class="mtg-rec-item" data-idx="' + i + '">' +
         '<div class="mtg-rec-item-top">' +
           '<span class="mtg-rec-label">#' + (i + 1) + ' (' + formatRecTime(rec.duration) + ')</span>' +
-          '<audio controls src="' + rec.url + '"></audio>' +
-          (rec.transcript || rec.transcribing ? '' : '<button class="btn btn-small btn-secondary" data-action="stt" title="텍스트 변환">📝 변환</button>') +
-          statusHtml +
-          '<button class="btn btn-small btn-ghost" data-action="dl" title="다운로드">💾</button>' +
+          audioHtml + sttBtn + statusHtml + dlBtn +
           '<button class="btn btn-small btn-danger" data-action="del" title="삭제">✕</button>' +
         '</div>' +
       '</div>';
