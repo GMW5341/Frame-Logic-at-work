@@ -1634,6 +1634,15 @@
     });
   });
 
+  // ── 커스텀 프롬프트 토글 ──
+  $('#mtg-ai-prompt-toggle').addEventListener('click', function () {
+    var box = $('#mtg-ai-prompt-box');
+    var isVisible = box.style.display !== 'none';
+    box.style.display = isVisible ? 'none' : '';
+    this.classList.toggle('active', !isVisible);
+    if (!isVisible) $('#mtg-ai-custom-prompt').focus();
+  });
+
   // AI 회의록 분석 → 각 섹션에 자동 배치
   $('#mtg-ai-summary').addEventListener('click', function () {
     var settings = loadSettings();
@@ -1679,7 +1688,13 @@
       if (body && !body.textContent.trim()) body.setAttribute('data-placeholder', '분석 중...');
     });
 
+    var customPrompt = ($('#mtg-ai-custom-prompt').value || '').trim();
+
     var systemPrompt = '당신은 회의 내용을 구조적으로 분석하는 전문 비서입니다. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 순수 JSON만 출력하세요.';
+    if (customPrompt) {
+      systemPrompt += '\n\n사용자가 요청한 분석 방식:\n' + customPrompt;
+    }
+
     var userPrompt = '아래 회의 내용을 분석하여 다음 JSON 형식으로 응답해주세요:\n\n' +
       '```json\n{\n' +
       '  "summary": "핵심 요약 (3줄 이내)",\n' +
@@ -1688,7 +1703,9 @@
       '  "actions": "액션 아이템 (담당자-할일-기한, 줄바꿈으로 구분)",\n' +
       '  "followup": "후속 조치 사항 (줄바꿈으로 구분)"\n' +
       '}\n```\n\n' +
-      '각 항목은 마크다운 없이 순수 텍스트로 작성하세요. 불릿은 "• "로 시작하세요.\n\n---\n\n' + textContent;
+      '각 항목은 마크다운 없이 순수 텍스트로 작성하세요. 불릿은 "• "로 시작하세요.\n' +
+      (customPrompt ? '\n**사용자 지시사항**: ' + customPrompt + '\n위 지시사항에 맞게 분석 결과를 조정해주세요.\n' : '') +
+      '\n---\n\n' + textContent;
 
     var modelId = 'claude-sonnet-4-20250514';
     fetch('https://api.anthropic.com/v1/messages', {

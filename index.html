@@ -241,6 +241,17 @@
             <div class="mtg-recordings" id="mtg-recordings"></div>
           </div>
 
+          <!-- AI 분석 커스텀 프롬프트 -->
+          <div class="mtg-ai-prompt-area">
+            <div class="mtg-ai-prompt-toggle-row">
+              <button class="btn btn-ghost btn-small" id="mtg-ai-prompt-toggle">🎯 분석 방식 설정</button>
+            </div>
+            <div class="mtg-ai-prompt-box" id="mtg-ai-prompt-box" style="display:none;">
+              <textarea id="mtg-ai-custom-prompt" rows="4" class="mtg-ai-prompt-input" placeholder="예: 액션 아이템 위주로 정리해줘 / 참석자별 발언 요약 / 결정사항만 추출해줘..."></textarea>
+              <div class="mtg-ai-prompt-hint">이 회의에 적용할 AI 분석 방식을 자유롭게 작성하세요. 비워두면 기본 분석을 수행합니다.</div>
+            </div>
+          </div>
+
           <!-- AI 분석 버튼 -->
           <div class="btn-row" style="margin:16px 0">
             <button class="btn btn-primary" id="mtg-ai-summary" style="flex:1">🤖 AI 회의록 분석</button>
