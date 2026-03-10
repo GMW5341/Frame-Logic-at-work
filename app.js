@@ -1398,7 +1398,7 @@
       }
       var audioHtml = rec.url ? '<audio controls src="' + rec.url + '"></audio>' : '<span style="font-size:0.75rem;color:var(--text-dim)">(저장된 텍스트)</span>';
       var dlBtn = rec.url ? '<button class="btn btn-small btn-ghost" data-action="dl" title="다운로드">💾</button>' : '';
-      var sttBtn = (!rec.transcript && !rec.transcribing && rec.url) ? '<button class="btn btn-small btn-secondary" data-action="stt" title="텍스트 변환">📝 변환</button>' : '';
+      var sttBtn = (!rec.transcript && !rec.transcribing && (rec.url || rec.blob)) ? '<button class="btn btn-small btn-secondary" data-action="stt" title="텍스트 변환">📝 변환</button>' : '';
       return '<div class="mtg-rec-item" data-idx="' + i + '">' +
         '<div class="mtg-rec-item-top">' +
           '<span class="mtg-rec-label">#' + (i + 1) + ' (' + formatRecTime(rec.duration) + ')</span>' +
@@ -1421,6 +1421,11 @@
 
     var rec = mtgRecordings[recIndex];
     if (!rec) return;
+    if (!blob && !rec.blob) {
+      toast('오디오 데이터가 없습니다. 녹음을 다시 진행하거나 파일을 업로드해주세요.');
+      return;
+    }
+    var uploadBlob = blob || rec.blob;
     rec.transcribing = true;
     renderRecordings();
     $('#mtg-rec-stt-status').textContent = '변환 중...';
@@ -1432,7 +1437,7 @@
         'Authorization': apiKey,
         'Content-Type': 'application/octet-stream'
       },
-      body: blob
+      body: uploadBlob
     })
     .then(function (res) {
       if (!res.ok) {
@@ -1470,8 +1475,9 @@
       return res.json();
     })
     .then(function (transcriptData) {
-      // Step 3: 폴링으로 결과 대기
-      return assemblyPollResult(apiKey, transcriptData.id);
+      // Step 3: 폴링으로 결과 대기 (음성 길이에 비례한 타임아웃)
+      var durationSec = rec.duration || 0;
+      return assemblyPollResult(apiKey, transcriptData.id, durationSec);
     })
     .then(function (result) {
       rec.transcribing = false;
@@ -1506,10 +1512,14 @@
     });
   }
 
-  function assemblyPollResult(apiKey, transcriptId) {
+  function assemblyPollResult(apiKey, transcriptId, audioDurationSec) {
     return new Promise(function (resolve, reject) {
       var attempts = 0;
-      var maxAttempts = 60; // 최대 5분 (5초 간격 × 60회)
+      // 음성 길이에 비례: 최소 5분, 음성 길이의 50% 또는 30분 중 큰 값 (5초 간격)
+      var minWaitSec = 300; // 5분
+      var dynamicWaitSec = Math.max((audioDurationSec || 0) * 0.5, 1800); // 음성의 50% 또는 30분
+      var maxWaitSec = Math.max(minWaitSec, dynamicWaitSec);
+      var maxAttempts = Math.ceil(maxWaitSec / 5);
 
       function poll() {
         fetch('https://api.assemblyai.com/v2/transcript/' + transcriptId, {
@@ -1604,7 +1614,7 @@
     if (!rec) return;
 
     if (e.target.closest('[data-action="stt"]')) {
-      assemblyUploadAndTranscribe(rec.blob, idx);
+      assemblyUploadAndTranscribe(rec.blob || null, idx);
     }
 
     if (e.target.closest('[data-action="dl"]')) {
