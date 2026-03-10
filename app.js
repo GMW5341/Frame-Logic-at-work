@@ -16,6 +16,71 @@
     localStorage.setItem(key, JSON.stringify(data));
   }
 
+  // ── IndexedDB: 오디오 blob 저장소 ──
+  var AUDIO_DB_NAME = 'fl_audio_store';
+  var AUDIO_DB_VERSION = 1;
+  var AUDIO_STORE_NAME = 'recordings';
+
+  function openAudioDB() {
+    return new Promise(function (resolve, reject) {
+      var request = indexedDB.open(AUDIO_DB_NAME, AUDIO_DB_VERSION);
+      request.onupgradeneeded = function (e) {
+        var db = e.target.result;
+        if (!db.objectStoreNames.contains(AUDIO_STORE_NAME)) {
+          db.createObjectStore(AUDIO_STORE_NAME, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = function (e) { resolve(e.target.result); };
+      request.onerror = function (e) { reject(e.target.error); };
+    });
+  }
+
+  function saveAudioBlob(id, blob) {
+    return openAudioDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(AUDIO_STORE_NAME, 'readwrite');
+        tx.objectStore(AUDIO_STORE_NAME).put({ id: id, blob: blob, savedAt: Date.now() });
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function (e) { reject(e.target.error); };
+      });
+    });
+  }
+
+  function loadAudioBlob(id) {
+    return openAudioDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(AUDIO_STORE_NAME, 'readonly');
+        var req = tx.objectStore(AUDIO_STORE_NAME).get(id);
+        req.onsuccess = function () { resolve(req.result ? req.result.blob : null); };
+        req.onerror = function (e) { reject(e.target.error); };
+      });
+    });
+  }
+
+  function deleteAudioBlob(id) {
+    return openAudioDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(AUDIO_STORE_NAME, 'readwrite');
+        tx.objectStore(AUDIO_STORE_NAME).delete(id);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function (e) { reject(e.target.error); };
+      });
+    });
+  }
+
+  function deleteAudioBlobsForMeeting(recIds) {
+    if (!recIds || !recIds.length) return Promise.resolve();
+    return openAudioDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(AUDIO_STORE_NAME, 'readwrite');
+        var store = tx.objectStore(AUDIO_STORE_NAME);
+        recIds.forEach(function (id) { store.delete(id); });
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function (e) { reject(e.target.error); };
+      });
+    });
+  }
+
   function toast(msg) {
     var el = $('#toast');
     el.textContent = msg;
@@ -921,10 +986,10 @@
       var existing = load(MTG_KEY).find(function (m) { return m.id === currentMtgEditId; });
       if (existing) existingAiTag = existing.aiTag || '';
     }
-    // 녹음 텍스트 보존 (blob/url 제외, transcript만 저장)
+    // 녹음 메타데이터 보존 (blob/url 제외, id·duration·transcript 저장)
     var savedTranscripts = mtgRecordings.map(function (r) {
       return { id: r.id, duration: r.duration, transcript: r.transcript || '' };
-    }).filter(function (r) { return r.transcript; });
+    });
     var allSections = getMtgAllSections();
     var result = {
       id: currentMtgEditId || uid(),
@@ -995,12 +1060,24 @@
         return { key: s.key, label: s.label, text: item[s.key] || '' };
       }));
     }
-    // 저장된 녹음 텍스트 복원 (오디오 blob은 복원 불가, transcript만 복원)
+    // 저장된 녹음 복원 (오디오 blob은 IndexedDB에서 복원)
     if (Array.isArray(item.transcripts) && item.transcripts.length > 0) {
       mtgRecordings = item.transcripts.map(function (t) {
-        return { id: t.id || uid(), duration: t.duration || 0, transcript: t.transcript, url: '', blob: null, transcribing: false };
+        return { id: t.id || uid(), duration: t.duration || 0, transcript: t.transcript || '', url: '', blob: null, transcribing: false };
       });
       renderRecordings();
+      // IndexedDB에서 오디오 blob 복원
+      mtgRecordings.forEach(function (rec, idx) {
+        loadAudioBlob(rec.id).then(function (blob) {
+          if (blob) {
+            rec.blob = blob;
+            rec.url = URL.createObjectURL(blob);
+            renderRecordings();
+          }
+        }).catch(function (err) {
+          console.warn('[IndexedDB] 오디오 복원 실패 (id=' + rec.id + '):', err);
+        });
+      });
     }
   }
 
@@ -1268,6 +1345,14 @@
     var id = item.dataset.id;
     var items = load(MTG_KEY);
     if (e.target.closest('[data-action="delete"]')) {
+      // 해당 회의의 녹음 blob도 IndexedDB에서 삭제
+      var delItem = items.find(function (i) { return i.id === id; });
+      if (delItem && Array.isArray(delItem.transcripts)) {
+        var recIds = delItem.transcripts.map(function (t) { return t.id; }).filter(Boolean);
+        deleteAudioBlobsForMeeting(recIds).catch(function (err) {
+          console.warn('[IndexedDB] 회의 녹음 삭제 실패:', err);
+        });
+      }
       save(MTG_KEY, items.filter(function (i) { return i.id !== id; }));
       renderMiniCal('meeting');
       renderMeetingList();
@@ -1580,6 +1665,11 @@
         mtgRecordings.push(rec);
         renderRecordings();
 
+        // IndexedDB에 오디오 blob 저장
+        saveAudioBlob(rec.id, blob).catch(function (err) {
+          console.error('[IndexedDB] 오디오 저장 실패:', err);
+        });
+
         // AssemblyAI 키가 있으면 자동 변환 시작
         var settings = loadSettings();
         if (settings.assemblyKey) {
@@ -1631,6 +1721,9 @@
 
     if (e.target.closest('[data-action="del"]')) {
       URL.revokeObjectURL(rec.url);
+      deleteAudioBlob(rec.id).catch(function (err) {
+        console.warn('[IndexedDB] 오디오 삭제 실패:', err);
+      });
       mtgRecordings.splice(idx, 1);
       renderRecordings();
       toast('녹음이 삭제되었습니다');
@@ -1689,6 +1782,10 @@
       var rec = { id: uid(), blob: file, url: url, duration: duration, transcript: '', transcribing: false };
       mtgRecordings.push(rec);
       renderRecordings();
+      // IndexedDB에 오디오 blob 저장
+      saveAudioBlob(rec.id, file).catch(function (err) {
+        console.error('[IndexedDB] 업로드 오디오 저장 실패:', err);
+      });
       // 자동 변환 시작
       assemblyUploadAndTranscribe(file, mtgRecordings.length - 1);
       toast('파일 업로드 완료 — 텍스트 변환 시작');
@@ -1698,6 +1795,10 @@
       var rec = { id: uid(), blob: file, url: url, duration: 0, transcript: '', transcribing: false };
       mtgRecordings.push(rec);
       renderRecordings();
+      // IndexedDB에 오디오 blob 저장
+      saveAudioBlob(rec.id, file).catch(function (err) {
+        console.error('[IndexedDB] 업로드 오디오 저장 실패:', err);
+      });
       assemblyUploadAndTranscribe(file, mtgRecordings.length - 1);
       toast('파일 업로드 완료 — 텍스트 변환 시작');
     });
