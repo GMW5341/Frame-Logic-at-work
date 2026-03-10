@@ -257,44 +257,8 @@
             <button class="btn btn-primary" id="mtg-ai-summary" style="flex:1">🤖 AI 회의록 분석</button>
           </div>
 
-          <!-- AI 분석 결과: 구조화된 섹션들 -->
-          <div class="mtg-sections">
-            <div class="mtg-section" id="mtg-sec-summary">
-              <div class="mtg-section-header">
-                <h3>핵심 요약</h3>
-                <button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-summary-body" title="복사">📋</button>
-              </div>
-              <div class="mtg-section-body" id="mtg-sec-summary-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다"></div>
-            </div>
-            <div class="mtg-section" id="mtg-sec-discussion">
-              <div class="mtg-section-header">
-                <h3>주요 논의 내용</h3>
-                <button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-discussion-body" title="복사">📋</button>
-              </div>
-              <div class="mtg-section-body" id="mtg-sec-discussion-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다"></div>
-            </div>
-            <div class="mtg-section" id="mtg-sec-decisions">
-              <div class="mtg-section-header">
-                <h3>결정 사항</h3>
-                <button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-decisions-body" title="복사">📋</button>
-              </div>
-              <div class="mtg-section-body" id="mtg-sec-decisions-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다"></div>
-            </div>
-            <div class="mtg-section" id="mtg-sec-actions">
-              <div class="mtg-section-header">
-                <h3>액션 아이템</h3>
-                <button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-actions-body" title="복사">📋</button>
-              </div>
-              <div class="mtg-section-body" id="mtg-sec-actions-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다"></div>
-            </div>
-            <div class="mtg-section" id="mtg-sec-followup">
-              <div class="mtg-section-header">
-                <h3>후속 조치 사항</h3>
-                <button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-followup-body" title="복사">📋</button>
-              </div>
-              <div class="mtg-section-body" id="mtg-sec-followup-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다"></div>
-            </div>
-          </div>
+          <!-- AI 분석 결과: 동적 섹션 컨테이너 -->
+          <div class="mtg-sections" id="mtg-sections"></div>
 
           <!-- 수동 메모 -->
           <div class="mtg-section mtg-memo-section">

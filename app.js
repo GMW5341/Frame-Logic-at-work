@@ -835,6 +835,72 @@
   }
 
   // -- Data --
+  // ── 동적 섹션 시스템 ──
+  var MTG_DEFAULT_SECTIONS = [
+    { key: 'summary', label: '핵심 요약' },
+    { key: 'discussion', label: '주요 논의 내용' },
+    { key: 'decisions', label: '결정 사항' },
+    { key: 'actions', label: '액션 아이템' },
+    { key: 'followup', label: '후속 조치 사항' }
+  ];
+
+  function renderMtgSections(sectionData) {
+    var container = $('#mtg-sections');
+    if (!container) return;
+    container.innerHTML = '';
+    var entries = sectionData || MTG_DEFAULT_SECTIONS.map(function (s) { return { key: s.key, label: s.label, text: '' }; });
+    entries.forEach(function (sec) {
+      var div = document.createElement('div');
+      div.className = 'mtg-section';
+      div.id = 'mtg-sec-' + sec.key;
+      div.innerHTML =
+        '<div class="mtg-section-header">' +
+          '<h3>' + escapeHtml(sec.label) + '</h3>' +
+          '<div class="mtg-section-header-btns">' +
+            '<button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-' + sec.key + '-body" title="복사">📋</button>' +
+            (isCustomSection(sec.key) ? '<button class="btn btn-small btn-ghost mtg-sec-del" data-key="' + sec.key + '" title="섹션 삭제">✕</button>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="mtg-section-body" id="mtg-sec-' + sec.key + '-body" contenteditable="true" data-placeholder="AI 분석 후 자동 입력됩니다">' + escapeHtml(sec.text || '') + '</div>';
+      container.appendChild(div);
+    });
+    // 복사 버튼 이벤트
+    container.querySelectorAll('.mtg-sec-copy').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var target = $('#' + btn.dataset.target);
+        if (target && target.textContent.trim()) copyToClipboard(target.textContent);
+      });
+    });
+    // 삭제 버튼 이벤트
+    container.querySelectorAll('.mtg-sec-del').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var sec = $('#mtg-sec-' + btn.dataset.key);
+        if (sec) sec.remove();
+      });
+    });
+  }
+
+  function isCustomSection(key) {
+    return !MTG_DEFAULT_SECTIONS.some(function (s) { return s.key === key; });
+  }
+
+  function getMtgAllSections() {
+    var container = $('#mtg-sections');
+    if (!container) return [];
+    var sections = [];
+    container.querySelectorAll('.mtg-section').forEach(function (el) {
+      var key = (el.id || '').replace('mtg-sec-', '');
+      var h3 = el.querySelector('h3');
+      var body = el.querySelector('.mtg-section-body');
+      sections.push({
+        key: key,
+        label: h3 ? h3.textContent.trim() : key,
+        text: body ? body.textContent.trim() : ''
+      });
+    });
+    return sections;
+  }
+
   function getMtgSectionText(id) {
     var el = $('#' + id);
     return el ? el.textContent.trim() : '';
@@ -844,6 +910,9 @@
     var el = $('#' + id);
     if (el) el.textContent = text || '';
   }
+
+  // 초기 기본 섹션 렌더
+  renderMtgSections(null);
 
   function getMeetingData() {
     // 기존 aiTag 보존
@@ -856,7 +925,8 @@
     var savedTranscripts = mtgRecordings.map(function (r) {
       return { id: r.id, duration: r.duration, transcript: r.transcript || '' };
     }).filter(function (r) { return r.transcript; });
-    return {
+    var allSections = getMtgAllSections();
+    var result = {
       id: currentMtgEditId || uid(),
       type: currentMtgType,
       title: $('#mtg-title').value.trim(),
@@ -864,16 +934,15 @@
       attendees: $('#mtg-attendees').value.trim(),
       agenda: mtgAgendaItems.slice(),
       notes: getRich('mtg-notes') ? getRich('mtg-notes').getHTML() : '',
-      summary: getMtgSectionText('mtg-sec-summary-body'),
-      discussion: getMtgSectionText('mtg-sec-discussion-body'),
-      decisions: getMtgSectionText('mtg-sec-decisions-body'),
-      actions: getMtgSectionText('mtg-sec-actions-body'),
-      followup: getMtgSectionText('mtg-sec-followup-body'),
       folder: $('#mtg-folder').value || '',
       aiTag: existingAiTag,
       transcripts: savedTranscripts,
+      sections: allSections,
       createdAt: new Date().toISOString()
     };
+    // 하위 호환: 기본 5개 키도 유지
+    allSections.forEach(function (s) { result[s.key] = s.text; });
+    return result;
   }
 
   function buildMeetingText(item) {
@@ -890,11 +959,12 @@
       item.agenda.forEach(function (a, i) { text += (i + 1) + '. ' + a + '\n'; });
       text += '\n';
     }
-    if (item.summary) text += '## 핵심 요약\n' + item.summary + '\n\n';
-    if (item.discussion) text += '## 주요 논의 내용\n' + item.discussion + '\n\n';
-    if (item.decisions) text += '## 결정 사항\n' + item.decisions + '\n\n';
-    if (item.actions) text += '## 액션 아이템\n' + item.actions + '\n\n';
-    if (item.followup) text += '## 후속 조치 사항\n' + item.followup + '\n\n';
+    var secs = Array.isArray(item.sections) ? item.sections : MTG_DEFAULT_SECTIONS.map(function (s) {
+      return { key: s.key, label: s.label, text: item[s.key] || '' };
+    });
+    secs.forEach(function (s) {
+      if (s.text) text += '## ' + s.label + '\n' + s.text + '\n\n';
+    });
     var notes = htmlToText(item.notes);
     if (notes) text += '## 수동 메모\n' + notes + '\n';
     return text.trim();
@@ -916,12 +986,15 @@
     }
     renderAgendaList();
     if (getRich('mtg-notes')) getRich('mtg-notes').setHTML(item.notes || '');
-    // 구조화된 섹션 복원
-    setMtgSectionText('mtg-sec-summary-body', item.summary || '');
-    setMtgSectionText('mtg-sec-discussion-body', item.discussion || '');
-    setMtgSectionText('mtg-sec-decisions-body', item.decisions || '');
-    setMtgSectionText('mtg-sec-actions-body', item.actions || '');
-    setMtgSectionText('mtg-sec-followup-body', item.followup || '');
+    // 구조화된 섹션 복원 (동적)
+    if (Array.isArray(item.sections) && item.sections.length > 0) {
+      renderMtgSections(item.sections);
+    } else {
+      // 레거시 데이터: 기본 5개 키로 복원
+      renderMtgSections(MTG_DEFAULT_SECTIONS.map(function (s) {
+        return { key: s.key, label: s.label, text: item[s.key] || '' };
+      }));
+    }
     // 저장된 녹음 텍스트 복원 (오디오 blob은 복원 불가, transcript만 복원)
     if (Array.isArray(item.transcripts) && item.transcripts.length > 0) {
       mtgRecordings = item.transcripts.map(function (t) {
@@ -942,12 +1015,8 @@
     try {
       if (getRich('mtg-notes')) getRich('mtg-notes').setHTML('');
     } catch (e) { /* rich editor not yet initialized */ }
-    // 구조화 섹션 초기화
-    setMtgSectionText('mtg-sec-summary-body', '');
-    setMtgSectionText('mtg-sec-discussion-body', '');
-    setMtgSectionText('mtg-sec-decisions-body', '');
-    setMtgSectionText('mtg-sec-actions-body', '');
-    setMtgSectionText('mtg-sec-followup-body', '');
+    // 구조화 섹션 초기화 (기본 섹션으로 리셋)
+    renderMtgSections(null);
     var dateEl = $('#mtg-date');
     if (dateEl) dateEl.value = nowLocalISO();
     var folderEl = $('#mtg-folder');
@@ -975,16 +1044,13 @@
       attendees: ($('#mtg-attendees') && $('#mtg-attendees').value) || '',
       agenda: mtgAgendaItems.slice(),
       notes: getRich('mtg-notes') ? getRich('mtg-notes').getHTML() : '',
-      summary: getMtgSectionText('mtg-sec-summary-body'),
-      discussion: getMtgSectionText('mtg-sec-discussion-body'),
-      decisions: getMtgSectionText('mtg-sec-decisions-body'),
-      actions: getMtgSectionText('mtg-sec-actions-body'),
-      followup: getMtgSectionText('mtg-sec-followup-body'),
+      sections: getMtgAllSections(),
       folder: ($('#mtg-folder') && $('#mtg-folder').value) || '',
       savedAt: Date.now()
     };
     // 내용이 있을 때만 저장
-    if (draft.title || htmlToText(draft.notes).trim() || draft.summary || draft.agenda.length) {
+    var hasSections = Array.isArray(draft.sections) && draft.sections.some(function (s) { return s.text; });
+    if (draft.title || htmlToText(draft.notes).trim() || hasSections || draft.agenda.length) {
       localStorage.setItem(MTG_DRAFT_KEY, JSON.stringify(draft));
     }
   }
@@ -1014,11 +1080,13 @@
     mtgAgendaItems = Array.isArray(draft.agenda) ? draft.agenda.slice() : [];
     renderAgendaList();
     if (getRich('mtg-notes')) getRich('mtg-notes').setHTML(draft.notes || '');
-    setMtgSectionText('mtg-sec-summary-body', draft.summary || '');
-    setMtgSectionText('mtg-sec-discussion-body', draft.discussion || '');
-    setMtgSectionText('mtg-sec-decisions-body', draft.decisions || '');
-    setMtgSectionText('mtg-sec-actions-body', draft.actions || '');
-    setMtgSectionText('mtg-sec-followup-body', draft.followup || '');
+    if (Array.isArray(draft.sections) && draft.sections.length > 0) {
+      renderMtgSections(draft.sections);
+    } else {
+      renderMtgSections(MTG_DEFAULT_SECTIONS.map(function (s) {
+        return { key: s.key, label: s.label, text: draft[s.key] || '' };
+      }));
+    }
     toast('임시 저장된 회의를 복원했습니다');
   }
 
@@ -1262,11 +1330,12 @@
       data.agenda.forEach(function (a, i) { sheetData.push([(i + 1) + '. ' + a]); });
       sheetData.push([]);
     }
-    if (data.summary) { sheetData.push(['핵심 요약']); sheetData.push([data.summary]); sheetData.push([]); }
-    if (data.discussion) { sheetData.push(['주요 논의 내용']); sheetData.push([data.discussion]); sheetData.push([]); }
-    if (data.decisions) { sheetData.push(['결정 사항']); sheetData.push([data.decisions]); sheetData.push([]); }
-    if (data.actions) { sheetData.push(['액션 아이템']); sheetData.push([data.actions]); sheetData.push([]); }
-    if (data.followup) { sheetData.push(['후속 조치 사항']); sheetData.push([data.followup]); sheetData.push([]); }
+    var secs = Array.isArray(data.sections) ? data.sections : MTG_DEFAULT_SECTIONS.map(function (s) {
+      return { key: s.key, label: s.label, text: data[s.key] || '' };
+    });
+    secs.forEach(function (s) {
+      if (s.text) { sheetData.push([s.label]); sheetData.push([s.text]); sheetData.push([]); }
+    });
     var notes = htmlToText(data.notes);
     if (notes) { sheetData.push(['수동 메모']); sheetData.push([notes]); }
     exportAsExcel(data.title || '회의메모', sheetData);
@@ -1287,11 +1356,12 @@
       data.agenda.forEach(function (a, i) { html += (i + 1) + '. ' + escapeHtml(a) + '<br>'; });
       html += '</div>';
     }
-    if (data.summary) html += '<h2>핵심 요약</h2><div>' + escapeHtml(data.summary).replace(/\n/g, '<br>') + '</div>';
-    if (data.discussion) html += '<h2>주요 논의 내용</h2><div>' + escapeHtml(data.discussion).replace(/\n/g, '<br>') + '</div>';
-    if (data.decisions) html += '<h2>결정 사항</h2><div>' + escapeHtml(data.decisions).replace(/\n/g, '<br>') + '</div>';
-    if (data.actions) html += '<h2>액션 아이템</h2><div>' + escapeHtml(data.actions).replace(/\n/g, '<br>') + '</div>';
-    if (data.followup) html += '<h2>후속 조치 사항</h2><div>' + escapeHtml(data.followup).replace(/\n/g, '<br>') + '</div>';
+    var pdfSecs = Array.isArray(data.sections) ? data.sections : MTG_DEFAULT_SECTIONS.map(function (s) {
+      return { key: s.key, label: s.label, text: data[s.key] || '' };
+    });
+    pdfSecs.forEach(function (s) {
+      if (s.text) html += '<h2>' + escapeHtml(s.label) + '</h2><div>' + escapeHtml(s.text).replace(/\n/g, '<br>') + '</div>';
+    });
     if (data.notes) html += '<h2>수동 메모</h2><div>' + data.notes + '</div>';
     exportAsPDF(data.title || '회의메모', html);
   });
@@ -1626,13 +1696,7 @@
   // ══════════════════════════════════════
   // 3-C. AI 요약
   // ══════════════════════════════════════
-  // 섹션 복사 버튼
-  $$('.mtg-sec-copy').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var target = $(('#' + btn.dataset.target));
-      if (target && target.textContent.trim()) copyToClipboard(target.textContent);
-    });
-  });
+  // 섹션 복사 버튼은 renderMtgSections() 내에서 동적 바인딩
 
   // ── 커스텀 프롬프트 토글 ──
   $('#mtg-ai-prompt-toggle').addEventListener('click', function () {
@@ -1680,32 +1744,39 @@
     btn.innerHTML = '<span class="mtg-ai-spinner"></span> AI 분석 중...';
 
     // 섹션에 로딩 상태 표시
-    var sectionIds = ['mtg-sec-summary', 'mtg-sec-discussion', 'mtg-sec-decisions', 'mtg-sec-actions', 'mtg-sec-followup'];
-    sectionIds.forEach(function (id) {
-      var sec = $('#' + id);
-      if (sec) sec.classList.add('mtg-analyzing');
-      var body = $('#' + id + '-body');
+    var container = $('#mtg-sections');
+    container.querySelectorAll('.mtg-section').forEach(function (sec) {
+      sec.classList.add('mtg-analyzing');
+      var body = sec.querySelector('.mtg-section-body');
       if (body && !body.textContent.trim()) body.setAttribute('data-placeholder', '분석 중...');
     });
 
     var customPrompt = ($('#mtg-ai-custom-prompt').value || '').trim();
 
-    var systemPrompt = '당신은 회의 내용을 구조적으로 분석하는 전문 비서입니다. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 순수 JSON만 출력하세요.';
-    if (customPrompt) {
-      systemPrompt += '\n\n사용자가 요청한 분석 방식:\n' + customPrompt;
-    }
+    var systemPrompt = '당신은 회의 내용을 구조적으로 분석하는 전문 비서입니다. 반드시 JSON 형식으로만 응답하세요. 다른 텍스트 없이 순수 JSON만 출력하세요.\n\n' +
+      '응답 형식:\n' +
+      '{ "sections": [ { "key": "영문키", "label": "한글 항목명", "text": "내용" }, ... ] }\n\n' +
+      '규칙:\n' +
+      '- key는 영문 소문자 snake_case (예: action_items, risk_analysis)\n' +
+      '- label은 한글로 된 섹션 제목\n' +
+      '- text는 마크다운 없이 순수 텍스트, 불릿은 "• "로 시작, 줄바꿈으로 구분\n' +
+      '- 분석 방식에 따라 섹션 수와 종류를 자유롭게 구성하세요';
 
-    var userPrompt = '아래 회의 내용을 분석하여 다음 JSON 형식으로 응답해주세요:\n\n' +
-      '```json\n{\n' +
-      '  "summary": "핵심 요약 (3줄 이내)",\n' +
-      '  "discussion": "주요 논의 내용 (불릿 포인트, 줄바꿈으로 구분)",\n' +
-      '  "decisions": "결정 사항 (없으면 빈 문자열)",\n' +
-      '  "actions": "액션 아이템 (담당자-할일-기한, 줄바꿈으로 구분)",\n' +
-      '  "followup": "후속 조치 사항 (줄바꿈으로 구분)"\n' +
-      '}\n```\n\n' +
-      '각 항목은 마크다운 없이 순수 텍스트로 작성하세요. 불릿은 "• "로 시작하세요.\n' +
-      (customPrompt ? '\n**사용자 지시사항**: ' + customPrompt + '\n위 지시사항에 맞게 분석 결과를 조정해주세요.\n' : '') +
-      '\n---\n\n' + textContent;
+    var userPrompt;
+    if (customPrompt) {
+      userPrompt = '아래 회의 내용을 다음 지시사항에 맞게 분석해주세요.\n\n' +
+        '**분석 지시사항**: ' + customPrompt + '\n\n' +
+        '위 지시사항에 맞게 적절한 섹션들을 자유롭게 구성하세요. 기본 항목(핵심 요약, 주요 논의, 결정 사항, 액션 아이템, 후속 조치)에 국한되지 않고, 지시사항에 맞는 새 항목을 만들어도 됩니다.\n\n' +
+        '---\n\n' + textContent;
+    } else {
+      userPrompt = '아래 회의 내용을 분석하여 다음 기본 항목으로 정리해주세요:\n\n' +
+        '- summary (핵심 요약): 3줄 이내\n' +
+        '- discussion (주요 논의 내용): 불릿 포인트\n' +
+        '- decisions (결정 사항): 없으면 빈 문자열\n' +
+        '- actions (액션 아이템): 담당자-할일-기한\n' +
+        '- followup (후속 조치 사항)\n\n' +
+        '---\n\n' + textContent;
+    }
 
     var modelId = 'claude-sonnet-4-20250514';
     fetch('https://api.anthropic.com/v1/messages', {
@@ -1746,17 +1817,25 @@
         parsed = JSON.parse(jsonStr);
       } catch (e) {
         // JSON 파싱 실패 시 전체 텍스트를 핵심 요약에 넣기
-        $('#mtg-sec-summary-body').textContent = raw;
+        renderMtgSections([{ key: 'summary', label: '핵심 요약', text: raw }]);
         toast('AI 분석 완료 (구조 파싱 실패, 원문 표시)');
         return;
       }
 
-      // 각 섹션에 배치
-      $('#mtg-sec-summary-body').textContent = parsed.summary || '';
-      $('#mtg-sec-discussion-body').textContent = parsed.discussion || '';
-      $('#mtg-sec-decisions-body').textContent = parsed.decisions || '';
-      $('#mtg-sec-actions-body').textContent = parsed.actions || '';
-      $('#mtg-sec-followup-body').textContent = parsed.followup || '';
+      // 동적 섹션 렌더링
+      var newSections;
+      if (Array.isArray(parsed.sections)) {
+        // 새 형식: { sections: [...] }
+        newSections = parsed.sections;
+      } else {
+        // 레거시 형식: { summary: "...", discussion: "...", ... }
+        var labelMap = {};
+        MTG_DEFAULT_SECTIONS.forEach(function (s) { labelMap[s.key] = s.label; });
+        newSections = Object.keys(parsed).map(function (key) {
+          return { key: key, label: labelMap[key] || key, text: parsed[key] || '' };
+        }).filter(function (s) { return s.text; });
+      }
+      renderMtgSections(newSections);
 
       toast('AI 회의록 분석이 완료되었습니다');
     })
@@ -1767,10 +1846,10 @@
       btn.disabled = false;
       btn.textContent = '🤖 AI 회의록 분석';
       // 로딩 상태 해제
-      sectionIds.forEach(function (id) {
-        var sec = $('#' + id);
-        if (sec) sec.classList.remove('mtg-analyzing');
-        var body = $('#' + id + '-body');
+      var ctr = $('#mtg-sections');
+      ctr.querySelectorAll('.mtg-section').forEach(function (sec) {
+        sec.classList.remove('mtg-analyzing');
+        var body = sec.querySelector('.mtg-section-body');
         if (body && body.getAttribute('data-placeholder') === '분석 중...') {
           body.setAttribute('data-placeholder', 'AI 분석 후 자동 입력됩니다');
         }

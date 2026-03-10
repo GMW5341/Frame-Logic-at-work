@@ -1049,6 +1049,22 @@ body {
   border-bottom: 1px solid var(--border, #e0e0e0);
 }
 
+.mtg-section-header-btns {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.mtg-sec-del {
+  color: var(--text-secondary, #999) !important;
+  font-size: 0.75rem !important;
+}
+
+.mtg-sec-del:hover {
+  color: #dc2626 !important;
+  background: rgba(220,38,38,0.08) !important;
+}
+
 .mtg-section-header h3 {
   margin: 0;
   font-size: 0.9rem;
