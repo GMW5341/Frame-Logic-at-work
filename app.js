@@ -1060,25 +1060,27 @@
         return { key: s.key, label: s.label, text: item[s.key] || '' };
       }));
     }
-    // 저장된 녹음 복원 (오디오 blob은 IndexedDB에서 복원)
+    // 기존 녹음 초기화 후 해당 회의 녹음만 복원
+    mtgRecordings.forEach(function (r) { if (r.url) URL.revokeObjectURL(r.url); });
+    mtgRecordings = [];
     if (Array.isArray(item.transcripts) && item.transcripts.length > 0) {
       mtgRecordings = item.transcripts.map(function (t) {
         return { id: t.id || uid(), duration: t.duration || 0, transcript: t.transcript || '', url: '', blob: null, transcribing: false };
       });
-      renderRecordings();
-      // IndexedDB에서 오디오 blob 복원
-      mtgRecordings.forEach(function (rec, idx) {
-        loadAudioBlob(rec.id).then(function (blob) {
-          if (blob) {
-            rec.blob = blob;
-            rec.url = URL.createObjectURL(blob);
-            renderRecordings();
-          }
-        }).catch(function (err) {
-          console.warn('[IndexedDB] 오디오 복원 실패 (id=' + rec.id + '):', err);
-        });
-      });
     }
+    renderRecordings();
+    // IndexedDB에서 오디오 blob 복원
+    mtgRecordings.forEach(function (rec) {
+      loadAudioBlob(rec.id).then(function (blob) {
+        if (blob) {
+          rec.blob = blob;
+          rec.url = URL.createObjectURL(blob);
+          renderRecordings();
+        }
+      }).catch(function (err) {
+        console.warn('[IndexedDB] 오디오 복원 실패 (id=' + rec.id + '):', err);
+      });
+    });
   }
 
   function clearMeetingForm() {
@@ -1321,7 +1323,8 @@
     items.unshift(data);
     save(MTG_KEY, items);
     clearMeetingDraft();
-    currentMtgEditId = null;
+    // 저장한 회의를 계속 편집 모드로 유지 (중복 생성 방지)
+    currentMtgEditId = data.id;
     refreshSidePanel('meeting');
     toast('회의 메모가 저장되었습니다');
   });
