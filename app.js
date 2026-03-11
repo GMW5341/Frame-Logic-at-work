@@ -1459,6 +1459,10 @@
   var mtgRecordings = []; // { id, blob, url, duration, transcript, transcribing }
   var mtgRecTimerInterval = null;
   var mtgRecStartTime = 0;
+  var mtgSelectedDeviceId = null; // 마이크 선택 팝업에서 선택된 deviceId
+  var mtgMicPreviewStream = null; // 마이크 미리보기 스트림
+  var mtgMicAnalyser = null;
+  var mtgMicMeterRAF = null;
 
   function formatRecTime(sec) {
     var m = Math.floor(sec / 60);
@@ -1632,22 +1636,121 @@
     });
   }
 
-  // 녹음 시작/중지 토글
-  $('#mtg-rec-btn').addEventListener('click', function () {
-    var btn = this;
+  // ── 마이크 선택 팝업 ──
+  function openMicPicker() {
+    var overlay = $('#mtg-mic-overlay');
+    var list = $('#mtg-mic-list');
+    var confirmBtn = $('#mtg-mic-confirm');
+    var preview = $('#mtg-mic-preview');
+    mtgSelectedDeviceId = null;
+    confirmBtn.disabled = true;
+    preview.style.display = 'none';
+    list.innerHTML = '<div class="mtg-mic-loading">마이크 목록을 불러오는 중...</div>';
+    overlay.classList.add('active');
 
-    // 녹음 중지
-    if (mtgMediaRecorder && mtgMediaRecorder.state === 'recording') {
-      mtgMediaRecorder.stop();
-      clearInterval(mtgRecTimerInterval);
-      btn.classList.remove('recording');
-      btn.textContent = '🎙 녹음 시작';
-      $('#mtg-rec-status').textContent = '';
-      return;
+    // 권한 요청 후 장치 목록 조회
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (tempStream) {
+      // 임시 스트림 즉시 해제 (권한만 얻기 위해)
+      tempStream.getTracks().forEach(function (t) { t.stop(); });
+      return navigator.mediaDevices.enumerateDevices();
+    }).then(function (devices) {
+      var mics = devices.filter(function (d) { return d.kind === 'audioinput'; });
+      if (mics.length === 0) {
+        list.innerHTML = '<div class="mtg-mic-error">연결된 마이크가 없습니다.<br>마이크를 연결한 후 다시 시도해주세요.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      mics.forEach(function (mic, idx) {
+        var item = document.createElement('div');
+        item.className = 'mtg-mic-item';
+        item.dataset.deviceId = mic.deviceId;
+        var label = mic.label || ('마이크 ' + (idx + 1));
+        var isDefault = mic.deviceId === 'default' || (idx === 0 && !mic.deviceId);
+        item.innerHTML =
+          '<div class="mtg-mic-radio"></div>' +
+          '<span class="mtg-mic-name">' + escapeHtml(label) + '</span>' +
+          (isDefault ? '<span class="mtg-mic-default-badge">기본</span>' : '');
+        item.addEventListener('click', function () {
+          selectMicItem(item, mic.deviceId);
+        });
+        list.appendChild(item);
+      });
+    }).catch(function (err) {
+      list.innerHTML = '<div class="mtg-mic-error">마이크 접근이 거부되었습니다.<br>브라우저 설정에서 마이크 권한을 허용해주세요.<br><small>' + escapeHtml(err.message) + '</small></div>';
+    });
+  }
+
+  function selectMicItem(itemEl, deviceId) {
+    // 기존 선택 해제
+    $$('.mtg-mic-item.selected').forEach(function (el) { el.classList.remove('selected'); });
+    itemEl.classList.add('selected');
+    mtgSelectedDeviceId = deviceId;
+    $('#mtg-mic-confirm').disabled = false;
+    // 미리보기 시작
+    startMicPreview(deviceId);
+  }
+
+  function startMicPreview(deviceId) {
+    stopMicPreview();
+    var preview = $('#mtg-mic-preview');
+    var meter = $('#mtg-mic-meter');
+    var status = $('#mtg-mic-preview-status');
+    preview.style.display = '';
+    status.textContent = '연결 중...';
+    meter.style.width = '0%';
+
+    var constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true };
+    navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
+      mtgMicPreviewStream = stream;
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var source = ctx.createMediaStreamSource(stream);
+      var analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      mtgMicAnalyser = { ctx: ctx, analyser: analyser };
+
+      var dataArray = new Uint8Array(analyser.frequencyBinCount);
+      status.textContent = '마이크가 연결되었습니다 — 소리를 내서 확인해보세요';
+
+      function drawMeter() {
+        if (!mtgMicPreviewStream) return;
+        analyser.getByteFrequencyData(dataArray);
+        var sum = 0;
+        for (var i = 0; i < dataArray.length; i++) sum += dataArray[i];
+        var avg = sum / dataArray.length;
+        var pct = Math.min(100, Math.round((avg / 128) * 100));
+        meter.style.width = pct + '%';
+        meter.style.background = pct > 60 ? '#ef4444' : pct > 30 ? '#f59e0b' : '#22c55e';
+        mtgMicMeterRAF = requestAnimationFrame(drawMeter);
+      }
+      drawMeter();
+    }).catch(function (err) {
+      status.textContent = '마이크 연결 실패: ' + err.message;
+    });
+  }
+
+  function stopMicPreview() {
+    if (mtgMicMeterRAF) { cancelAnimationFrame(mtgMicMeterRAF); mtgMicMeterRAF = null; }
+    if (mtgMicAnalyser && mtgMicAnalyser.ctx) {
+      try { mtgMicAnalyser.ctx.close(); } catch (e) {}
+      mtgMicAnalyser = null;
     }
+    if (mtgMicPreviewStream) {
+      mtgMicPreviewStream.getTracks().forEach(function (t) { t.stop(); });
+      mtgMicPreviewStream = null;
+    }
+  }
 
-    // 녹음 시작 - 마이크 권한 요청
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+  function closeMicPicker() {
+    stopMicPreview();
+    $('#mtg-mic-overlay').classList.remove('active');
+  }
+
+  function startRecordingWithDevice(deviceId) {
+    var btn = $('#mtg-rec-btn');
+    var constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true };
+
+    navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
       mtgAudioChunks = [];
       mtgMediaRecorder = new MediaRecorder(stream);
 
@@ -1693,6 +1796,36 @@
     }).catch(function (err) {
       toast('마이크 접근 실패: ' + err.message);
     });
+  }
+
+  // 마이크 선택 팝업 이벤트
+  $('#mtg-mic-close').addEventListener('click', closeMicPicker);
+  $('#mtg-mic-cancel').addEventListener('click', closeMicPicker);
+  $('#mtg-mic-overlay').addEventListener('click', function (e) {
+    if (e.target === this) closeMicPicker();
+  });
+  $('#mtg-mic-confirm').addEventListener('click', function () {
+    var deviceId = mtgSelectedDeviceId;
+    closeMicPicker();
+    startRecordingWithDevice(deviceId);
+  });
+
+  // 녹음 시작/중지 토글
+  $('#mtg-rec-btn').addEventListener('click', function () {
+    var btn = this;
+
+    // 녹음 중지
+    if (mtgMediaRecorder && mtgMediaRecorder.state === 'recording') {
+      mtgMediaRecorder.stop();
+      clearInterval(mtgRecTimerInterval);
+      btn.classList.remove('recording');
+      btn.textContent = '🎙 녹음 시작';
+      $('#mtg-rec-status').textContent = '';
+      return;
+    }
+
+    // 녹음 시작 → 마이크 선택 팝업 열기
+    openMicPicker();
   });
 
   // 녹음 목록 - 변환/다운로드/삭제

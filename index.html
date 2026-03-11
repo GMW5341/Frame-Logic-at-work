@@ -296,6 +296,33 @@
             </div>
           </div>
 
+          <!-- 마이크 선택 팝업 모달 -->
+          <div class="modal-overlay" id="mtg-mic-overlay">
+            <div class="modal-content mtg-mic-modal">
+              <div class="modal-header">
+                <h3>🎙 마이크 설정</h3>
+                <button class="btn btn-ghost btn-small" id="mtg-mic-close">✕</button>
+              </div>
+              <div class="mtg-mic-body">
+                <p class="mtg-mic-desc">녹음에 사용할 마이크를 선택하세요.</p>
+                <div class="mtg-mic-list" id="mtg-mic-list">
+                  <div class="mtg-mic-loading">마이크 목록을 불러오는 중...</div>
+                </div>
+                <div class="mtg-mic-preview" id="mtg-mic-preview" style="display:none">
+                  <label class="mtg-mic-preview-label">입력 레벨</label>
+                  <div class="mtg-mic-meter-bg">
+                    <div class="mtg-mic-meter-bar" id="mtg-mic-meter"></div>
+                  </div>
+                  <span class="mtg-mic-preview-status" id="mtg-mic-preview-status">대기 중</span>
+                </div>
+              </div>
+              <div class="btn-row" style="margin-top:16px">
+                <button class="btn btn-ghost" id="mtg-mic-cancel">취소</button>
+                <button class="btn btn-primary" id="mtg-mic-confirm" disabled>이 마이크로 녹음 시작</button>
+              </div>
+            </div>
+          </div>
+
           <!-- 기존 호환용 숨김 필드 -->
           <textarea id="mtg-decisions" style="display:none"></textarea>
           <textarea id="mtg-actions" style="display:none"></textarea>

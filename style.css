@@ -1118,6 +1118,135 @@ body {
   white-space: pre-wrap;
 }
 
+/* ===== 마이크 선택 팝업 ===== */
+.mtg-mic-modal {
+  max-width: 480px;
+}
+
+.mtg-mic-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary, #666);
+  margin: 0 0 12px;
+}
+
+.mtg-mic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.mtg-mic-loading {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-secondary, #999);
+  font-size: 0.85rem;
+}
+
+.mtg-mic-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 2px solid var(--border, #e0e0e0);
+  border-radius: var(--radius, 6px);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-size: 0.88rem;
+}
+
+.mtg-mic-item:hover {
+  background: var(--surface, #f8f9fa);
+}
+
+.mtg-mic-item.selected {
+  border-color: var(--primary, #2563eb);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.mtg-mic-item .mtg-mic-radio {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border, #ccc);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.mtg-mic-item.selected .mtg-mic-radio {
+  border-color: var(--primary, #2563eb);
+}
+
+.mtg-mic-item.selected .mtg-mic-radio::after {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--primary, #2563eb);
+}
+
+.mtg-mic-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mtg-mic-default-badge {
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  background: var(--surface, #e8e8e8);
+  border-radius: 4px;
+  color: var(--text-secondary, #666);
+  flex-shrink: 0;
+}
+
+.mtg-mic-preview {
+  margin-top: 14px;
+  padding: 12px;
+  background: var(--surface, #f8f9fa);
+  border-radius: var(--radius, 6px);
+}
+
+.mtg-mic-preview-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.mtg-mic-meter-bg {
+  height: 8px;
+  background: var(--border, #e0e0e0);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mtg-mic-meter-bar {
+  height: 100%;
+  width: 0%;
+  background: #22c55e;
+  border-radius: 4px;
+  transition: width 0.1s ease;
+}
+
+.mtg-mic-preview-status {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #999);
+  margin-top: 4px;
+  display: block;
+}
+
+.mtg-mic-error {
+  padding: 16px;
+  text-align: center;
+  color: #dc2626;
+  font-size: 0.88rem;
+}
+
 /* ===== AI 분석 중 상태 ===== */
 .mtg-ai-spinner {
   display: inline-block;
