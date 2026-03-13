@@ -376,6 +376,17 @@
               <button class="btn btn-secondary" id="mtg-export-excel">📊 Excel</button>
               <button class="btn btn-secondary" id="mtg-export-pdf">📄 PDF</button>
             </div>
+            <div class="btn-row">
+              <div class="mtg-export-dropdown" style="flex:1;position:relative">
+                <button class="btn btn-secondary" id="mtg-export-analysis" style="width:100%">📤 분석결과 내보내기</button>
+                <div class="mtg-export-menu" id="mtg-export-menu" style="display:none">
+                  <button class="mtg-export-option" data-format="clipboard">📋 클립보드 복사</button>
+                  <button class="mtg-export-option" data-format="markdown">📝 Markdown (.md)</button>
+                  <button class="mtg-export-option" data-format="text">📄 텍스트 (.txt)</button>
+                  <button class="mtg-export-option" data-format="json">🗂 JSON (.json)</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- 텍스트 원문 팝업 모달 -->

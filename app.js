@@ -919,9 +919,16 @@
       var div = document.createElement('div');
       div.className = 'mtg-section';
       div.id = 'mtg-sec-' + sec.key;
+      // 신뢰도 배지 (#13)
+      var confBadge = '';
+      if (typeof sec.confidence === 'number') {
+        var confPct = Math.round(sec.confidence * 100);
+        var confClass = sec.confidence >= 0.8 ? 'high' : (sec.confidence >= 0.5 ? 'mid' : 'low');
+        confBadge = '<span class="mtg-confidence mtg-confidence-' + confClass + '" title="분석 신뢰도 ' + confPct + '%">' + confPct + '%</span>';
+      }
       div.innerHTML =
         '<div class="mtg-section-header">' +
-          '<h3>' + escapeHtml(sec.label) + '</h3>' +
+          '<h3>' + escapeHtml(sec.label) + confBadge + '</h3>' +
           '<div class="mtg-section-header-btns">' +
             '<button class="btn btn-small btn-ghost mtg-sec-reanalyze" data-key="' + sec.key + '" data-label="' + escapeHtml(sec.label) + '" title="이 섹션만 재분석">🔄</button>' +
             '<button class="btn btn-small btn-ghost mtg-sec-copy" data-target="mtg-sec-' + sec.key + '-body" title="복사">📋</button>' +
@@ -1573,18 +1580,29 @@
         throw new Error('업로드 응답에 upload_url이 없습니다');
       }
       // Step 2: 변환 요청 (한국어는 best/conformer-2 모델만 지원)
+      // 참석자 이름을 word_boost로 전달하여 인식 정확도 향상
+      var attendeesStr = ($('#mtg-attendees').value || '').trim();
+      var wordBoost = [];
+      if (attendeesStr) {
+        wordBoost = attendeesStr.split(',').map(function (a) { return a.trim(); }).filter(Boolean);
+      }
+      var transcriptBody = {
+        audio_url: uploadData.upload_url,
+        language_code: 'ko',
+        speech_models: ['universal-2'],
+        speaker_labels: true
+      };
+      if (wordBoost.length > 0) {
+        transcriptBody.word_boost = wordBoost;
+        transcriptBody.boost_param = 'high';
+      }
       return fetch('https://api.assemblyai.com/v2/transcript', {
         method: 'POST',
         headers: {
           'Authorization': apiKey,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          audio_url: uploadData.upload_url,
-          language_code: 'ko',
-          speech_models: ['universal-2'],
-          speaker_labels: true
-        })
+        body: JSON.stringify(transcriptBody)
       });
     })
     .then(function (res) {
@@ -2050,7 +2068,7 @@
       '반드시 JSON 형식으로만 응답하세요. 다른 텍스트 없이 순수 JSON만 출력하세요.\n\n' +
       '응답 형식:\n' +
       '{\n' +
-      '  "sections": [ { "key": "영문키", "label": "한글 항목명", "text": "내용" }, ... ],\n' +
+      '  "sections": [ { "key": "영문키", "label": "한글 항목명", "text": "내용", "confidence": 0.0~1.0 }, ... ],\n' +
       '  "keywords": ["키워드1", "키워드2", ...],\n' +
       '  "action_items": [ { "assignee": "담당자", "task": "할 일", "deadline": "기한", "priority": "urgent|high|normal" }, ... ]\n' +
       '}\n\n' +
@@ -2058,6 +2076,7 @@
       '- key는 영문 소문자 snake_case\n' +
       '- label은 한글로 된 섹션 제목\n' +
       '- text는 마크다운 없이 순수 텍스트, 불릿은 "• "로 시작, 줄바꿈으로 구분\n' +
+      '- confidence: 각 섹션의 분석 신뢰도 (0.0~1.0). 원문에 명확히 언급된 내용은 0.9 이상, 추론한 내용은 0.5~0.8, 불확실한 내용은 0.5 미만\n' +
       '- keywords: 이 회의의 핵심 키워드 3~7개\n' +
       '- action_items: 회의에서 도출된 액션 아이템을 구조화. assignee가 불명확하면 "미정"으로\n' +
       '- 분석 시 단순 요약이 아닌 "왜 이것이 중요한지" 맥락을 포함하세요\n' +
@@ -2129,6 +2148,27 @@
     return { textContent: textContent, hasContent: !!(recTexts || manualNotes), data: data };
   }
 
+  // ── 컨텍스트 탭 연동 빌더 (#5) ──
+  function buildContextTabContent() {
+    var ctxItems = load(CTX_KEY);
+    if (ctxItems.length === 0) return '';
+    // 최신 3개 컨텍스트만 포함
+    var relevant = ctxItems.slice(0, 3);
+    var ctx = '\n\n## 프로젝트 컨텍스트 (컨텍스트 탭 연동)\n';
+    relevant.forEach(function (item) {
+      if (item.project) ctx += '### 프로젝트: ' + item.project + '\n';
+      var bg = htmlToText(item.background || '').trim();
+      var goal = htmlToText(item.goal || '').trim();
+      var constraints = htmlToText(item.constraints || '').trim();
+      if (bg) ctx += '배경: ' + bg.slice(0, 500) + '\n';
+      if (goal) ctx += '목표: ' + goal.slice(0, 300) + '\n';
+      if (constraints) ctx += '제약조건: ' + constraints.slice(0, 300) + '\n';
+      ctx += '\n';
+    });
+    ctx += '위 프로젝트 맥락을 고려하여 회의 내용을 분석해주세요.\n';
+    return ctx;
+  }
+
   // ── Task 컨텍스트 빌더 (#7) ──
   function buildTaskContext() {
     var tasks = loadTasks();
@@ -2150,26 +2190,47 @@
   }
 
   // ── 이전 회의 참조 빌더 ──
-  function buildPreviousMeetingContext(currentFolder, currentDate) {
+  function buildPreviousMeetingContext(currentFolder, currentDate, currentType) {
     var meetings = load(MTG_KEY);
-    var relevant = meetings.filter(function (m) {
+    var currentId = currentMtgEditId;
+
+    // 같은 폴더 이전 회의 (최대 2개)
+    var byFolder = meetings.filter(function (m) {
+      if (m.id === currentId) return false;
       if (currentFolder && m.folder && m.folder === currentFolder) return true;
       return false;
     }).filter(function (m) {
       return m.date && m.date < currentDate;
     }).sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); }).slice(0, 2);
 
+    // 같은 유형 이전 회의 (폴더 다르더라도, 최대 1개)
+    var byType = [];
+    if (currentType) {
+      byType = meetings.filter(function (m) {
+        if (m.id === currentId) return false;
+        if (byFolder.some(function (bf) { return bf.id === m.id; })) return false;
+        return m.type === currentType && m.date && m.date < currentDate;
+      }).sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); }).slice(0, 1);
+    }
+
+    var relevant = byFolder.concat(byType);
     if (relevant.length === 0) return '';
+
     var ctx = '\n\n## 이전 관련 회의 참고\n';
+    ctx += '아래 이전 회의의 결정사항, 액션아이템, 후속조치를 참고하여 연속성 있는 분석을 해주세요.\n';
+    ctx += '이전 결정사항이 이번 회의에서 어떻게 진행되었는지, 미완료 액션이 언급되었는지 확인해주세요.\n\n';
     relevant.forEach(function (m) {
-      ctx += '--- ' + (m.title || '제목없음') + ' (' + (m.date || '') + ') ---\n';
+      ctx += '--- ' + (m.title || '제목없음') + ' (' + (m.date || '') + ')';
+      if (m.type) ctx += ' [' + (MTG_TYPE_LABELS[m.type] || m.type) + ']';
+      ctx += ' ---\n';
       if (m.sections) {
         m.sections.forEach(function (s) {
-          if (s.key === 'decisions' || s.key === 'actions' || s.key === 'followup') {
-            if (s.text) ctx += s.label + ': ' + s.text.slice(0, 300) + '\n';
+          if (s.key === 'summary' || s.key === 'decisions' || s.key === 'actions' || s.key === 'followup' || s.key === 'risk') {
+            if (s.text) ctx += s.label + ': ' + s.text.slice(0, 400) + '\n';
           }
         });
       }
+      ctx += '\n';
     });
     return ctx;
   }
@@ -2495,7 +2556,7 @@
     $('#mtg-ai-progress').style.display = 'none';
   }
 
-  // ── Claude API 호출 (공통) ──
+  // ── Claude API 호출 (공통, 비스트리밍) ──
   function callMtgClaudeAPI(systemPrompt, messages, modelId, maxTokens) {
     var settings = loadSettings();
     return fetch('https://api.anthropic.com/v1/messages', {
@@ -2518,6 +2579,78 @@
     }).then(function (data) {
       trackApiUsage(modelId, data.usage);
       return data;
+    });
+  }
+
+  // ── Claude API 스트리밍 호출 (#16) ──
+  function callMtgClaudeAPIStream(systemPrompt, messages, modelId, maxTokens, onChunk) {
+    var settings = loadSettings();
+    return fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': settings.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: modelId,
+        max_tokens: maxTokens,
+        stream: true,
+        system: systemPrompt,
+        messages: messages
+      })
+    }).then(function (res) {
+      if (!res.ok) return res.text().then(function (body) {
+        var errMsg = 'API 오류';
+        try { var d = JSON.parse(body); errMsg = d.error && d.error.message || errMsg; } catch (e) {}
+        throw new Error(errMsg);
+      });
+      return new Promise(function (resolve, reject) {
+        var reader = res.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+        var fullText = '';
+        var usage = null;
+
+        function processLine(line) {
+          if (!line.startsWith('data: ')) return;
+          var jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') return;
+          try {
+            var evt = JSON.parse(jsonStr);
+            if (evt.type === 'content_block_delta' && evt.delta && evt.delta.text) {
+              fullText += evt.delta.text;
+              if (onChunk) onChunk(fullText, evt.delta.text);
+            }
+            if (evt.type === 'message_delta' && evt.usage) {
+              usage = { input_tokens: 0, output_tokens: evt.usage.output_tokens };
+            }
+            if (evt.type === 'message_start' && evt.message && evt.message.usage) {
+              usage = usage || {};
+              usage.input_tokens = evt.message.usage.input_tokens;
+            }
+          } catch (e) { /* skip parse errors */ }
+        }
+
+        function read() {
+          reader.read().then(function (result) {
+            if (result.done) {
+              // process remaining buffer
+              if (buffer) buffer.split('\n').forEach(processLine);
+              if (usage) trackApiUsage(modelId, usage);
+              resolve({ content: [{ text: fullText }], usage: usage });
+              return;
+            }
+            buffer += decoder.decode(result.value, { stream: true });
+            var lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            lines.forEach(processLine);
+            read();
+          }).catch(reject);
+        }
+        read();
+      });
     });
   }
 
@@ -2545,13 +2678,16 @@
 
     var textContent = built.textContent;
 
+    // 컨텍스트 탭 연동 (#5)
+    textContent += buildContextTabContent();
+
     // Task 컨텍스트 (#7)
     if ($('#mtg-ai-include-tasks').checked) {
       textContent += buildTaskContext();
     }
 
-    // 이전 회의 참조
-    textContent += buildPreviousMeetingContext(built.data.folder, built.data.date);
+    // 이전 회의 참조 (#6) — 같은 폴더 or 같은 유형 이전 회의
+    textContent += buildPreviousMeetingContext(built.data.folder, built.data.date, built.data.type);
 
     // 프리셋에 따른 유저 프롬프트
     var userPrompt;
@@ -2638,9 +2774,22 @@
           clearMtgLoadingState();
         });
     } else {
-      // ── 1-pass 분석 ──
-      showProgress('분석 중...', 40);
-      callMtgClaudeAPI(systemPrompt, [{ role: 'user', content: userPrompt }], modelId, maxTokens)
+      // ── 1-pass 분석 (스트리밍 #16) ──
+      showProgress('분석 중...', 20);
+      // 스트리밍 미리보기용 섹션
+      renderMtgSections([{ key: 'stream_preview', label: '분석 중...', text: '' }]);
+      var previewBody = $('#mtg-sec-stream_preview-body');
+
+      callMtgClaudeAPIStream(systemPrompt, [{ role: 'user', content: userPrompt }], modelId, maxTokens, function (fullText, chunk) {
+        // 스트리밍 중 실시간 미리보기
+        if (previewBody) {
+          // 짧은 미리보기 (마지막 500자)
+          var preview = fullText.length > 500 ? '...' + fullText.slice(-500) : fullText;
+          previewBody.textContent = preview;
+        }
+        var pct = Math.min(20 + Math.round(fullText.length / (maxTokens * 2) * 70), 85);
+        showProgress('스트리밍 수신 중... (' + fullText.length + '자)', pct);
+      })
         .then(function (respData) {
           showProgress('결과 처리 중...', 90);
           var raw = respData.content[0].text.trim();
@@ -2779,6 +2928,114 @@
       e.preventDefault();
       sendFollowupQuestion();
     }
+  });
+
+  // ── 분석결과 내보내기 (#21) ──
+  function exportMtgAnalysis(format) {
+    var data = getMeetingData();
+    var sections = getMtgAllSections();
+    if (!sections.length || !sections.some(function (s) { return s.text; })) {
+      toast('내보낼 분석 결과가 없습니다');
+      return;
+    }
+    // 키워드 수집
+    var keywords = [];
+    var kwTags = $$('.mtg-keyword-tag');
+    kwTags.forEach(function (t) { keywords.push(t.textContent); });
+
+    if (format === 'markdown') {
+      var md = '# ' + (data.title || '회의 분석 결과') + '\n\n';
+      md += '> **일시**: ' + (data.date ? formatDate(data.date) : '-') + '  \n';
+      md += '> **유형**: ' + (MTG_TYPE_LABELS[data.type] || '-') + '  \n';
+      md += '> **참석자**: ' + (data.attendees || '-') + '\n\n';
+      if (data.agenda && data.agenda.length) {
+        md += '## 안건\n';
+        data.agenda.forEach(function (a, i) { md += (i + 1) + '. ' + a + '\n'; });
+        md += '\n';
+      }
+      sections.forEach(function (s) {
+        if (s.text) {
+          md += '## ' + s.label + '\n\n' + s.text + '\n\n';
+        }
+      });
+      if (keywords.length) {
+        md += '---\n\n**키워드**: ' + keywords.join(', ') + '\n';
+      }
+      downloadFile(md, (data.title || '회의분석') + '.md', 'text/markdown');
+      toast('Markdown 파일이 다운로드되었습니다');
+
+    } else if (format === 'json') {
+      var jsonData = {
+        title: data.title,
+        date: data.date,
+        type: data.type,
+        attendees: data.attendees,
+        agenda: data.agenda,
+        sections: sections,
+        keywords: keywords,
+        action_items: mtgAiLastResult ? mtgAiLastResult.action_items : [],
+        exportedAt: new Date().toISOString()
+      };
+      downloadFile(JSON.stringify(jsonData, null, 2), (data.title || '회의분석') + '.json', 'application/json');
+      toast('JSON 파일이 다운로드되었습니다');
+
+    } else if (format === 'text') {
+      var txt = '=' .repeat(50) + '\n';
+      txt += (data.title || '회의 분석 결과') + '\n';
+      txt += '='.repeat(50) + '\n\n';
+      txt += '일시: ' + (data.date ? formatDate(data.date) : '-') + '\n';
+      txt += '유형: ' + (MTG_TYPE_LABELS[data.type] || '-') + '\n';
+      txt += '참석자: ' + (data.attendees || '-') + '\n\n';
+      sections.forEach(function (s) {
+        if (s.text) {
+          txt += '[ ' + s.label + ' ]\n' + s.text + '\n\n';
+        }
+      });
+      if (keywords.length) {
+        txt += '핵심 키워드: ' + keywords.join(', ') + '\n';
+      }
+      downloadFile(txt, (data.title || '회의분석') + '.txt', 'text/plain');
+      toast('텍스트 파일이 다운로드되었습니다');
+
+    } else if (format === 'clipboard') {
+      var clipText = (data.title || '회의 분석 결과') + '\n\n';
+      sections.forEach(function (s) {
+        if (s.text) clipText += '■ ' + s.label + '\n' + s.text + '\n\n';
+      });
+      if (keywords.length) clipText += '핵심 키워드: ' + keywords.join(', ') + '\n';
+      copyToClipboard(clipText);
+    }
+  }
+
+  function downloadFile(content, filename, mimeType) {
+    var blob = new Blob([content], { type: mimeType + ';charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ── 내보내기 드롭다운 이벤트 ──
+  $('#mtg-export-analysis').addEventListener('click', function () {
+    var menu = $('#mtg-export-menu');
+    menu.style.display = menu.style.display === 'none' ? '' : 'none';
+  });
+  document.addEventListener('click', function (e) {
+    var menu = $('#mtg-export-menu');
+    if (!menu) return;
+    if (!e.target.closest('.mtg-export-dropdown')) {
+      menu.style.display = 'none';
+    }
+  });
+  $$('.mtg-export-option').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      exportMtgAnalysis(btn.dataset.format);
+      $('#mtg-export-menu').style.display = 'none';
+    });
   });
 
   // ── AI 프롬프트 기본값 ──
