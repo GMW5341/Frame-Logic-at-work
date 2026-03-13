@@ -464,6 +464,11 @@
     if (panel) panel.classList.add('active');
     var calTab = TAB_TO_CAL[tabName];
     if (calTab) refreshSidePanel(calTab);
+    // 업무일지 탭 진입 시 할 일 큐 배너 표시 + 자동완성 빌드
+    if (tabName === 'journal') {
+      if (typeof showTaskJnlBanner === 'function') showTaskJnlBanner();
+      if (typeof buildJnlAutocompleteData === 'function') buildJnlAutocompleteData();
+    }
   }
 
   tabBtns.forEach(function (btn) {
@@ -5471,6 +5476,7 @@
   // 7.5  할 일 목록 탭
   // ══════════════════════════════════════
   var TASKS_KEY = 'fl_tasks';
+  var TASK_JNL_QUEUE_KEY = 'fl_task_jnl_queue';
   var STAGE_LABELS = { todo: '진행 전', in_progress: '진행 중', review: '검토', done: '완료' };
 
   function loadTasks() {
@@ -5478,6 +5484,28 @@
     catch (e) { return []; }
   }
   function saveTasks(list) { localStorage.setItem(TASKS_KEY, JSON.stringify(list)); }
+
+  // ── 할 일 완료 → 업무일지 큐 ──
+  function loadTaskJnlQueue() {
+    try { return JSON.parse(localStorage.getItem(TASK_JNL_QUEUE_KEY)) || []; }
+    catch (e) { return []; }
+  }
+  function saveTaskJnlQueue(q) { localStorage.setItem(TASK_JNL_QUEUE_KEY, JSON.stringify(q)); }
+
+  function enqueueTaskToJnl(task) {
+    var q = loadTaskJnlQueue();
+    // 중복 방지
+    if (q.some(function (x) { return x.taskId === task.id; })) return;
+    q.push({
+      taskId: task.id,
+      text: task.text,
+      priority: task.priority || 'normal',
+      memo: task.memo || '',
+      dueDate: task.dueDate || '',
+      completedAt: new Date().toISOString().slice(0, 10)
+    });
+    saveTaskJnlQueue(q);
+  }
 
   function getTaskDate() {
     return $('#task-date').value || new Date().toISOString().slice(0, 10);
@@ -5669,6 +5697,7 @@
         t.done = checked;
         t.stage = checked ? 'done' : 'todo';
         saveTasks(all);
+        if (checked) enqueueTaskToJnl(t);
         renderTaskList();
       }
     }
@@ -5804,11 +5833,13 @@
       t.text = nText;
       t.memo = dialog.querySelector('#task-edit-memo').value.trim();
       t.priority = dialog.querySelector('#task-edit-priority').value;
+      var prevStage = t.stage;
       t.stage = dialog.querySelector('#task-edit-stage').value;
       t.date = dialog.querySelector('#task-edit-date').value;
       t.dueDate = dialog.querySelector('#task-edit-due').value || '';
       t.done = t.stage === 'done';
       saveTasks(all);
+      if (t.stage === 'done' && prevStage !== 'done') enqueueTaskToJnl(t);
       doClose();
       renderTaskList();
       toast('수정되었습니다');
@@ -7125,6 +7156,13 @@
         showCellAiMenu(ev.target, id, field, null, inputEl);
       });
 
+      // 자동완성 연동
+      if (col && col.type === 'text' && jnlAutocompleteData[field]) {
+        inputEl.addEventListener('input', function () { showJnlAutocomplete(inputEl, field); });
+        inputEl.addEventListener('focus', function () { showJnlAutocomplete(inputEl, field); });
+        inputEl.addEventListener('blur', function () { setTimeout(hideJnlAutocomplete, 150); });
+      }
+
       bindSimpleEditKeys(inputEl, td, id, field, col, currentVal);
     }
   }
@@ -7617,6 +7655,253 @@
   });
 
   // (셀 단위 AI 기능은 startJnlEdit 내 showCellAiMenu로 이동됨)
+
+  // ── 완료된 할 일 → 업무일지 배너 ──
+  function showTaskJnlBanner() {
+    var q = loadTaskJnlQueue();
+    var banner = $('#jnl-task-banner');
+    if (!banner) return;
+    if (q.length === 0) {
+      banner.style.display = 'none';
+      return;
+    }
+    banner.style.display = '';
+    $('#jnl-task-banner-text').textContent = '완료된 할 일 ' + q.length + '건을 업무일지에 반영할 수 있습니다';
+  }
+
+  $('#jnl-task-apply').addEventListener('click', function () {
+    var q = loadTaskJnlQueue();
+    if (q.length === 0) { toast('반영할 항목이 없습니다'); return; }
+    var cols = loadJnlColumns();
+    var items = load(JNL_KEY);
+    var today = new Date().toISOString().slice(0, 10);
+
+    q.forEach(function (task) {
+      var newEntry = {
+        id: uid(),
+        attachments: [],
+        createdAt: new Date().toISOString()
+      };
+      cols.forEach(function (col) {
+        if (col.key === 'category' || col.label === '구분') {
+          newEntry[col.key] = '할 일 완료';
+        } else if (col.key === 'item' || col.label === '항목') {
+          newEntry[col.key] = task.text;
+        } else if (col.key === 'subitem' || col.label === '세부 항목') {
+          newEntry[col.key] = task.memo || '';
+        } else if (col.type === 'date') {
+          newEntry[col.key] = task.completedAt || today;
+        } else if (col.key === 'note' || col.label.indexOf('수행') > -1 || col.label.indexOf('느낀') > -1) {
+          var note = '';
+          if (task.priority === 'urgent') note = '[긴급] ';
+          else if (task.priority === 'high') note = '[중요] ';
+          if (task.dueDate) note += '기한: ' + task.dueDate + ' / ';
+          note += '완료일: ' + (task.completedAt || today);
+          newEntry[col.key] = note;
+        } else {
+          newEntry[col.key] = '';
+        }
+      });
+      items.unshift(newEntry);
+    });
+
+    save(JNL_KEY, items);
+    saveTaskJnlQueue([]);
+    renderJnlTable();
+    populateJnlCategoryFilter();
+    populateJnlColFilters();
+    refreshSidePanel('journal');
+    showTaskJnlBanner();
+    toast(q.length + '건의 할 일이 업무일지에 반영되었습니다');
+  });
+
+  $('#jnl-task-dismiss').addEventListener('click', function () {
+    $('#jnl-task-banner').style.display = 'none';
+  });
+
+  // ── 자연어 빠른 입력 ──
+  $('#jnl-quick-add').addEventListener('click', function () {
+    var text = $('#jnl-quick-text').value.trim();
+    if (!text) { toast('내용을 입력해주세요'); return; }
+    var cols = loadJnlColumns();
+    var items = load(JNL_KEY);
+    var newEntry = {
+      id: uid(),
+      attachments: [],
+      createdAt: new Date().toISOString()
+    };
+    cols.forEach(function (col, idx) {
+      if (idx === 0) newEntry[col.key] = '';
+      else if (col.type === 'date') newEntry[col.key] = new Date().toISOString().slice(0, 10);
+      else if (col.key === 'item' || col.label === '항목') newEntry[col.key] = text;
+      else newEntry[col.key] = '';
+    });
+    items.unshift(newEntry);
+    save(JNL_KEY, items);
+    renderJnlTable();
+    populateJnlCategoryFilter();
+    populateJnlColFilters();
+    refreshSidePanel('journal');
+    $('#jnl-quick-text').value = '';
+    toast('항목이 추가되었습니다');
+  });
+
+  // Enter 키로 빠른 추가
+  $('#jnl-quick-text').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        $('#jnl-quick-ai').click();
+      } else {
+        $('#jnl-quick-add').click();
+      }
+    }
+  });
+
+  // ── AI 자연어 → 칼럼 자동 분류 (#자연어AI) ──
+  $('#jnl-quick-ai').addEventListener('click', function () {
+    var text = $('#jnl-quick-text').value.trim();
+    if (!text) { toast('내용을 입력해주세요'); return; }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '분류 중...';
+
+    var cols = loadJnlColumns();
+    var colDesc = cols.map(function (c) {
+      return '- ' + c.key + ' (' + c.label + ', 타입: ' + c.type + ')';
+    }).join('\n');
+
+    // 기존 항목에서 자주 쓰이는 값 수집 (자동완성 데이터 활용)
+    var existingItems = load(JNL_KEY);
+    var sampleValues = {};
+    cols.forEach(function (col) {
+      if (col.type === 'text') {
+        var vals = {};
+        existingItems.forEach(function (item) {
+          var v = item[col.key];
+          if (v) vals[v] = (vals[v] || 0) + 1;
+        });
+        var sorted = Object.keys(vals).sort(function (a, b) { return vals[b] - vals[a]; }).slice(0, 5);
+        if (sorted.length > 0) sampleValues[col.key] = sorted;
+      }
+    });
+    var sampleInfo = '';
+    if (Object.keys(sampleValues).length > 0) {
+      sampleInfo = '\n\n기존 사용 값 참고 (가능하면 이 값들을 재사용):\n';
+      Object.keys(sampleValues).forEach(function (k) {
+        sampleInfo += k + ': ' + sampleValues[k].join(', ') + '\n';
+      });
+    }
+
+    var systemPrompt = '당신은 업무일지 입력 도우미입니다. 사용자의 자연어 입력을 분석하여 지정된 칼럼에 맞게 분류하세요.\n' +
+      '반드시 JSON 형식으로만 응답하세요. 다른 텍스트 없이 순수 JSON만 출력하세요.';
+    var userMsg = '아래 자연어 입력을 업무일지 칼럼에 맞게 분류해주세요.\n\n' +
+      '입력: "' + text + '"\n\n' +
+      '칼럼 정의:\n' + colDesc + sampleInfo + '\n\n' +
+      '응답 형식 (date는 YYYY-MM-DD, 오늘: ' + new Date().toISOString().slice(0, 10) + '):\n' +
+      '{ ' + cols.map(function (c) { return '"' + c.key + '": "값"'; }).join(', ') + ' }';
+
+    callClaudeAPI(systemPrompt, userMsg)
+      .then(function (raw) {
+        var parsed;
+        try {
+          var jsonMatch = raw.match(/\{[\s\S]*\}/);
+          parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        } catch (e) {
+          toast('AI 분류 실패: 응답 파싱 오류');
+          return;
+        }
+
+        var items = load(JNL_KEY);
+        var newEntry = {
+          id: uid(),
+          attachments: [],
+          createdAt: new Date().toISOString()
+        };
+        cols.forEach(function (col) {
+          newEntry[col.key] = parsed[col.key] || '';
+        });
+        items.unshift(newEntry);
+        save(JNL_KEY, items);
+        renderJnlTable();
+        populateJnlCategoryFilter();
+        populateJnlColFilters();
+        refreshSidePanel('journal');
+        $('#jnl-quick-text').value = '';
+        toast('AI가 자동 분류하여 추가했습니다');
+      })
+      .catch(function (err) {
+        toast('AI 분류 실패: ' + err.message);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = '🤖 AI 분류';
+      });
+  });
+
+  // ── 구분/항목 자동완성 ──
+  var jnlAutocompleteData = {};
+
+  function buildJnlAutocompleteData() {
+    var items = load(JNL_KEY);
+    var cols = loadJnlColumns();
+    jnlAutocompleteData = {};
+    cols.forEach(function (col) {
+      if (col.type === 'text') {
+        var vals = {};
+        items.forEach(function (item) {
+          var v = (item[col.key] || '').trim();
+          if (v) vals[v] = (vals[v] || 0) + 1;
+        });
+        var sorted = Object.keys(vals).sort(function (a, b) { return vals[b] - vals[a]; });
+        if (sorted.length > 0) jnlAutocompleteData[col.key] = sorted;
+      }
+    });
+  }
+
+  function showJnlAutocomplete(input, colKey) {
+    hideJnlAutocomplete();
+    var options = jnlAutocompleteData[colKey];
+    if (!options || options.length === 0) return;
+    var val = (input.value || '').trim().toLowerCase();
+    var filtered = val ? options.filter(function (o) { return o.toLowerCase().indexOf(val) > -1; }) : options;
+    if (filtered.length === 0) return;
+
+    var dropdown = document.createElement('div');
+    dropdown.className = 'jnl-autocomplete-dropdown';
+    dropdown.id = 'jnl-autocomplete-active';
+    filtered.slice(0, 8).forEach(function (opt) {
+      var item = document.createElement('div');
+      item.className = 'jnl-autocomplete-item';
+      item.textContent = opt;
+      item.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        input.value = opt;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        hideJnlAutocomplete();
+        // 편집 중인 셀 저장 트리거
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      dropdown.appendChild(item);
+    });
+
+    var rect = input.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.top = (rect.bottom + 2) + 'px';
+    dropdown.style.width = Math.max(rect.width, 150) + 'px';
+    document.body.appendChild(dropdown);
+  }
+
+  function hideJnlAutocomplete() {
+    var existing = document.getElementById('jnl-autocomplete-active');
+    if (existing) existing.remove();
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.jnl-autocomplete-dropdown')) hideJnlAutocomplete();
+  });
 
   // ── 전체 데이터 AI 요약 ──
   $('#jnl-ai-summary').addEventListener('click', function () {
