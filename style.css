@@ -4666,3 +4666,343 @@ body {
     width: 100%;
   }
 }
+
+/* ══════════════════════════════════════
+   회의 AI 분석 개선 스타일
+   ══════════════════════════════════════ */
+
+/* 화자 매핑 (#8) */
+.mtg-speaker-map {
+  background: var(--bg-secondary, #f8f9fa);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.mtg-speaker-map-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.mtg-speaker-map-header h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.mtg-speaker-map-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted, #94a3b8);
+}
+.mtg-speaker-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mtg-speaker-map-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+}
+.mtg-speaker-map-row .speaker-label {
+  min-width: 80px;
+  font-weight: 500;
+  color: var(--text-secondary, #64748b);
+}
+.mtg-speaker-map-row .speaker-stats {
+  font-size: 0.72rem;
+  color: var(--text-muted, #94a3b8);
+  min-width: 60px;
+}
+.mtg-speaker-map-row select,
+.mtg-speaker-map-row input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 4px;
+  font-size: 0.82rem;
+}
+
+/* AI 분석 설정 영역 */
+.mtg-ai-config {
+  background: var(--bg-secondary, #f8f9fa);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.mtg-ai-config-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  display: block;
+}
+
+/* 프리셋 버튼 (#18) */
+.mtg-ai-presets {
+  margin-bottom: 10px;
+}
+.mtg-ai-preset-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mtg-preset-btn {
+  font-size: 0.78rem !important;
+  padding: 4px 10px !important;
+  border-radius: 16px !important;
+  border: 1px solid var(--border, #e2e8f0) !important;
+  transition: all 0.15s;
+}
+.mtg-preset-btn.active {
+  background: var(--primary, #3b82f6) !important;
+  color: #fff !important;
+  border-color: var(--primary, #3b82f6) !important;
+}
+
+/* 모델 & 옵션 행 */
+.mtg-ai-options-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.mtg-ai-option {
+  flex: 1;
+  min-width: 120px;
+}
+.mtg-ai-select {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  background: var(--bg-primary, #fff);
+}
+.mtg-ai-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+/* 비용 추정 (#17) */
+.mtg-ai-cost-estimate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: var(--bg-tertiary, #f1f5f9);
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+.mtg-ai-cost-label {
+  color: var(--text-secondary, #64748b);
+}
+.mtg-ai-cost-value {
+  font-weight: 600;
+  color: var(--primary, #3b82f6);
+}
+.mtg-ai-cost-tokens {
+  color: var(--text-muted, #94a3b8);
+}
+
+/* 진행 바 */
+.mtg-ai-progress {
+  margin: 8px 0;
+}
+.mtg-ai-progress-bar {
+  height: 4px;
+  background: var(--bg-tertiary, #e2e8f0);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.mtg-ai-progress-fill {
+  height: 100%;
+  background: var(--primary, #3b82f6);
+  border-radius: 2px;
+  transition: width 0.3s;
+  width: 0%;
+}
+.mtg-ai-progress-text {
+  font-size: 0.75rem;
+  color: var(--text-muted, #94a3b8);
+  margin-top: 4px;
+  display: block;
+}
+
+/* 키워드 태그 (#12) */
+.mtg-keywords {
+  margin: 12px 0;
+}
+.mtg-keyword-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mtg-keyword-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  background: var(--primary-light, #dbeafe);
+  color: var(--primary-dark, #1e40af);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* 액션아이템 → Task (#11) */
+.mtg-action-to-task {
+  background: var(--bg-secondary, #f8f9fa);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.mtg-action-to-task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.mtg-action-to-task-header h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.mtg-action-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mtg-action-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+.mtg-action-item input[type="checkbox"] {
+  margin-top: 3px;
+}
+.mtg-action-item-text {
+  flex: 1;
+}
+.mtg-action-item-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted, #94a3b8);
+  margin-top: 2px;
+}
+.mtg-action-item .btn {
+  flex-shrink: 0;
+}
+.mtg-action-item.added {
+  opacity: 0.5;
+}
+
+/* 버전 관리 (#14) */
+.mtg-version-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 6px 10px;
+  background: var(--bg-secondary, #f8f9fa);
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+.mtg-version-label {
+  color: var(--text-secondary, #64748b);
+  white-space: nowrap;
+}
+.mtg-version-bar select {
+  flex: 1;
+  max-width: 250px;
+}
+.mtg-version-count {
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.72rem;
+}
+
+/* 후속 질문 (#20) */
+.mtg-followup-chat {
+  background: var(--bg-secondary, #f8f9fa);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  margin: 12px 0;
+  overflow: hidden;
+}
+.mtg-followup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-tertiary, #f1f5f9);
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.mtg-followup-header h4 {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.mtg-followup-messages {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+.mtg-followup-msg {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  max-width: 85%;
+  word-break: break-word;
+}
+.mtg-followup-msg.user {
+  background: var(--primary, #3b82f6);
+  color: #fff;
+  margin-left: auto;
+  border-bottom-right-radius: 2px;
+}
+.mtg-followup-msg.ai {
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-bottom-left-radius: 2px;
+}
+.mtg-followup-msg.ai .thinking {
+  color: var(--text-muted, #94a3b8);
+  font-style: italic;
+}
+.mtg-followup-input-row {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border, #e2e8f0);
+}
+.mtg-followup-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+/* 섹션 재분석 버튼 (#19) */
+.mtg-sec-reanalyze {
+  font-size: 0.68rem !important;
+  padding: 1px 5px !important;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.mtg-sec-reanalyze:hover {
+  opacity: 1;
+}

@@ -241,24 +241,119 @@
             <div class="mtg-recordings" id="mtg-recordings"></div>
           </div>
 
-          <!-- AI 분석 커스텀 프롬프트 -->
-          <div class="mtg-ai-prompt-area">
-            <div class="mtg-ai-prompt-toggle-row">
-              <button class="btn btn-ghost btn-small" id="mtg-ai-prompt-toggle">🎯 분석 방식 설정</button>
+          <!-- 화자 매핑 -->
+          <div class="mtg-speaker-map" id="mtg-speaker-map" style="display:none">
+            <div class="mtg-speaker-map-header">
+              <h4>화자 매핑</h4>
+              <span class="mtg-speaker-map-hint">녹음에서 인식된 화자를 참석자 이름에 매핑하세요</span>
             </div>
+            <div class="mtg-speaker-map-list" id="mtg-speaker-map-list"></div>
+          </div>
+
+          <!-- AI 분석 설정 영역 -->
+          <div class="mtg-ai-config">
+            <!-- 분석 프리셋 (#18) -->
+            <div class="mtg-ai-presets">
+              <label class="mtg-ai-config-label">분석 프리셋</label>
+              <div class="mtg-ai-preset-btns" id="mtg-ai-preset-btns">
+                <button class="btn btn-small btn-ghost mtg-preset-btn active" data-preset="default">기본 분석</button>
+                <button class="btn btn-small btn-ghost mtg-preset-btn" data-preset="quick">빠른 요약</button>
+                <button class="btn btn-small btn-ghost mtg-preset-btn" data-preset="detailed">상세 분석</button>
+                <button class="btn btn-small btn-ghost mtg-preset-btn" data-preset="decision">의사결정 중심</button>
+                <button class="btn btn-small btn-ghost mtg-preset-btn" data-preset="action">액션아이템 중심</button>
+                <button class="btn btn-small btn-ghost mtg-preset-btn" data-preset="custom">직접 입력</button>
+              </div>
+            </div>
+
+            <!-- 커스텀 프롬프트 (custom 프리셋 선택 시 표시) -->
             <div class="mtg-ai-prompt-box" id="mtg-ai-prompt-box" style="display:none;">
               <textarea id="mtg-ai-custom-prompt" rows="4" class="mtg-ai-prompt-input" placeholder="예: 액션 아이템 위주로 정리해줘 / 참석자별 발언 요약 / 결정사항만 추출해줘..."></textarea>
-              <div class="mtg-ai-prompt-hint">이 회의에 적용할 AI 분석 방식을 자유롭게 작성하세요. 비워두면 기본 분석을 수행합니다.</div>
+              <div class="mtg-ai-prompt-hint">이 회의에 적용할 AI 분석 방식을 자유롭게 작성하세요.</div>
+            </div>
+
+            <!-- 모델 선택 & 분석 깊이 (#15) -->
+            <div class="mtg-ai-options-row">
+              <div class="mtg-ai-option">
+                <label class="mtg-ai-config-label">모델</label>
+                <select id="mtg-ai-model" class="mtg-ai-select">
+                  <option value="auto">자동 선택</option>
+                  <option value="claude-haiku-4-5-20251001">Haiku (빠르고 저렴)</option>
+                  <option value="claude-sonnet-4-20250514">Sonnet (균형)</option>
+                  <option value="claude-opus-4-20250514">Opus (최고 품질)</option>
+                </select>
+              </div>
+              <div class="mtg-ai-option">
+                <label class="mtg-ai-config-label">분석 깊이</label>
+                <select id="mtg-ai-depth" class="mtg-ai-select">
+                  <option value="single">1-pass (빠름)</option>
+                  <option value="deep" selected>2-pass (정밀)</option>
+                </select>
+              </div>
+              <div class="mtg-ai-option">
+                <label class="mtg-ai-config-label">Task 연동</label>
+                <label class="mtg-ai-checkbox-label">
+                  <input type="checkbox" id="mtg-ai-include-tasks" checked> 관련 Task 포함
+                </label>
+              </div>
+            </div>
+
+            <!-- 토큰 추정 (#17) -->
+            <div class="mtg-ai-cost-estimate" id="mtg-ai-cost-estimate" style="display:none">
+              <span class="mtg-ai-cost-label">예상 비용:</span>
+              <span class="mtg-ai-cost-value" id="mtg-ai-cost-value">-</span>
+              <span class="mtg-ai-cost-tokens" id="mtg-ai-cost-tokens">-</span>
             </div>
           </div>
 
           <!-- AI 분석 버튼 -->
           <div class="btn-row" style="margin:16px 0">
             <button class="btn btn-primary" id="mtg-ai-summary" style="flex:1">🤖 AI 회의록 분석</button>
+            <button class="btn btn-secondary" id="mtg-ai-estimate" title="비용 추정">💰 추정</button>
+          </div>
+
+          <!-- 분석 진행 상태 -->
+          <div class="mtg-ai-progress" id="mtg-ai-progress" style="display:none">
+            <div class="mtg-ai-progress-bar"><div class="mtg-ai-progress-fill" id="mtg-ai-progress-fill"></div></div>
+            <span class="mtg-ai-progress-text" id="mtg-ai-progress-text">분석 준비 중...</span>
           </div>
 
           <!-- AI 분석 결과: 동적 섹션 컨테이너 -->
           <div class="mtg-sections" id="mtg-sections"></div>
+
+          <!-- 키워드 태그 (#12) -->
+          <div class="mtg-keywords" id="mtg-keywords" style="display:none">
+            <label class="mtg-ai-config-label">핵심 키워드</label>
+            <div class="mtg-keyword-tags" id="mtg-keyword-tags"></div>
+          </div>
+
+          <!-- 액션아이템 → Task 변환 (#11) -->
+          <div class="mtg-action-to-task" id="mtg-action-to-task" style="display:none">
+            <div class="mtg-action-to-task-header">
+              <h4>액션 아이템 → Task 변환</h4>
+              <button class="btn btn-small btn-primary" id="mtg-action-add-all">전체 추가</button>
+            </div>
+            <div class="mtg-action-items" id="mtg-action-items"></div>
+          </div>
+
+          <!-- 요약 버전 관리 (#14) -->
+          <div class="mtg-version-bar" id="mtg-version-bar" style="display:none">
+            <span class="mtg-version-label">분석 버전:</span>
+            <select id="mtg-version-select" class="mtg-ai-select"></select>
+            <span class="mtg-version-count" id="mtg-version-count"></span>
+          </div>
+
+          <!-- 후속 질문 인터페이스 (#20) -->
+          <div class="mtg-followup-chat" id="mtg-followup-chat" style="display:none">
+            <div class="mtg-followup-header">
+              <h4>후속 질문</h4>
+              <button class="btn btn-ghost btn-small" id="mtg-followup-close">✕</button>
+            </div>
+            <div class="mtg-followup-messages" id="mtg-followup-messages"></div>
+            <div class="mtg-followup-input-row">
+              <input type="text" id="mtg-followup-input" placeholder="분석 결과에 대해 질문하세요..." class="mtg-followup-input">
+              <button class="btn btn-primary btn-small" id="mtg-followup-send">전송</button>
+            </div>
+          </div>
 
           <!-- 수동 메모 -->
           <div class="mtg-section mtg-memo-section">
@@ -277,6 +372,7 @@
             </div>
             <div class="btn-row">
               <button class="btn btn-secondary" id="mtg-to-idea" style="flex:1">💡 아이디어로 보내기</button>
+              <button class="btn btn-secondary" id="mtg-followup-open">💬 후속 질문</button>
               <button class="btn btn-secondary" id="mtg-export-excel">📊 Excel</button>
               <button class="btn btn-secondary" id="mtg-export-pdf">📄 PDF</button>
             </div>
