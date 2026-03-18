@@ -1023,6 +1023,7 @@
       aiTag: existingAiTag,
       transcripts: savedTranscripts,
       sections: allSections,
+      refDocs: mtgRefDocs.map(function (d) { return { id: d.id, name: d.name, size: d.size, text: (d.text || '').slice(0, 20000) }; }),
       createdAt: new Date().toISOString()
     };
     // 하위 호환: 기본 5개 키도 유지
@@ -1089,6 +1090,12 @@
       });
     }
     renderRecordings();
+    // 참고 문서 복원
+    mtgRefDocs = (item.refDocs || []).map(function (d) {
+      return { id: d.id || uid(), name: d.name, size: d.size || 0, text: d.text || '', parsed: { meta: { type: 'restored' } }, parsing: false, error: null };
+    });
+    renderRefDocs();
+    updateRefDocsStatus();
     renderSpeakerMap();
     renderVersionBar(item.id);
     // 새 분석 UI 초기화
@@ -1128,6 +1135,10 @@
     if (dateEl) dateEl.value = nowLocalISO();
     var folderEl = $('#mtg-folder');
     if (folderEl) populateFolderSelect('#mtg-folder', '');
+    // 참고 문서 초기화
+    mtgRefDocs = [];
+    renderRefDocs();
+    updateRefDocsStatus();
     // 녹음 & AI 요약 초기화
     if (typeof mtgRecordings !== 'undefined') {
       mtgRecordings.forEach(function (r) { if (r.url) URL.revokeObjectURL(r.url); });
@@ -1994,6 +2005,315 @@
   });
 
   // ══════════════════════════════════════
+  // 3-B2. 참고 문서 업로드 & 파싱
+  // ══════════════════════════════════════
+  var mtgRefDocs = []; // { id, name, type, size, text, parsed }
+
+  // 문서 파싱 엔진
+  var DocParser = {
+    // PDF 파싱 (pdf.js)
+    parsePDF: function (file) {
+      return new Promise(function (resolve, reject) {
+        if (typeof pdfjsLib === 'undefined') {
+          reject(new Error('PDF.js 라이브러리가 로드되지 않았습니다'));
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function () {
+          var typedArray = new Uint8Array(reader.result);
+          pdfjsLib.getDocument({ data: typedArray }).promise.then(function (pdf) {
+            var pages = [];
+            var total = pdf.numPages;
+            var chain = Promise.resolve();
+            for (var i = 1; i <= total; i++) {
+              (function (pageNum) {
+                chain = chain.then(function () {
+                  return pdf.getPage(pageNum).then(function (page) {
+                    return page.getTextContent().then(function (content) {
+                      var text = content.items.map(function (item) { return item.str; }).join(' ');
+                      pages.push({ page: pageNum, text: text });
+                    });
+                  });
+                });
+              })(i);
+            }
+            chain.then(function () {
+              var fullText = pages.map(function (p) {
+                return '[페이지 ' + p.page + ']\n' + p.text;
+              }).join('\n\n');
+              resolve({ text: fullText, meta: { pages: total, type: 'pdf' } });
+            }).catch(reject);
+          }).catch(reject);
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      });
+    },
+
+    // Excel/CSV 파싱 (SheetJS)
+    parseSpreadsheet: function (file) {
+      return new Promise(function (resolve, reject) {
+        if (typeof XLSX === 'undefined') {
+          reject(new Error('SheetJS 라이브러리가 로드되지 않았습니다'));
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function () {
+          try {
+            var wb = XLSX.read(reader.result, { type: 'array' });
+            var texts = [];
+            wb.SheetNames.forEach(function (name) {
+              var ws = wb.Sheets[name];
+              var csv = XLSX.utils.sheet_to_csv(ws);
+              var json = XLSX.utils.sheet_to_json(ws, { header: 1 });
+              texts.push('[시트: ' + name + ']\n' + csv);
+            });
+            resolve({ text: texts.join('\n\n'), meta: { sheets: wb.SheetNames.length, type: 'spreadsheet' } });
+          } catch (e) { reject(e); }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      });
+    },
+
+    // HTML 파싱
+    parseHTML: function (file) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          try {
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(reader.result, 'text/html');
+            // 스크립트/스타일 제거
+            doc.querySelectorAll('script, style, noscript').forEach(function (el) { el.remove(); });
+            var title = (doc.querySelector('title') || {}).textContent || '';
+            var body = (doc.body || doc.documentElement).textContent || '';
+            // 테이블 구조 보존
+            var tables = [];
+            doc.querySelectorAll('table').forEach(function (tbl, idx) {
+              var rows = [];
+              tbl.querySelectorAll('tr').forEach(function (tr) {
+                var cells = [];
+                tr.querySelectorAll('td, th').forEach(function (cell) {
+                  cells.push(cell.textContent.trim());
+                });
+                rows.push(cells.join(' | '));
+              });
+              tables.push('[표 ' + (idx + 1) + ']\n' + rows.join('\n'));
+            });
+            var text = (title ? '제목: ' + title + '\n\n' : '') + body.replace(/\s+/g, ' ').trim();
+            if (tables.length) text += '\n\n## 추출된 표\n' + tables.join('\n\n');
+            resolve({ text: text, meta: { type: 'html', title: title } });
+          } catch (e) { reject(e); }
+        };
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    },
+
+    // Markdown/TXT 파싱
+    parseText: function (file) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          resolve({ text: reader.result, meta: { type: file.name.endsWith('.md') ? 'markdown' : 'text' } });
+        };
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    },
+
+    // JSON 파싱
+    parseJSON: function (file) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          try {
+            var obj = JSON.parse(reader.result);
+            var text = JSON.stringify(obj, null, 2);
+            resolve({ text: text, meta: { type: 'json' } });
+          } catch (e) { reject(e); }
+        };
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    },
+
+    // PPT(X) 파싱 - ZIP 기반 XML 추출
+    parsePPTX: function (file) {
+      return new Promise(function (resolve, reject) {
+        if (typeof JSZip === 'undefined' && typeof XLSX !== 'undefined') {
+          // SheetJS의 ZIP 유틸 사용 시도, 그렇지 않으면 간단한 텍스트 추출
+          var reader = new FileReader();
+          reader.onload = function () {
+            try {
+              // PPTX는 ZIP 형식 → SheetJS ZIP 파서로 텍스트 추출 시도
+              var zip = XLSX.read(reader.result, { type: 'array', bookSheets: true });
+              // SheetJS로 읽히는 경우 (PPT를 스프레드시트로)
+              var texts = [];
+              if (zip.SheetNames && zip.SheetNames.length) {
+                zip.SheetNames.forEach(function (name) {
+                  var ws = zip.Sheets[name];
+                  if (ws) texts.push('[슬라이드: ' + name + ']\n' + XLSX.utils.sheet_to_csv(ws));
+                });
+              }
+              if (texts.length) {
+                resolve({ text: texts.join('\n\n'), meta: { type: 'pptx' } });
+              } else {
+                resolve({ text: '[PPT 파일] 텍스트 추출이 제한적입니다. 파일명: ' + file.name, meta: { type: 'pptx', limited: true } });
+              }
+            } catch (e) {
+              resolve({ text: '[PPT 파일] 자동 추출 실패. 파일명: ' + file.name + '\n내용을 수동으로 붙여넣어 주세요.', meta: { type: 'pptx', limited: true } });
+            }
+          };
+          reader.onerror = reject;
+          reader.readAsArrayBuffer(file);
+        } else {
+          resolve({ text: '[PPT 파일] 파일명: ' + file.name + '\n내용을 수동으로 붙여넣어 주세요.', meta: { type: 'pptx', limited: true } });
+        }
+      });
+    },
+
+    // 파일 확장자에 따라 적절한 파서 선택
+    parse: function (file) {
+      var name = file.name.toLowerCase();
+      if (name.endsWith('.pdf')) return this.parsePDF(file);
+      if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')) return this.parseSpreadsheet(file);
+      if (name.endsWith('.html') || name.endsWith('.htm')) return this.parseHTML(file);
+      if (name.endsWith('.md') || name.endsWith('.txt')) return this.parseText(file);
+      if (name.endsWith('.json')) return this.parseJSON(file);
+      if (name.endsWith('.pptx') || name.endsWith('.ppt')) return this.parsePPTX(file);
+      if (name.endsWith('.doc') || name.endsWith('.docx')) return this.parsePPTX(file); // 같은 ZIP 기반 추출 시도
+      return Promise.resolve({ text: '[지원되지 않는 형식] ' + file.name, meta: { type: 'unknown' } });
+    }
+  };
+
+  // 참고 문서 렌더링
+  function renderRefDocs() {
+    var container = $('#mtg-ref-docs-list');
+    if (!container) return;
+    if (mtgRefDocs.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+    container.innerHTML = mtgRefDocs.map(function (doc, i) {
+      var sizeStr = doc.size < 1024 ? doc.size + 'B'
+        : doc.size < 1048576 ? Math.round(doc.size / 1024) + 'KB'
+        : (doc.size / 1048576).toFixed(1) + 'MB';
+      var typeIcon = { pdf: '📄', spreadsheet: '📊', html: '🌐', markdown: '📝', text: '📃', json: '🗂', pptx: '📑', unknown: '📎' };
+      var icon = typeIcon[doc.parsed && doc.parsed.meta ? doc.parsed.meta.type : 'unknown'] || '📎';
+      var charCount = doc.text ? doc.text.length : 0;
+      var statusClass = doc.parsing ? 'ref-doc-parsing' : doc.error ? 'ref-doc-error' : 'ref-doc-ready';
+      var statusText = doc.parsing ? '파싱 중...' : doc.error ? '오류' : charCount.toLocaleString() + '자 추출';
+      return '<div class="mtg-ref-doc-item ' + statusClass + '" data-idx="' + i + '">' +
+        '<span class="ref-doc-icon">' + icon + '</span>' +
+        '<span class="ref-doc-name" title="' + doc.name + '">' + doc.name + '</span>' +
+        '<span class="ref-doc-size">' + sizeStr + '</span>' +
+        '<span class="ref-doc-status">' + statusText + '</span>' +
+        '<button class="ref-doc-preview-btn" data-idx="' + i + '" title="미리보기">👁</button>' +
+        '<button class="ref-doc-remove-btn" data-idx="' + i + '" title="제거">✕</button>' +
+        '</div>';
+    }).join('');
+
+    // 이벤트 바인딩
+    container.querySelectorAll('.ref-doc-remove-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = parseInt(this.getAttribute('data-idx'));
+        mtgRefDocs.splice(idx, 1);
+        renderRefDocs();
+        updateRefDocsStatus();
+      });
+    });
+    container.querySelectorAll('.ref-doc-preview-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = parseInt(this.getAttribute('data-idx'));
+        var doc = mtgRefDocs[idx];
+        if (!doc || !doc.text) { toast('추출된 텍스트가 없습니다'); return; }
+        var overlay = $('#mtg-transcript-overlay');
+        var content = $('#mtg-transcript-content');
+        overlay.querySelector('h3').textContent = '문서 내용: ' + doc.name;
+        content.textContent = doc.text.slice(0, 10000) + (doc.text.length > 10000 ? '\n\n... (' + doc.text.length.toLocaleString() + '자 중 10,000자 미리보기)' : '');
+        overlay.classList.add('active');
+      });
+    });
+  }
+
+  function updateRefDocsStatus() {
+    var status = $('#mtg-ref-docs-status');
+    if (!status) return;
+    if (mtgRefDocs.length === 0) { status.textContent = ''; return; }
+    var totalChars = mtgRefDocs.reduce(function (sum, d) { return sum + (d.text ? d.text.length : 0); }, 0);
+    status.textContent = mtgRefDocs.length + '개 문서, 총 ' + totalChars.toLocaleString() + '자';
+  }
+
+  // 참고 문서에서 AI 컨텍스트 텍스트 빌드
+  function buildRefDocsContext() {
+    if (mtgRefDocs.length === 0) return '';
+    var ctx = '\n\n## 참고 문서\n';
+    ctx += '아래는 회의 관련 참고 문서에서 추출한 내용입니다. 회의 분석 시 이 문서들의 내용을 참고하세요.\n\n';
+    mtgRefDocs.forEach(function (doc, i) {
+      if (!doc.text) return;
+      // 문서당 최대 8000자로 제한 (토큰 절약)
+      var maxLen = 8000;
+      var text = doc.text.length > maxLen ? doc.text.slice(0, maxLen) + '\n... (이하 생략, 총 ' + doc.text.length.toLocaleString() + '자)' : doc.text;
+      ctx += '### 문서 ' + (i + 1) + ': ' + doc.name + '\n';
+      if (doc.parsed && doc.parsed.meta) {
+        var m = doc.parsed.meta;
+        if (m.pages) ctx += '(PDF, ' + m.pages + '페이지)\n';
+        if (m.sheets) ctx += '(스프레드시트, ' + m.sheets + '개 시트)\n';
+      }
+      ctx += text + '\n\n';
+    });
+    return ctx;
+  }
+
+  // 파일 업로드 핸들러
+  $('#mtg-ref-docs-btn').addEventListener('click', function () {
+    $('#mtg-ref-docs-input').click();
+  });
+
+  $('#mtg-ref-docs-input').addEventListener('change', function () {
+    var files = Array.from(this.files);
+    if (!files.length) return;
+    this.value = '';
+
+    files.forEach(function (file) {
+      // 파일 크기 제한 (20MB)
+      if (file.size > 20 * 1024 * 1024) {
+        toast(file.name + ': 파일 크기가 20MB를 초과합니다');
+        return;
+      }
+      var doc = {
+        id: uid(),
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        text: '',
+        parsed: null,
+        parsing: true,
+        error: null
+      };
+      mtgRefDocs.push(doc);
+      renderRefDocs();
+
+      DocParser.parse(file).then(function (result) {
+        doc.text = result.text;
+        doc.parsed = result;
+        doc.parsing = false;
+        renderRefDocs();
+        updateRefDocsStatus();
+        toast(file.name + ' 파싱 완료 (' + result.text.length.toLocaleString() + '자 추출)');
+      }).catch(function (err) {
+        doc.parsing = false;
+        doc.error = err.message;
+        renderRefDocs();
+        updateRefDocsStatus();
+        toast(file.name + ' 파싱 실패: ' + err.message);
+      });
+    });
+  });
+
+  // ══════════════════════════════════════
   // 3-C. AI 요약 (Enhanced)
   // ══════════════════════════════════════
 
@@ -2676,8 +2996,9 @@
     }
 
     var built = buildMtgTextContent();
-    if (!built.hasContent) {
-      toast('분석할 녹음 텍스트 또는 메모가 없습니다');
+    var hasRefDocs = mtgRefDocs.some(function (d) { return d.text && d.text.length > 0; });
+    if (!built.hasContent && !hasRefDocs) {
+      toast('분석할 녹음 텍스트, 메모 또는 참고 문서가 없습니다');
       return;
     }
 
@@ -2693,6 +3014,9 @@
 
     // 이전 회의 참조 (#6) — 같은 폴더 or 같은 유형 이전 회의
     textContent += buildPreviousMeetingContext(built.data.folder, built.data.date, built.data.type);
+
+    // 참고 문서 컨텍스트
+    textContent += buildRefDocsContext();
 
     // 프리셋에 따른 유저 프롬프트
     var userPrompt;

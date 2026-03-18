@@ -241,6 +241,20 @@
             <div class="mtg-recordings" id="mtg-recordings"></div>
           </div>
 
+          <!-- 참고 문서 업로드 -->
+          <div class="mtg-ref-docs-section">
+            <div class="mtg-ref-docs-header">
+              <h4>참고 문서</h4>
+              <span class="mtg-ref-docs-hint">PDF, Excel, PPT, MD, HTML, TXT, CSV 파일을 업로드하면 AI 분석 시 참고 자료로 활용됩니다</span>
+            </div>
+            <div class="mtg-ref-docs-upload-row">
+              <button class="btn btn-secondary" id="mtg-ref-docs-btn">📂 문서 추가</button>
+              <input type="file" id="mtg-ref-docs-input" multiple accept=".pdf,.xlsx,.xls,.csv,.pptx,.ppt,.md,.html,.htm,.txt,.json,.doc,.docx" style="display:none">
+              <span class="mtg-ref-docs-status" id="mtg-ref-docs-status"></span>
+            </div>
+            <div class="mtg-ref-docs-list" id="mtg-ref-docs-list"></div>
+          </div>
+
           <!-- 화자 매핑 -->
           <div class="mtg-speaker-map" id="mtg-speaker-map" style="display:none">
             <div class="mtg-speaker-map-header">
@@ -901,6 +915,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>

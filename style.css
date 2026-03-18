@@ -5154,3 +5154,114 @@ body {
 .mtg-export-option:hover {
   background: var(--bg-secondary, #f8f9fa);
 }
+
+/* ===== 참고 문서 업로드 ===== */
+.mtg-ref-docs-section {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+.mtg-ref-docs-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.mtg-ref-docs-header h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.mtg-ref-docs-hint {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+.mtg-ref-docs-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.mtg-ref-docs-status {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.mtg-ref-docs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mtg-ref-doc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  transition: background var(--transition);
+}
+.mtg-ref-doc-item:hover {
+  background: var(--accent-subtle);
+}
+.mtg-ref-doc-item.ref-doc-parsing {
+  opacity: 0.7;
+  border-color: var(--warning);
+}
+.mtg-ref-doc-item.ref-doc-error {
+  border-color: var(--danger);
+  background: rgba(220, 38, 38, 0.04);
+}
+.ref-doc-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.ref-doc-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--text);
+}
+.ref-doc-size {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.ref-doc-status {
+  font-size: 0.72rem;
+  color: var(--success);
+  flex-shrink: 0;
+}
+.ref-doc-parsing .ref-doc-status {
+  color: var(--warning);
+}
+.ref-doc-error .ref-doc-status {
+  color: var(--danger);
+}
+.ref-doc-preview-btn,
+.ref-doc-remove-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: color var(--transition), background var(--transition);
+  flex-shrink: 0;
+}
+.ref-doc-preview-btn:hover {
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+.ref-doc-remove-btn:hover {
+  color: var(--danger);
+  background: rgba(220, 38, 38, 0.08);
+}
