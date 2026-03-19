@@ -1375,10 +1375,30 @@
     items.unshift(data);
     save(MTG_KEY, items);
     clearMeetingDraft();
-    // 저장한 회의를 계속 편집 모드로 유지 (중복 생성 방지)
-    currentMtgEditId = data.id;
     refreshSidePanel('meeting');
-    toast('회의 메모가 저장되었습니다');
+
+    // 저장 성공 오버레이 표시
+    var savedId = data.id;
+    var overlay = $('#mtg-save-overlay');
+    if (overlay) {
+      overlay.classList.add('show');
+      setTimeout(function () {
+        overlay.classList.remove('show');
+        // 폼 초기화 → 새 메모 작성 준비 상태로 전환
+        clearMeetingForm();
+        // 사이드바에서 방금 저장된 항목 하이라이트
+        var savedEl = document.querySelector('.saved-item[data-id="' + savedId + '"]');
+        if (savedEl) {
+          savedEl.classList.add('just-saved');
+          savedEl.addEventListener('animationend', function () {
+            savedEl.classList.remove('just-saved');
+          }, { once: true });
+        }
+      }, 1200);
+    } else {
+      clearMeetingForm();
+      toast('회의 메모가 저장되었습니다');
+    }
   });
 
   $('#mtg-copy').addEventListener('click', function () {

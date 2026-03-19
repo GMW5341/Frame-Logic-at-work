@@ -5265,3 +5265,74 @@ body {
   color: var(--danger);
   background: rgba(220, 38, 38, 0.08);
 }
+
+/* ===== Meeting Save Success Overlay ===== */
+#mtg-form-view {
+  position: relative;
+}
+.mtg-save-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  border-radius: var(--radius);
+}
+.mtg-save-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.mtg-save-overlay .save-check {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: savePopIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+.mtg-save-overlay .save-check svg {
+  width: 28px;
+  height: 28px;
+  stroke: #fff;
+  stroke-width: 3;
+  fill: none;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: saveCheckDraw 0.4s 0.2s ease forwards;
+}
+.mtg-save-overlay .save-msg {
+  margin-top: 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0;
+  transform: translateY(8px);
+  animation: saveFadeUp 0.3s 0.35s ease forwards;
+}
+@keyframes savePopIn {
+  0% { transform: scale(0); }
+  100% { transform: scale(1); }
+}
+@keyframes saveCheckDraw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes saveFadeUp {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Sidebar item highlight after save */
+.saved-item.just-saved {
+  animation: savedHighlight 1.5s ease;
+}
+@keyframes savedHighlight {
+  0% { background: var(--accent-subtle, rgba(59,130,246,0.15)); border-color: var(--accent); }
+  100% { background: var(--bg-surface); border-color: var(--border); }
+}
