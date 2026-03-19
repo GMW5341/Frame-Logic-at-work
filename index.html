@@ -72,7 +72,12 @@
             </div>
           </div>
           <div class="tab-col-main">
-            <div id="ctx-form-view">
+            <div id="ctx-empty-state" class="form-empty-state">
+              <div class="form-empty-state-icon">🧠</div>
+              <div class="form-empty-state-text">AI 컨텍스트를 작성하여<br>프롬프트를 체계적으로 관리하세요</div>
+              <div class="form-empty-state-hint">왼쪽의 '+ 새 컨텍스트 작성'을 클릭하거나<br>히스토리에서 기존 항목을 선택하세요</div>
+            </div>
+            <div id="ctx-form-view" class="form-slide-wrapper form-hidden">
               <div class="view-form-header">
                 <div class="form-group form-datetime-group">
                   <label for="ctx-datetime">작성 시간</label>
@@ -128,7 +133,12 @@
             </div>
           </div>
           <div class="tab-col-main">
-            <div id="idea-form-view">
+            <div id="idea-empty-state" class="form-empty-state">
+              <div class="form-empty-state-icon">💡</div>
+              <div class="form-empty-state-text">떠오르는 아이디어를<br>자유롭게 기록하세요</div>
+              <div class="form-empty-state-hint">왼쪽의 '+ 새 아이디어 작성'을 클릭하거나<br>히스토리에서 기존 항목을 선택하세요</div>
+            </div>
+            <div id="idea-form-view" class="form-slide-wrapper form-hidden">
               <div class="view-form-header">
                 <div class="form-group form-datetime-group">
                   <label for="idea-datetime">작성 시간</label>
@@ -188,9 +198,14 @@
             </div>
           </div>
           <div class="tab-col-main">
+            <div id="mtg-empty-state" class="form-empty-state">
+              <div class="form-empty-state-icon">📋</div>
+              <div class="form-empty-state-text">회의 내용을 기록하고<br>AI로 분석하세요</div>
+              <div class="form-empty-state-hint">왼쪽의 '+ 새 회의'를 클릭하거나<br>히스토리에서 기존 항목을 선택하세요</div>
+            </div>
             <!-- 빈 폼 또는 기존 mtg-type-select 대체 -->
             <div id="mtg-type-select" class="mtg-step" style="display:none"></div>
-            <div id="mtg-form-view" class="mtg-step">
+            <div id="mtg-form-view" class="mtg-step form-slide-wrapper form-hidden">
               <div id="mtg-save-overlay" class="mtg-save-overlay">
                 <div class="save-check"><svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"/></svg></div>
                 <div class="save-msg">저장 완료</div>
@@ -476,7 +491,12 @@
             </div>
           </div>
           <div class="tab-col-main">
-            <div id="prop-form-view">
+            <div id="prop-empty-state" class="form-empty-state">
+              <div class="form-empty-state-icon">📨</div>
+              <div class="form-empty-state-text">브리핑 문서를 체계적으로<br>작성하고 관리하세요</div>
+              <div class="form-empty-state-hint">왼쪽의 '+ 새 문서 작성'을 클릭하거나<br>히스토리에서 기존 항목을 선택하세요</div>
+            </div>
+            <div id="prop-form-view" class="form-slide-wrapper form-hidden">
               <div class="view-form-header">
                 <div class="form-group form-datetime-group">
                   <label for="prop-datetime">작성 시간</label>
@@ -744,7 +764,7 @@
         </div>
 
         <!-- 업무일지 작성/수정 폼 -->
-        <div id="jnl-form-view"
+        <div id="jnl-form-view" class="form-slide-wrapper form-hidden">
           <div class="view-form-header">
             <button class="btn btn-secondary btn-small" id="jnl-back">← 목록</button>
             <span id="jnl-form-title-label" style="font-weight:600;font-size:0.9rem;color:var(--text-muted)">새 항목 추가</span>

@@ -462,6 +462,15 @@
     if (btn) { btn.classList.add('active'); btn.setAttribute('aria-selected', 'true'); }
     var panel = $('#tab-' + tabName);
     if (panel) panel.classList.add('active');
+    // 탭 전환 시 폼을 즉시 숨기고 빈 상태 표시
+    hideFormImmediate('ctx-form-view', 'ctx-empty-state');
+    hideFormImmediate('idea-form-view', 'idea-empty-state');
+    hideFormImmediate('mtg-form-view', 'mtg-empty-state');
+    hideFormImmediate('prop-form-view', 'prop-empty-state');
+    hideFormImmediate('jnl-form-view');
+    if (tabName === 'journal') {
+      $('#jnl-list-view').style.display = '';
+    }
     var calTab = TAB_TO_CAL[tabName];
     if (calTab) refreshSidePanel(calTab);
     // 업무일지 탭 진입 시 할 일 큐 배너 표시 + 자동완성 빌드
@@ -476,6 +485,46 @@
       switchTab(btn.dataset.tab);
     });
   });
+
+  // ── Form Slide In/Out ──
+  function slideFormIn(formId, emptyStateId) {
+    var form = $('#' + formId);
+    var empty = emptyStateId ? $('#' + emptyStateId) : null;
+    if (!form) return;
+    if (empty) empty.style.display = 'none';
+    form.classList.remove('form-hidden', 'form-sliding-out');
+    form.classList.add('form-sliding-in');
+    form.addEventListener('animationend', function handler() {
+      form.classList.remove('form-sliding-in');
+      form.removeEventListener('animationend', handler);
+    });
+  }
+
+  function slideFormOut(formId, emptyStateId) {
+    var form = $('#' + formId);
+    var empty = emptyStateId ? $('#' + emptyStateId) : null;
+    if (!form) return;
+    if (form.classList.contains('form-hidden')) {
+      if (empty) empty.style.display = '';
+      return;
+    }
+    form.classList.add('form-sliding-out');
+    form.addEventListener('animationend', function handler() {
+      form.classList.remove('form-sliding-out');
+      form.classList.add('form-hidden');
+      if (empty) empty.style.display = '';
+      form.removeEventListener('animationend', handler);
+    });
+  }
+
+  function hideFormImmediate(formId, emptyStateId) {
+    var form = $('#' + formId);
+    var empty = emptyStateId ? $('#' + emptyStateId) : null;
+    if (!form) return;
+    form.classList.remove('form-sliding-in', 'form-sliding-out');
+    form.classList.add('form-hidden');
+    if (empty) empty.style.display = '';
+  }
 
   // ── File Export ──
   function exportAsExcel(filename, sheetData) {
@@ -596,10 +645,12 @@
   var currentCtxEditId = null;
 
   function showCtxList() {
+    slideFormOut('ctx-form-view', 'ctx-empty-state');
     renderContextList();
   }
 
   function showCtxForm() {
+    slideFormIn('ctx-form-view', 'ctx-empty-state');
   }
 
   function clearContextForm() {
@@ -694,10 +745,12 @@
   var currentIdeaSource = null; // { meetingId, meetingTitle }
 
   function showIdeaList() {
+    slideFormOut('idea-form-view', 'idea-empty-state');
     renderIdeaBoard();
   }
 
   function showIdeaForm() {
+    slideFormIn('idea-form-view', 'idea-empty-state');
   }
 
   function clearIdeaForm() {
@@ -832,6 +885,7 @@
     } else {
       badge.style.display = 'none';
     }
+    slideFormIn('mtg-form-view', 'mtg-empty-state');
   }
 
   // -- Folder helpers --
@@ -1384,8 +1438,9 @@
       overlay.classList.add('show');
       setTimeout(function () {
         overlay.classList.remove('show');
-        // 폼 초기화 → 새 메모 작성 준비 상태로 전환
+        // 폼 초기화 → 빈 상태로 전환
         clearMeetingForm();
+        slideFormOut('mtg-form-view', 'mtg-empty-state');
         // 사이드바에서 방금 저장된 항목 하이라이트
         var savedEl = document.querySelector('.saved-item[data-id="' + savedId + '"]');
         if (savedEl) {
@@ -1397,6 +1452,7 @@
       }, 1200);
     } else {
       clearMeetingForm();
+      slideFormOut('mtg-form-view', 'mtg-empty-state');
       toast('회의 메모가 저장되었습니다');
     }
   });
@@ -3487,10 +3543,12 @@
   var currentPropSource = null; // { ideaId, ideaTitle }
 
   function showPropList() {
+    slideFormOut('prop-form-view', 'prop-empty-state');
     renderProposalList();
   }
 
   function showPropForm() {
+    slideFormIn('prop-form-view', 'prop-empty-state');
   }
 
   function showPropSourceLink(title) {
@@ -6688,11 +6746,24 @@
   }
 
   function showJnlList() {
+    var form = $('#jnl-form-view');
+    if (!form.classList.contains('form-hidden')) {
+      form.classList.add('form-sliding-out');
+      form.addEventListener('animationend', function handler() {
+        form.classList.remove('form-sliding-out');
+        form.classList.add('form-hidden');
+        $('#jnl-list-view').style.display = '';
+        form.removeEventListener('animationend', handler);
+      });
+    } else {
+      $('#jnl-list-view').style.display = '';
+    }
     renderJnlTable();
   }
 
   function showJnlForm() {
-    // no-op: form always visible in two-column layout
+    $('#jnl-list-view').style.display = 'none';
+    slideFormIn('jnl-form-view');
   }
 
   // ── 칼럼 설정 시스템 ──
@@ -7213,6 +7284,17 @@
     populateJnlColFilters();
     refreshSidePanel('journal');
     toast('새 항목이 추가되었습니다. 셀을 클릭하여 편집하세요.');
+  });
+
+  $('#jnl-back').addEventListener('click', function () {
+    var form = $('#jnl-form-view');
+    form.classList.add('form-sliding-out');
+    form.addEventListener('animationend', function handler() {
+      form.classList.remove('form-sliding-out');
+      form.classList.add('form-hidden');
+      $('#jnl-list-view').style.display = '';
+      form.removeEventListener('animationend', handler);
+    });
   });
 
   $('#jnl-form-clear').addEventListener('click', function () {

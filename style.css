@@ -199,6 +199,55 @@ body {
 .tab-col-main {
   flex: 1;
   min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Form Slide Animation ── */
+.form-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  color: var(--text-dim);
+  text-align: center;
+  gap: 12px;
+  padding: 48px 24px;
+}
+.form-empty-state-icon {
+  font-size: 3rem;
+  opacity: 0.5;
+}
+.form-empty-state-text {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.form-empty-state-hint {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.form-slide-wrapper {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+.form-slide-wrapper.form-hidden {
+  display: none;
+}
+.form-slide-wrapper.form-sliding-in {
+  animation: formSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.form-slide-wrapper.form-sliding-out {
+  animation: formSlideOut 0.2s ease forwards;
+}
+@keyframes formSlideIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes formSlideOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(40px); }
 }
 
 /* ── Mini Calendar ── */
