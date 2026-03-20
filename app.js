@@ -453,7 +453,7 @@
   var tabBtns = $$('.tab-btn');
   var tabPanels = $$('.tab-panel');
 
-  var TAB_TO_CAL = { context: 'context', ideas: 'ideas', meeting: 'meeting', proposal: 'proposal', tasks: 'tasks', diagram: 'diagram', journal: 'journal' };
+  var TAB_TO_CAL = { context: 'context', ideas: 'ideas', meeting: 'meeting', proposal: 'proposal', tasks: 'tasks', diagram: 'diagram', journal: 'journal', growth: 'growth' };
 
   function switchTab(tabName) {
     tabBtns.forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
@@ -468,6 +468,7 @@
     hideFormImmediate('mtg-form-view', 'mtg-empty-state');
     hideFormImmediate('prop-form-view', 'prop-empty-state');
     hideFormImmediate('jnl-form-view');
+    hideFormImmediate('gw-form-view');
     if (tabName === 'journal') {
       // 폼을 기본 뷰로 표시
       $('#jnl-list-view').style.display = 'none';
@@ -482,6 +483,11 @@
     if (tabName === 'journal') {
       if (typeof showTaskJnlBanner === 'function') showTaskJnlBanner();
       if (typeof buildJnlAutocompleteData === 'function') buildJnlAutocompleteData();
+    }
+    // 성장 기록 탭 진입 시 대시보드 렌더링
+    if (tabName === 'growth') {
+      hideFormImmediate('gw-form-view');
+      if (typeof renderGwDashboard === 'function') renderGwDashboard();
     }
   }
 

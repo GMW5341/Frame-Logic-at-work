@@ -44,6 +44,10 @@
             <span class="tab-icon">📝</span>
             <span class="tab-label">업무일지</span>
           </button>
+          <button class="tab-btn" data-tab="growth" role="tab" aria-selected="false">
+            <span class="tab-icon">📈</span>
+            <span class="tab-label">성장 기록</span>
+          </button>
         </nav>
         <div class="sidebar-footer">
           <button class="settings-btn" id="open-settings">⚙ 설정</button>
@@ -831,6 +835,229 @@
             <button class="btn btn-ghost" id="jnl-form-clear">초기화</button>
           </div>
         </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 성장 기록 탭 ==================== -->
+      <section id="tab-growth" class="tab-panel" role="tabpanel">
+        <div class="panel-top">
+          <h2>성장 기록</h2>
+          <div class="live-clock" data-clock></div>
+        </div>
+        <div class="tab-two-col">
+          <div class="tab-col-side">
+            <div class="mini-cal" data-cal="growth"></div>
+            <button class="side-new-btn" id="gw-new">+ 새 성장 스토리</button>
+            <div class="side-history" data-side-history="growth">
+              <div class="side-history-header">
+                <span class="side-history-title">히스토리</span>
+                <span class="side-history-count" data-count></span>
+              </div>
+              <div data-list></div>
+            </div>
+          </div>
+          <div class="tab-col-main">
+
+            <!-- 대시보드 뷰 (기본) -->
+            <div id="gw-dashboard-view">
+              <div class="gw-view-toggle">
+                <button class="btn btn-primary btn-small gw-toggle-active" id="gw-show-dashboard">📊 대시보드</button>
+                <button class="btn btn-secondary btn-small" id="gw-show-list">📋 전체 목록</button>
+                <button class="btn btn-accent btn-small" id="gw-show-interview">🎯 면접 준비</button>
+                <span style="flex:1"></span>
+                <button class="btn btn-secondary btn-small" id="gw-export-pdf">📄 PDF 내보내기</button>
+              </div>
+
+              <!-- 역량 맵 -->
+              <div class="gw-competency-map" id="gw-competency-map">
+                <h3 class="gw-section-title">역량 맵</h3>
+                <div class="gw-competency-grid" id="gw-competency-grid"></div>
+              </div>
+
+              <!-- 타임라인 -->
+              <div class="gw-timeline-section" id="gw-timeline-section">
+                <h3 class="gw-section-title">성장 타임라인</h3>
+                <div class="gw-timeline" id="gw-timeline"></div>
+              </div>
+
+              <!-- 최근 스토리 요약 -->
+              <div class="gw-recent-section">
+                <h3 class="gw-section-title">최근 성장 스토리</h3>
+                <div class="gw-recent-cards" id="gw-recent-cards"></div>
+              </div>
+
+              <!-- AI 인사이트 -->
+              <div class="gw-ai-insight" id="gw-ai-insight" style="display:none">
+                <div class="gw-ai-insight-header">
+                  <span>🤖 AI 성장 인사이트</span>
+                  <button class="btn btn-small btn-ghost" id="gw-ai-insight-close">✕</button>
+                </div>
+                <div class="gw-ai-insight-body" id="gw-ai-insight-body"></div>
+              </div>
+
+              <div class="gw-dashboard-actions">
+                <button class="btn btn-accent" id="gw-ai-analyze">🤖 AI 성장 분석</button>
+              </div>
+            </div>
+
+            <!-- 전체 목록 뷰 -->
+            <div id="gw-list-view" style="display:none">
+              <div class="gw-view-toggle">
+                <button class="btn btn-secondary btn-small" id="gw-show-dashboard2">📊 대시보드</button>
+                <button class="btn btn-primary btn-small gw-toggle-active" id="gw-show-list2">📋 전체 목록</button>
+                <button class="btn btn-secondary btn-small" id="gw-show-interview2">🎯 면접 준비</button>
+              </div>
+              <div class="gw-list-filter">
+                <input type="text" id="gw-search" placeholder="스토리 검색..." class="gw-search-input">
+                <select id="gw-filter-tag" class="gw-filter-select">
+                  <option value="">전체 역량</option>
+                </select>
+                <select id="gw-filter-cat" class="gw-filter-select">
+                  <option value="">전체 카테고리</option>
+                  <option value="problem_solving">문제 해결</option>
+                  <option value="leadership">리더십</option>
+                  <option value="technical">기술 역량</option>
+                  <option value="communication">커뮤니케이션</option>
+                  <option value="planning">기획/전략</option>
+                  <option value="data">데이터 분석</option>
+                  <option value="growth">자기 성장</option>
+                  <option value="other">기타</option>
+                </select>
+              </div>
+              <div class="gw-story-list" id="gw-story-list"></div>
+            </div>
+
+            <!-- 면접 준비 뷰 -->
+            <div id="gw-interview-view" style="display:none">
+              <div class="gw-view-toggle">
+                <button class="btn btn-secondary btn-small" id="gw-show-dashboard3">📊 대시보드</button>
+                <button class="btn btn-secondary btn-small" id="gw-show-list3">📋 전체 목록</button>
+                <button class="btn btn-primary btn-small gw-toggle-active" id="gw-show-interview3">🎯 면접 준비</button>
+              </div>
+              <div class="gw-interview-panel">
+                <div class="gw-interview-header">
+                  <h3>면접 준비 모드</h3>
+                  <p class="gw-interview-desc">성장 스토리를 기반으로 AI가 예상 질문과 답변 초안을 생성합니다.</p>
+                </div>
+                <div class="gw-interview-options">
+                  <label class="gw-interview-label">면접 유형</label>
+                  <select id="gw-interview-type" class="gw-filter-select">
+                    <option value="behavioral">행동 면접 (Behavioral)</option>
+                    <option value="competency">역량 면접</option>
+                    <option value="technical">기술 면접</option>
+                    <option value="culture">컬처핏 면접</option>
+                  </select>
+                  <label class="gw-interview-label">직무/포지션 (선택)</label>
+                  <input type="text" id="gw-interview-position" class="gw-search-input" placeholder="예: 프로덕트 매니저, 데이터 엔지니어">
+                  <button class="btn btn-accent" id="gw-interview-generate">🤖 AI 예상 질문 생성</button>
+                </div>
+                <div class="gw-interview-result" id="gw-interview-result" style="display:none">
+                  <div class="gw-interview-result-header">
+                    <span>예상 질문 & 답변 초안</span>
+                    <button class="btn btn-small btn-secondary" id="gw-interview-copy">📋 복사</button>
+                  </div>
+                  <div class="gw-interview-result-body" id="gw-interview-result-body"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 스토리 작성/수정 폼 -->
+            <div id="gw-form-view" class="form-slide-wrapper form-hidden">
+              <div class="view-form-header">
+                <button class="btn btn-secondary btn-small" id="gw-back">← 돌아가기</button>
+                <span id="gw-form-title-label" style="font-weight:600;font-size:0.9rem;color:var(--text-muted)">새 성장 스토리</span>
+              </div>
+
+              <!-- AI 자동 생성 섹션 -->
+              <div class="gw-ai-generate" id="gw-ai-generate">
+                <div class="gw-ai-gen-label">🤖 기존 데이터에서 AI 자동 생성</div>
+                <div class="gw-ai-gen-row">
+                  <label>기간:</label>
+                  <input type="date" id="gw-ai-date-from" class="gw-date-input">
+                  <span>~</span>
+                  <input type="date" id="gw-ai-date-to" class="gw-date-input">
+                  <button class="btn btn-accent btn-small" id="gw-ai-gen-btn">🤖 AI 초안 생성</button>
+                </div>
+                <div class="gw-ai-gen-status" id="gw-ai-gen-status" style="display:none"></div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group flex-2">
+                  <label for="gw-title">제목</label>
+                  <input type="text" id="gw-title" placeholder="예: 데이터 파이프라인 장애 대응으로 처리 시간 89% 단축">
+                </div>
+                <div class="form-group">
+                  <label for="gw-category">카테고리</label>
+                  <select id="gw-category">
+                    <option value="problem_solving">문제 해결</option>
+                    <option value="leadership">리더십</option>
+                    <option value="technical">기술 역량</option>
+                    <option value="communication">커뮤니케이션</option>
+                    <option value="planning">기획/전략</option>
+                    <option value="data">데이터 분석</option>
+                    <option value="growth">자기 성장</option>
+                    <option value="other">기타</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="gw-period-from">기간</label>
+                  <div class="gw-period-row">
+                    <input type="date" id="gw-period-from">
+                    <span>~</span>
+                    <input type="date" id="gw-period-to">
+                  </div>
+                </div>
+                <div class="form-group flex-2">
+                  <label for="gw-tags">역량 태그</label>
+                  <input type="text" id="gw-tags" placeholder="쉼표로 구분 (예: 문제해결, 아키텍처, 리더십)">
+                  <div class="gw-tag-presets" id="gw-tag-presets">
+                    <span class="gw-tag-preset" data-tag="문제해결">문제해결</span>
+                    <span class="gw-tag-preset" data-tag="리더십">리더십</span>
+                    <span class="gw-tag-preset" data-tag="협업">협업</span>
+                    <span class="gw-tag-preset" data-tag="기획">기획</span>
+                    <span class="gw-tag-preset" data-tag="기술">기술</span>
+                    <span class="gw-tag-preset" data-tag="데이터">데이터</span>
+                    <span class="gw-tag-preset" data-tag="커뮤니케이션">커뮤니케이션</span>
+                    <span class="gw-tag-preset" data-tag="자동화">자동화</span>
+                    <span class="gw-tag-preset" data-tag="프로세스개선">프로세스개선</span>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="gw-situation">📋 상황 (Situation)</label>
+                <textarea id="gw-situation" rows="3" placeholder="어떤 상황이었나요? 배경과 맥락을 설명하세요."></textarea>
+              </div>
+              <div class="form-group">
+                <label for="gw-task">🎯 과제 (Task)</label>
+                <textarea id="gw-task" rows="3" placeholder="해결해야 할 과제나 목표는 무엇이었나요?"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="gw-action">💪 행동 (Action)</label>
+                <textarea id="gw-action" rows="4" placeholder="구체적으로 어떤 행동을 취했나요?"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="gw-result">📈 결과 (Result)</label>
+                <textarea id="gw-result" rows="3" placeholder="결과는 어떠했나요? 가능하면 수치로 표현하세요."></textarea>
+              </div>
+              <div class="form-group">
+                <label for="gw-lesson">💡 배운 점</label>
+                <textarea id="gw-lesson" rows="3" placeholder="이 경험에서 배운 점이나 성장한 부분은?"></textarea>
+              </div>
+              <div class="form-group">
+                <label>📎 연결된 항목</label>
+                <div class="gw-linked-items" id="gw-linked-items">
+                  <span class="gw-linked-empty">저장 후 업무일지/회의 항목과 연결할 수 있습니다</span>
+                </div>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-primary" id="gw-save">저장</button>
+                <button class="btn btn-ghost" id="gw-form-clear">초기화</button>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>
