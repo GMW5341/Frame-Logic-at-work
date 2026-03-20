@@ -696,36 +696,23 @@
           </div>
           <div class="tab-col-main">
         <div id="jnl-list-view" style="display:none">
+          <!-- 통합 상단 바: 검색 + 필터 + 내보내기 + AI + 새 항목 -->
           <div class="jnl-list-top-bar">
-            <button class="btn btn-primary btn-small" id="jnl-go-form">✏️ 새 항목 작성</button>
-          </div>
-          <!-- 완료된 할 일 반영 배너 -->
-          <div class="jnl-task-banner" id="jnl-task-banner" style="display:none">
-            <div class="jnl-task-banner-icon">✅</div>
-            <div class="jnl-task-banner-body">
-              <span class="jnl-task-banner-text" id="jnl-task-banner-text">완료된 할 일 0건을 업무일지에 반영할 수 있습니다</span>
-              <div class="jnl-task-banner-actions">
-                <button class="btn btn-primary btn-small" id="jnl-task-apply">반영하기</button>
-                <button class="btn btn-ghost btn-small" id="jnl-task-dismiss">나중에</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 자연어 빠른 입력 -->
-          <div class="jnl-quick-input" id="jnl-quick-input">
-            <input type="text" id="jnl-quick-text" class="jnl-quick-text" placeholder="오늘 한 일을 자유롭게 입력하세요 (예: '경쟁사 분석 보고서 작성 완료, 다음주 리뷰 예정')">
-            <button class="btn btn-accent btn-small" id="jnl-quick-ai" title="AI가 자동으로 칼럼을 분류합니다">🤖 AI 분류</button>
-            <button class="btn btn-primary btn-small" id="jnl-quick-add" title="바로 추가">+ 추가</button>
-          </div>
-
-          <div class="jnl-toolbar">
-            <button class="btn btn-secondary" id="jnl-import-excel">📥 Excel/CSV 업로드</button>
-            <button class="btn btn-secondary" id="jnl-export-excel">📊 Excel 내보내기</button>
-            <button class="btn btn-secondary" id="jnl-export-csv">📄 CSV 내보내기</button>
+            <input type="text" id="jnl-search" class="jnl-topbar-search" placeholder="검색...">
+            <select id="jnl-filter-category" class="jnl-topbar-select">
+              <option value="">전체 구분</option>
+            </select>
+            <span class="jnl-topbar-sep"></span>
+            <button class="btn btn-secondary btn-small" id="jnl-import-excel" title="Excel/CSV 업로드">📥 업로드</button>
+            <button class="btn btn-secondary btn-small" id="jnl-export-excel" title="Excel 내보내기">📊 Excel</button>
+            <button class="btn btn-secondary btn-small" id="jnl-export-csv" title="CSV 내보내기">📄 CSV</button>
             <input type="file" id="jnl-file-input" accept=".xlsx,.xls,.csv" style="display:none">
-            <span class="jnl-toolbar-sep"></span>
-            <button class="btn btn-accent" id="jnl-ai-summary">🤖 AI 요약</button>
-            <button class="btn btn-accent" id="jnl-ai-report">📋 AI 리포트</button>
+            <span class="jnl-topbar-sep"></span>
+            <button class="btn btn-accent btn-small" id="jnl-ai-summary" title="AI 요약">🤖 요약</button>
+            <button class="btn btn-accent btn-small" id="jnl-ai-report" title="AI 리포트">📋 리포트</button>
+            <span class="jnl-topbar-sep"></span>
+            <button class="btn btn-secondary btn-small" id="jnl-col-manage" title="칼럼 관리">⚙ 칼럼</button>
+            <button class="btn btn-primary btn-small" id="jnl-go-form">+ 새 항목</button>
           </div>
           <!-- AI 결과 패널 -->
           <div class="jnl-ai-panel" id="jnl-ai-panel" style="display:none">
@@ -734,13 +721,6 @@
               <button class="btn btn-small btn-ghost" id="jnl-ai-panel-close">✕</button>
             </div>
             <div class="jnl-ai-panel-body" id="jnl-ai-panel-body"></div>
-          </div>
-          <div class="jnl-filter-row">
-            <input type="text" id="jnl-search" placeholder="검색...">
-            <select id="jnl-filter-category">
-              <option value="">전체 구분</option>
-            </select>
-            <button class="btn btn-secondary btn-small" id="jnl-col-manage" title="칼럼 관리">⚙ 칼럼</button>
           </div>
           <!-- 칼럼 관리 패널 -->
           <div class="jnl-col-panel" id="jnl-col-panel" style="display:none">
@@ -793,37 +773,10 @@
               <button class="btn btn-accent btn-small" id="jnl-nl-ai" title="AI로 정교하게 분류 (API 키 필요)">🤖 AI 분류</button>
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="jnl-category">구분</label>
-              <input type="text" id="jnl-category" placeholder="예: 기획, 리서치, 미팅">
-            </div>
-            <div class="form-group flex-1">
-              <label for="jnl-item">항목</label>
-              <input type="text" id="jnl-item" placeholder="예: 시장 조사">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="jnl-subitem">세부 항목</label>
-              <input type="text" id="jnl-subitem" placeholder="예: 경쟁사 분석">
-            </div>
-            <div class="form-group">
-              <label for="jnl-date">날짜</label>
-              <input type="date" id="jnl-date">
-            </div>
-          </div>
+          <!-- 동적 폼 필드 (loadJnlColumns 기반으로 JS가 렌더링) -->
+          <div id="jnl-dynamic-fields"></div>
+          <!-- 파일 첨부 (항상 표시) -->
           <div class="form-group">
-            <label for="jnl-feedback">피드백 및 결정</label>
-            <textarea id="jnl-feedback" rows="4" placeholder="관련 피드백 및 결정 사항을 기록하세요"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="jnl-note">느낀 점 및 수행해야 할 사항</label>
-            <textarea id="jnl-note" rows="4" placeholder="느낀 점이나 앞으로 수행해야 할 사항을 기록하세요"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="jnl-ref">레퍼런스</label>
-            <textarea id="jnl-ref" rows="3" placeholder="참고 링크, 문서, 자료 등"></textarea>
             <div class="jnl-attach-area">
               <button type="button" class="btn btn-small btn-secondary" id="jnl-attach-btn">📎 파일 첨부</button>
               <input type="file" id="jnl-attach-input" multiple style="display:none">

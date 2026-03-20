@@ -493,10 +493,10 @@
     }
     var calTab = TAB_TO_CAL[tabName];
     if (calTab) refreshSidePanel(calTab);
-    // 업무일지 탭 진입 시 할 일 큐 배너 표시 + 자동완성 빌드
+    // 업무일지 탭 진입 시 자동완성 빌드 + 동적 폼 렌더링
     if (tabName === 'journal') {
-      if (typeof showTaskJnlBanner === 'function') showTaskJnlBanner();
       if (typeof buildJnlAutocompleteData === 'function') buildJnlAutocompleteData();
+      if (typeof renderJnlFormFields === 'function') renderJnlFormFields();
     }
     // 성장 기록 탭 진입 시 대시보드 렌더링
     if (tabName === 'growth') {
@@ -6784,12 +6784,12 @@
       $('#jnl-list-view').style.display = '';
     }
     renderJnlTable();
-    showTaskJnlBanner();
     buildJnlAutocompleteData();
   }
 
   function showJnlForm() {
     $('#jnl-list-view').style.display = 'none';
+    renderJnlFormFields();
     slideFormIn('jnl-form-view');
   }
 
@@ -6842,6 +6842,90 @@
     $('#jnl-form-title-label').textContent = '새 항목 추가';
     jnlAttachments = [];
     renderJnlAttachList();
+  }
+
+  // ── 동적 폼 필드 렌더링 ──
+  function renderJnlFormFields() {
+    var cols = loadJnlColumns();
+    var container = $('#jnl-dynamic-fields');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // 짧은 필드(text, date, select)는 2열로, 긴 필드(longtext)는 1열로
+    var shortGroup = [];
+    cols.forEach(function (col, idx) {
+      if (col.type === 'longtext') {
+        // 먼저 쌓인 short 그룹 플러시
+        if (shortGroup.length > 0) {
+          _flushShortGroup(container, shortGroup);
+          shortGroup = [];
+        }
+        // longtext: 단독 행
+        var div = document.createElement('div');
+        div.className = 'form-group';
+        var label = document.createElement('label');
+        label.setAttribute('for', 'jnl-' + col.key);
+        label.textContent = col.label;
+        var textarea = document.createElement('textarea');
+        textarea.id = 'jnl-' + col.key;
+        textarea.rows = 4;
+        textarea.placeholder = col.label + '을(를) 입력하세요';
+        div.appendChild(label);
+        div.appendChild(textarea);
+        container.appendChild(div);
+      } else {
+        shortGroup.push(col);
+        // 2개씩 묶어서 행 만들기
+        if (shortGroup.length === 2) {
+          _flushShortGroup(container, shortGroup);
+          shortGroup = [];
+        }
+      }
+    });
+    // 남은 short 필드
+    if (shortGroup.length > 0) {
+      _flushShortGroup(container, shortGroup);
+    }
+  }
+
+  function _flushShortGroup(container, group) {
+    var row = document.createElement('div');
+    row.className = 'form-row';
+    group.forEach(function (col) {
+      var div = document.createElement('div');
+      div.className = 'form-group flex-1';
+      var label = document.createElement('label');
+      label.setAttribute('for', 'jnl-' + col.key);
+      label.textContent = col.label;
+      var input;
+      if (col.type === 'date') {
+        input = document.createElement('input');
+        input.type = 'date';
+        input.id = 'jnl-' + col.key;
+      } else if (col.type === 'select' && col.options && col.options.length > 0) {
+        input = document.createElement('select');
+        input.id = 'jnl-' + col.key;
+        var optEmpty = document.createElement('option');
+        optEmpty.value = '';
+        optEmpty.textContent = '선택...';
+        input.appendChild(optEmpty);
+        col.options.forEach(function (opt) {
+          var o = document.createElement('option');
+          o.value = opt;
+          o.textContent = opt;
+          input.appendChild(o);
+        });
+      } else {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.id = 'jnl-' + col.key;
+        input.placeholder = col.label + ' 입력';
+      }
+      div.appendChild(label);
+      div.appendChild(input);
+      row.appendChild(div);
+    });
+    container.appendChild(row);
   }
 
   // ── 리치 텍스트 유틸리티 ──
@@ -7063,6 +7147,7 @@
   function loadJnlToForm(entry) {
     var cols = loadJnlColumns();
     currentJnlEditId = entry.id;
+    renderJnlFormFields();
     showJnlForm();
     cols.forEach(function (col) {
       var el = $('#jnl-' + col.key);
@@ -7308,7 +7393,6 @@
       form.removeEventListener('animationend', handler);
     });
     renderJnlTable();
-    showTaskJnlBanner();
     buildJnlAutocompleteData();
   });
 
@@ -7703,6 +7787,7 @@
     });
   }
 
+  // 클릭: 삭제, 파일 다운로드, 링크 열기 (편집 제외)
   $('#jnl-tbody').addEventListener('click', function (e) {
     // File download from table
     var attachTag = e.target.closest('.jnl-cell-attach-tag');
@@ -7758,8 +7843,17 @@
       toast('삭제되었습니다');
       return;
     }
+  });
 
-    // 인라인 편집: 셀 클릭
+  // 더블클릭: 인라인 편집 (셀 더블클릭으로 변경)
+  $('#jnl-tbody').addEventListener('dblclick', function (e) {
+    // 이미 편집 중인 input/textarea/contentEditable 클릭은 무시
+    if (e.target.closest('.jnl-cell-input, .jnl-cell-textarea, .jnl-cell-rich-editor, .jnl-rich-toolbar, .jnl-text-edit-wrap')) return;
+
+    var tr = e.target.closest('tr[data-id]');
+    if (!tr) return;
+    var id = tr.dataset.id;
+
     var td = e.target.closest('.jnl-editable');
     if (!td) return;
     var field = td.dataset.field;
@@ -8097,68 +8191,10 @@
 
   // (셀 단위 AI 기능은 startJnlEdit 내 showCellAiMenu로 이동됨)
 
-  // ── 완료된 할 일 → 업무일지 배너 ──
+  // ── 완료된 할 일 → 업무일지 (폼 뷰에서만 처리) ──
   function showTaskJnlBanner() {
-    var q = loadTaskJnlQueue();
-    var banner = $('#jnl-task-banner');
-    if (!banner) return;
-    if (q.length === 0) {
-      banner.style.display = 'none';
-      return;
-    }
-    banner.style.display = '';
-    $('#jnl-task-banner-text').textContent = '완료된 할 일 ' + q.length + '건을 업무일지에 반영할 수 있습니다';
+    // 목록 뷰 배너 제거됨 — 폼 뷰 알림만 사용
   }
-
-  $('#jnl-task-apply').addEventListener('click', function () {
-    var q = loadTaskJnlQueue();
-    if (q.length === 0) { toast('반영할 항목이 없습니다'); return; }
-    var cols = loadJnlColumns();
-    var items = load(JNL_KEY);
-    var today = new Date().toISOString().slice(0, 10);
-
-    q.forEach(function (task) {
-      var newEntry = {
-        id: uid(),
-        attachments: [],
-        createdAt: new Date().toISOString()
-      };
-      cols.forEach(function (col) {
-        if (col.key === 'category' || col.label === '구분') {
-          newEntry[col.key] = '할 일 완료';
-        } else if (col.key === 'item' || col.label === '항목') {
-          newEntry[col.key] = task.text;
-        } else if (col.key === 'subitem' || col.label === '세부 항목') {
-          newEntry[col.key] = task.memo || '';
-        } else if (col.type === 'date') {
-          newEntry[col.key] = task.completedAt || today;
-        } else if (col.key === 'note' || col.label.indexOf('수행') > -1 || col.label.indexOf('느낀') > -1) {
-          var note = '';
-          if (task.priority === 'urgent') note = '[긴급] ';
-          else if (task.priority === 'high') note = '[중요] ';
-          if (task.dueDate) note += '기한: ' + task.dueDate + ' / ';
-          note += '완료일: ' + (task.completedAt || today);
-          newEntry[col.key] = note;
-        } else {
-          newEntry[col.key] = '';
-        }
-      });
-      items.unshift(newEntry);
-    });
-
-    save(JNL_KEY, items);
-    saveTaskJnlQueue([]);
-    renderJnlTable();
-    populateJnlCategoryFilter();
-    populateJnlColFilters();
-    refreshSidePanel('journal');
-    showTaskJnlBanner();
-    toast(q.length + '건의 할 일이 업무일지에 반영되었습니다');
-  });
-
-  $('#jnl-task-dismiss').addEventListener('click', function () {
-    $('#jnl-task-banner').style.display = 'none';
-  });
 
   // ── 목록 ↔ 폼 전환 버튼 ──
   $('#jnl-go-form').addEventListener('click', function () {
@@ -8511,124 +8547,7 @@
     }
   });
 
-  // ── 자연어 빠른 입력 (리스트 뷰 - 규칙 기반 파싱 적용) ──
-  $('#jnl-quick-add').addEventListener('click', function () {
-    var text = $('#jnl-quick-text').value.trim();
-    if (!text) { toast('내용을 입력해주세요'); return; }
-    var parsed = parseJnlNaturalLanguage(text);
-    var items = load(JNL_KEY);
-    var newEntry = {
-      id: uid(),
-      attachments: [],
-      createdAt: new Date().toISOString()
-    };
-    var cols = loadJnlColumns();
-    cols.forEach(function (col) {
-      newEntry[col.key] = parsed[col.key] || '';
-    });
-    items.unshift(newEntry);
-    save(JNL_KEY, items);
-    renderJnlTable();
-    populateJnlCategoryFilter();
-    populateJnlColFilters();
-    refreshSidePanel('journal');
-    $('#jnl-quick-text').value = '';
-    toast('자동 파싱하여 추가했습니다');
-  });
-
-  // Enter 키로 빠른 추가
-  $('#jnl-quick-text').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (e.ctrlKey || e.metaKey) {
-        $('#jnl-quick-ai').click();
-      } else {
-        $('#jnl-quick-add').click();
-      }
-    }
-  });
-
-  // ── AI 자연어 → 칼럼 자동 분류 (#자연어AI) ──
-  $('#jnl-quick-ai').addEventListener('click', function () {
-    var text = $('#jnl-quick-text').value.trim();
-    if (!text) { toast('내용을 입력해주세요'); return; }
-
-    var btn = this;
-    btn.disabled = true;
-    btn.textContent = '분류 중...';
-
-    var cols = loadJnlColumns();
-    var colDesc = cols.map(function (c) {
-      return '- ' + c.key + ' (' + c.label + ', 타입: ' + c.type + ')';
-    }).join('\n');
-
-    // 기존 항목에서 자주 쓰이는 값 수집 (자동완성 데이터 활용)
-    var existingItems = load(JNL_KEY);
-    var sampleValues = {};
-    cols.forEach(function (col) {
-      if (col.type === 'text') {
-        var vals = {};
-        existingItems.forEach(function (item) {
-          var v = item[col.key];
-          if (v) vals[v] = (vals[v] || 0) + 1;
-        });
-        var sorted = Object.keys(vals).sort(function (a, b) { return vals[b] - vals[a]; }).slice(0, 5);
-        if (sorted.length > 0) sampleValues[col.key] = sorted;
-      }
-    });
-    var sampleInfo = '';
-    if (Object.keys(sampleValues).length > 0) {
-      sampleInfo = '\n\n기존 사용 값 참고 (가능하면 이 값들을 재사용):\n';
-      Object.keys(sampleValues).forEach(function (k) {
-        sampleInfo += k + ': ' + sampleValues[k].join(', ') + '\n';
-      });
-    }
-
-    var systemPrompt = '당신은 업무일지 입력 도우미입니다. 사용자의 자연어 입력을 분석하여 지정된 칼럼에 맞게 분류하세요.\n' +
-      '반드시 JSON 형식으로만 응답하세요. 다른 텍스트 없이 순수 JSON만 출력하세요.';
-    var userMsg = '아래 자연어 입력을 업무일지 칼럼에 맞게 분류해주세요.\n\n' +
-      '입력: "' + text + '"\n\n' +
-      '칼럼 정의:\n' + colDesc + sampleInfo + '\n\n' +
-      '응답 형식 (date는 YYYY-MM-DD, 오늘: ' + new Date().toISOString().slice(0, 10) + '):\n' +
-      '{ ' + cols.map(function (c) { return '"' + c.key + '": "값"'; }).join(', ') + ' }';
-
-    callClaudeAPI(systemPrompt, userMsg)
-      .then(function (raw) {
-        var parsed;
-        try {
-          var jsonMatch = raw.match(/\{[\s\S]*\}/);
-          parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
-        } catch (e) {
-          toast('AI 분류 실패: 응답 파싱 오류');
-          return;
-        }
-
-        var items = load(JNL_KEY);
-        var newEntry = {
-          id: uid(),
-          attachments: [],
-          createdAt: new Date().toISOString()
-        };
-        cols.forEach(function (col) {
-          newEntry[col.key] = parsed[col.key] || '';
-        });
-        items.unshift(newEntry);
-        save(JNL_KEY, items);
-        renderJnlTable();
-        populateJnlCategoryFilter();
-        populateJnlColFilters();
-        refreshSidePanel('journal');
-        $('#jnl-quick-text').value = '';
-        toast('AI가 자동 분류하여 추가했습니다');
-      })
-      .catch(function (err) {
-        toast('AI 분류 실패: ' + err.message);
-      })
-      .finally(function () {
-        btn.disabled = false;
-        btn.textContent = '🤖 AI 분류';
-      });
-  });
+  // (자연어 빠른 입력은 폼 뷰의 jnl-nl-section으로 통합됨)
 
   // ── 구분/항목 자동완성 ──
   var jnlAutocompleteData = {};
@@ -8842,6 +8761,7 @@
     populateJnlCategoryFilter();
     populateJnlColFilters();
     renderJnlTable();
+    renderJnlFormFields();
   }
 
   // 칼럼 관리 패널 열기/닫기
