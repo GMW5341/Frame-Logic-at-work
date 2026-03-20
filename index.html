@@ -50,6 +50,7 @@
           </button>
         </nav>
         <div class="sidebar-footer">
+          <button class="workflow-btn" id="open-workflow">⚡ 워크플로우</button>
           <button class="settings-btn" id="open-settings">⚙ 설정</button>
           <p>데이터는 브라우저에 저장됩니다</p>
         </div>
@@ -1093,6 +1094,131 @@
       </div>
     </div>
     <div class="pres-stage" id="pres-stage"></div>
+  </div>
+
+  <!-- 워크플로우 오버레이 -->
+  <div class="modal-overlay" id="workflow-overlay">
+    <div class="modal-content workflow-modal">
+      <div class="modal-header">
+        <h2>⚡ 멀티 스텝 워크플로우</h2>
+        <button class="btn btn-small btn-danger" id="workflow-close">✕</button>
+      </div>
+
+      <!-- 워크플로우 선택 뷰 -->
+      <div id="wf-select-view">
+        <p class="wf-desc">여러 작업을 자동으로 연결하여 실행합니다.</p>
+
+        <div class="wf-templates">
+          <div class="wf-template-card" data-wf="meeting-to-journal">
+            <div class="wf-template-icon">🎙→📝</div>
+            <div class="wf-template-info">
+              <div class="wf-template-name">회의 녹음 → 일지 정리</div>
+              <div class="wf-template-steps">녹음 → STT 변환 → AI 분석 → 업무일지 자동 작성</div>
+            </div>
+          </div>
+          <div class="wf-template-card" data-wf="meeting-to-tasks">
+            <div class="wf-template-icon">📋→✅</div>
+            <div class="wf-template-info">
+              <div class="wf-template-name">회의 분석 → 할 일 추출</div>
+              <div class="wf-template-steps">회의 선택 → AI 분석 → 액션 아이템 → 할 일 자동 생성</div>
+            </div>
+          </div>
+          <div class="wf-template-card" data-wf="meeting-full">
+            <div class="wf-template-icon">🎙→📝→✅</div>
+            <div class="wf-template-info">
+              <div class="wf-template-name">회의 풀 파이프라인</div>
+              <div class="wf-template-steps">녹음 → STT → AI 분석 → 일지 + 할 일 + 브리핑 자동 생성</div>
+            </div>
+          </div>
+          <div class="wf-template-card" data-wf="journal-to-growth">
+            <div class="wf-template-icon">📝→📈</div>
+            <div class="wf-template-info">
+              <div class="wf-template-name">업무일지 → 성장 기록</div>
+              <div class="wf-template-steps">일지 선택 → AI 분석 → STAR 성장 스토리 자동 생성</div>
+            </div>
+          </div>
+          <div class="wf-template-card" data-wf="custom">
+            <div class="wf-template-icon">🔧</div>
+            <div class="wf-template-info">
+              <div class="wf-template-name">커스텀 워크플로우</div>
+              <div class="wf-template-steps">원하는 단계를 자유롭게 조합합니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 워크플로우 설정 뷰 -->
+      <div id="wf-config-view" style="display:none">
+        <div class="wf-config-header">
+          <button class="btn btn-ghost btn-small" id="wf-back">← 돌아가기</button>
+          <h3 id="wf-config-title"></h3>
+        </div>
+
+        <!-- 회의 선택 (기존 회의 기반 워크플로우용) -->
+        <div id="wf-meeting-select" class="form-group" style="display:none">
+          <label>회의 선택</label>
+          <select id="wf-meeting-picker" class="settings-input">
+            <option value="">-- 회의를 선택하세요 --</option>
+          </select>
+          <label style="margin-top:8px"><input type="checkbox" id="wf-use-current-meeting"> 현재 작성 중인 회의 사용</label>
+        </div>
+
+        <!-- 일지 선택 (일지 기반 워크플로우용) -->
+        <div id="wf-journal-select" class="form-group" style="display:none">
+          <label>업무일지 범위</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="date" id="wf-jnl-from" class="settings-input" style="flex:1">
+            <span>~</span>
+            <input type="date" id="wf-jnl-to" class="settings-input" style="flex:1">
+          </div>
+        </div>
+
+        <!-- 커스텀 스텝 빌더 -->
+        <div id="wf-custom-builder" style="display:none">
+          <div class="wf-step-list" id="wf-custom-steps"></div>
+          <div class="wf-add-step-row">
+            <select id="wf-add-step-type" class="settings-input" style="flex:1">
+              <option value="">+ 스텝 추가...</option>
+              <option value="select-meeting">📋 기존 회의 선택</option>
+              <option value="ai-analyze">🤖 AI 분석</option>
+              <option value="to-journal">📝 업무일지 작성</option>
+              <option value="to-tasks">✅ 할 일 추출</option>
+              <option value="to-briefing">📨 브리핑 생성</option>
+              <option value="to-growth">📈 성장 기록 생성</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 출력 옵션 -->
+        <div class="wf-output-options" id="wf-output-options">
+          <label class="wf-option"><input type="checkbox" id="wf-opt-journal" checked> 업무일지에 자동 저장</label>
+          <label class="wf-option"><input type="checkbox" id="wf-opt-tasks"> 할 일 자동 생성</label>
+          <label class="wf-option"><input type="checkbox" id="wf-opt-briefing"> 브리핑 문서 생성</label>
+          <label class="wf-option"><input type="checkbox" id="wf-opt-growth"> 성장 기록 생성</label>
+        </div>
+
+        <div class="btn-row" style="margin-top:16px">
+          <button class="btn btn-primary" id="wf-start">▶ 워크플로우 실행</button>
+        </div>
+      </div>
+
+      <!-- 워크플로우 실행 뷰 -->
+      <div id="wf-run-view" style="display:none">
+        <div class="wf-run-header">
+          <h3 id="wf-run-title"></h3>
+          <span class="wf-run-status" id="wf-run-status">실행 중</span>
+        </div>
+        <div class="wf-progress-bar">
+          <div class="wf-progress-fill" id="wf-progress-fill"></div>
+        </div>
+        <div class="wf-steps-tracker" id="wf-steps-tracker"></div>
+        <div class="wf-run-log" id="wf-run-log"></div>
+        <div class="btn-row" style="margin-top:16px">
+          <button class="btn btn-danger btn-small" id="wf-cancel" style="display:none">취소</button>
+          <button class="btn btn-primary" id="wf-done" style="display:none">완료</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 설정 오버레이 -->

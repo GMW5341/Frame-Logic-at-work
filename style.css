@@ -5914,3 +5914,310 @@ body {
 .jnl-field-filled {
   animation: jnlFieldFilled 1.5s ease;
 }
+
+/* ===== Workflow Button & Modal ===== */
+.workflow-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(168,85,247,0.12));
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--transition);
+}
+.workflow-btn:hover {
+  background: linear-gradient(135deg, rgba(99,102,241,0.22), rgba(168,85,247,0.22));
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.workflow-modal {
+  max-width: 600px;
+  width: 95%;
+}
+
+.wf-desc {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
+
+/* Template cards */
+.wf-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wf-template-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--surface);
+}
+.wf-template-card:hover {
+  border-color: var(--accent);
+  background: rgba(99,102,241,0.06);
+  transform: translateX(4px);
+}
+.wf-template-icon {
+  font-size: 1.6rem;
+  min-width: 50px;
+  text-align: center;
+}
+.wf-template-info {
+  flex: 1;
+}
+.wf-template-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin-bottom: 3px;
+}
+.wf-template-steps {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+/* Config view */
+.wf-config-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.wf-config-header h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.wf-output-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.wf-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.wf-option input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+/* Custom step builder */
+.wf-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.wf-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.85rem;
+}
+.wf-step-item .wf-step-num {
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 22px;
+}
+.wf-step-item .wf-step-label {
+  flex: 1;
+}
+.wf-step-item .wf-step-remove {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0 4px;
+}
+.wf-step-item .wf-step-remove:hover {
+  color: #ef4444;
+}
+.wf-step-arrow {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+.wf-add-step-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Run view */
+.wf-run-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.wf-run-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.wf-run-status {
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.wf-run-status.running {
+  background: rgba(59,130,246,0.15);
+  color: #3b82f6;
+}
+.wf-run-status.completed {
+  background: rgba(34,197,94,0.15);
+  color: #22c55e;
+}
+.wf-run-status.error {
+  background: rgba(239,68,68,0.15);
+  color: #ef4444;
+}
+.wf-run-status.cancelled {
+  background: rgba(156,163,175,0.15);
+  color: #9ca3af;
+}
+
+.wf-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.wf-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #a855f7);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.5s ease;
+}
+
+.wf-steps-tracker {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 12px;
+}
+.wf-tracker-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 0.85rem;
+  position: relative;
+}
+.wf-tracker-step::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 28px;
+  bottom: -8px;
+  width: 2px;
+  background: var(--border);
+}
+.wf-tracker-step:last-child::before {
+  display: none;
+}
+.wf-tracker-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  transition: all 0.3s ease;
+}
+.wf-tracker-step.active .wf-tracker-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  animation: wfPulse 1.5s infinite;
+}
+.wf-tracker-step.done .wf-tracker-dot {
+  border-color: #22c55e;
+  background: #22c55e;
+  color: #fff;
+}
+.wf-tracker-step.error .wf-tracker-dot {
+  border-color: #ef4444;
+  background: #ef4444;
+  color: #fff;
+}
+.wf-tracker-step.done::before {
+  background: #22c55e;
+}
+.wf-tracker-step.active::before {
+  background: linear-gradient(to bottom, var(--accent) 0%, var(--border) 100%);
+}
+.wf-tracker-info {
+  flex: 1;
+  padding-top: 2px;
+}
+.wf-tracker-label {
+  font-weight: 500;
+}
+.wf-tracker-detail {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+@keyframes wfPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(99,102,241,0); }
+}
+
+.wf-run-log {
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  line-height: 1.6;
+}
+.wf-log-entry {
+  padding: 1px 0;
+}
+.wf-log-time {
+  color: var(--accent);
+  margin-right: 6px;
+}
+.wf-log-success {
+  color: #22c55e;
+}
+.wf-log-error {
+  color: #ef4444;
+}

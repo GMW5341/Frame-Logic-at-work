@@ -9489,6 +9489,575 @@
     exportAsPDF('성장 포트폴리오', html);
   });
 
+  // ══════════════════════════════════════════════════════════
+  // ██  멀티 스텝 워크플로우
+  // ══════════════════════════════════════════════════════════
+
+  var wfState = {
+    type: null,        // 'meeting-to-journal' | 'meeting-to-tasks' | 'meeting-full' | 'journal-to-growth' | 'custom'
+    steps: [],         // [{ key, label, icon }]
+    currentStep: 0,
+    cancelled: false,
+    running: false,
+    meeting: null,     // 선택된 회의 데이터
+    journals: [],      // 선택된 일지 데이터
+    results: {},       // 단계별 결과 저장
+    customSteps: []    // 커스텀 워크플로우 스텝 목록
+  };
+
+  var WF_STEP_DEFS = {
+    'select-meeting':  { label: '회의 선택',       icon: '📋' },
+    'stt':             { label: 'STT 음성 변환',   icon: '🎙' },
+    'ai-analyze':      { label: 'AI 분석',         icon: '🤖' },
+    'to-journal':      { label: '업무일지 작성',   icon: '📝' },
+    'to-tasks':        { label: '할 일 추출',      icon: '✅' },
+    'to-briefing':     { label: '브리핑 생성',     icon: '📨' },
+    'to-growth':       { label: '성장 기록 생성',  icon: '📈' }
+  };
+
+  var WF_TEMPLATES = {
+    'meeting-to-journal': {
+      title: '회의 녹음 → 일지 정리',
+      needsMeeting: true,
+      steps: ['select-meeting', 'ai-analyze', 'to-journal']
+    },
+    'meeting-to-tasks': {
+      title: '회의 분석 → 할 일 추출',
+      needsMeeting: true,
+      steps: ['select-meeting', 'ai-analyze', 'to-tasks']
+    },
+    'meeting-full': {
+      title: '회의 풀 파이프라인',
+      needsMeeting: true,
+      steps: ['select-meeting', 'ai-analyze', 'to-journal', 'to-tasks', 'to-briefing']
+    },
+    'journal-to-growth': {
+      title: '업무일지 → 성장 기록',
+      needsJournal: true,
+      steps: ['ai-analyze', 'to-growth']
+    }
+  };
+
+  // ── 워크플로우 열기/닫기 ──
+  $('#open-workflow').addEventListener('click', function () {
+    wfShowSelectView();
+    $('#workflow-overlay').classList.add('active');
+  });
+  $('#workflow-close').addEventListener('click', function () {
+    if (wfState.running) {
+      if (!confirm('실행 중인 워크플로우를 중단하시겠습니까?')) return;
+      wfState.cancelled = true;
+    }
+    $('#workflow-overlay').classList.remove('active');
+  });
+  $('#workflow-overlay').addEventListener('click', function (e) {
+    if (e.target === this && !wfState.running) this.classList.remove('active');
+  });
+
+  function wfShowSelectView() {
+    $('#wf-select-view').style.display = '';
+    $('#wf-config-view').style.display = 'none';
+    $('#wf-run-view').style.display = 'none';
+  }
+
+  // ── 템플릿 선택 ──
+  var wfTemplateCards = document.querySelectorAll('.wf-template-card');
+  wfTemplateCards.forEach(function (card) {
+    card.addEventListener('click', function () {
+      var wfType = card.getAttribute('data-wf');
+      wfState.type = wfType;
+      wfShowConfigView(wfType);
+    });
+  });
+
+  function wfShowConfigView(wfType) {
+    $('#wf-select-view').style.display = 'none';
+    $('#wf-config-view').style.display = '';
+    $('#wf-run-view').style.display = 'none';
+
+    var tpl = WF_TEMPLATES[wfType];
+    var isCustom = wfType === 'custom';
+
+    $('#wf-config-title').textContent = isCustom ? '커스텀 워크플로우' : tpl.title;
+    $('#wf-meeting-select').style.display = (isCustom || (tpl && tpl.needsMeeting)) ? '' : 'none';
+    $('#wf-journal-select').style.display = (isCustom || (tpl && tpl.needsJournal)) ? '' : 'none';
+    $('#wf-custom-builder').style.display = isCustom ? '' : 'none';
+
+    // 출력 옵션 표시 (커스텀이 아닌 경우 자동 설정)
+    if (!isCustom && tpl) {
+      $('#wf-opt-journal').checked = tpl.steps.indexOf('to-journal') >= 0;
+      $('#wf-opt-tasks').checked = tpl.steps.indexOf('to-tasks') >= 0;
+      $('#wf-opt-briefing').checked = tpl.steps.indexOf('to-briefing') >= 0;
+      $('#wf-opt-growth').checked = tpl.steps.indexOf('to-growth') >= 0;
+    }
+
+    // 회의 목록 채우기
+    wfPopulateMeetingPicker();
+
+    // 일지 날짜 기본값
+    var today = new Date().toISOString().slice(0, 10);
+    var weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    $('#wf-jnl-from').value = weekAgo;
+    $('#wf-jnl-to').value = today;
+
+    // 커스텀 스텝 초기화
+    if (isCustom) {
+      wfState.customSteps = [];
+      wfRenderCustomSteps();
+    }
+  }
+
+  function wfPopulateMeetingPicker() {
+    var meetings = load(MTG_KEY);
+    var picker = $('#wf-meeting-picker');
+    picker.innerHTML = '<option value="">-- 회의를 선택하세요 --</option>';
+    meetings.sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
+    meetings.forEach(function (m) {
+      var opt = document.createElement('option');
+      opt.value = m.id;
+      var dateStr = m.date ? m.date + ' ' : '';
+      opt.textContent = dateStr + (m.title || '제목 없음');
+      picker.appendChild(opt);
+    });
+  }
+
+  // ── 돌아가기 ──
+  $('#wf-back').addEventListener('click', wfShowSelectView);
+
+  // ── 커스텀 스텝 빌더 ──
+  $('#wf-add-step-type').addEventListener('change', function () {
+    var val = this.value;
+    if (!val) return;
+    this.value = '';
+    var def = WF_STEP_DEFS[val];
+    if (!def) return;
+    wfState.customSteps.push({ key: val, label: def.label, icon: def.icon });
+    wfRenderCustomSteps();
+  });
+
+  function wfRenderCustomSteps() {
+    var container = $('#wf-custom-steps');
+    if (wfState.customSteps.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-dim);font-size:0.82rem;text-align:center;padding:12px 0">아래에서 스텝을 추가하세요</p>';
+      return;
+    }
+    container.innerHTML = wfState.customSteps.map(function (step, i) {
+      var arrow = i < wfState.customSteps.length - 1 ? '<div class="wf-step-arrow">↓</div>' : '';
+      return '<div class="wf-step-item">' +
+        '<span class="wf-step-num">' + (i + 1) + '</span>' +
+        '<span>' + step.icon + '</span>' +
+        '<span class="wf-step-label">' + step.label + '</span>' +
+        '<button class="wf-step-remove" data-idx="' + i + '">✕</button>' +
+        '</div>' + arrow;
+    }).join('');
+
+    container.querySelectorAll('.wf-step-remove').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        wfState.customSteps.splice(parseInt(btn.getAttribute('data-idx')), 1);
+        wfRenderCustomSteps();
+      });
+    });
+  }
+
+  // ── 워크플로우 실행 ──
+  $('#wf-start').addEventListener('click', function () {
+    var tpl = WF_TEMPLATES[wfState.type];
+    var isCustom = wfState.type === 'custom';
+
+    // 회의 선택 검증
+    var needsMeeting = isCustom ? wfState.customSteps.some(function (s) { return s.key === 'select-meeting' || s.key === 'ai-analyze'; }) : (tpl && tpl.needsMeeting);
+    if (needsMeeting) {
+      var useCurrent = $('#wf-use-current-meeting').checked;
+      var meetingId = $('#wf-meeting-picker').value;
+      if (!useCurrent && !meetingId) {
+        toast('회의를 선택해주세요');
+        return;
+      }
+      if (useCurrent) {
+        wfState.meeting = getMeetingData();
+      } else {
+        var meetings = load(MTG_KEY);
+        wfState.meeting = meetings.find(function (m) { return m.id === meetingId; });
+      }
+      if (!wfState.meeting) {
+        toast('회의 데이터를 찾을 수 없습니다');
+        return;
+      }
+    }
+
+    // 일지 선택 검증
+    var needsJournal = isCustom ? wfState.customSteps.some(function (s) { return s.key === 'to-growth'; }) : (tpl && tpl.needsJournal);
+    if (needsJournal) {
+      var fromDate = $('#wf-jnl-from').value;
+      var toDate = $('#wf-jnl-to').value;
+      var allEntries = load(JNL_KEY);
+      wfState.journals = allEntries.filter(function (e) {
+        var cols = loadJnlColumns();
+        var dateCol = cols.find(function (c) { return c.type === 'date'; });
+        if (!dateCol) return true;
+        var d = e[dateCol.key];
+        if (!d) return true;
+        return (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
+      });
+      if (wfState.journals.length === 0) {
+        toast('선택한 기간에 업무일지가 없습니다');
+        return;
+      }
+    }
+
+    // 스텝 결정
+    var stepKeys;
+    if (isCustom) {
+      if (wfState.customSteps.length === 0) { toast('스텝을 하나 이상 추가하세요'); return; }
+      stepKeys = wfState.customSteps.map(function (s) { return s.key; });
+    } else {
+      stepKeys = tpl.steps.slice();
+      // 출력 옵션에 따라 추가 스텝
+      if ($('#wf-opt-journal').checked && stepKeys.indexOf('to-journal') < 0) stepKeys.push('to-journal');
+      if ($('#wf-opt-tasks').checked && stepKeys.indexOf('to-tasks') < 0) stepKeys.push('to-tasks');
+      if ($('#wf-opt-briefing').checked && stepKeys.indexOf('to-briefing') < 0) stepKeys.push('to-briefing');
+      if ($('#wf-opt-growth').checked && stepKeys.indexOf('to-growth') < 0) stepKeys.push('to-growth');
+    }
+
+    wfState.steps = stepKeys.map(function (k) {
+      var def = WF_STEP_DEFS[k] || { label: k, icon: '⚙' };
+      return { key: k, label: def.label, icon: def.icon };
+    });
+    wfState.currentStep = 0;
+    wfState.cancelled = false;
+    wfState.running = true;
+    wfState.results = {};
+
+    wfShowRunView();
+    wfExecute();
+  });
+
+  function wfShowRunView() {
+    $('#wf-select-view').style.display = 'none';
+    $('#wf-config-view').style.display = 'none';
+    $('#wf-run-view').style.display = '';
+
+    var tpl = WF_TEMPLATES[wfState.type];
+    $('#wf-run-title').textContent = tpl ? tpl.title : '커스텀 워크플로우';
+    $('#wf-run-status').textContent = '실행 중';
+    $('#wf-run-status').className = 'wf-run-status running';
+    $('#wf-progress-fill').style.width = '0%';
+    $('#wf-cancel').style.display = '';
+    $('#wf-done').style.display = 'none';
+    $('#wf-run-log').innerHTML = '';
+
+    // 트래커 렌더
+    var tracker = $('#wf-steps-tracker');
+    tracker.innerHTML = wfState.steps.map(function (s, i) {
+      return '<div class="wf-tracker-step" id="wf-tracker-' + i + '">' +
+        '<div class="wf-tracker-dot">' + s.icon + '</div>' +
+        '<div class="wf-tracker-info">' +
+        '<div class="wf-tracker-label">' + s.label + '</div>' +
+        '<div class="wf-tracker-detail" id="wf-detail-' + i + '">대기 중</div>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  function wfLog(msg, cls) {
+    var log = $('#wf-run-log');
+    var time = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    var clsAttr = cls ? ' class="' + cls + '"' : '';
+    log.innerHTML += '<div class="wf-log-entry"><span class="wf-log-time">[' + time + ']</span><span' + clsAttr + '>' + msg + '</span></div>';
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function wfUpdateStep(idx, state, detail) {
+    var el = document.getElementById('wf-tracker-' + idx);
+    if (!el) return;
+    el.className = 'wf-tracker-step ' + state;
+    var detailEl = document.getElementById('wf-detail-' + idx);
+    if (detailEl && detail) detailEl.textContent = detail;
+    // 프로그레스 바
+    var done = 0;
+    wfState.steps.forEach(function (_, i) {
+      var t = document.getElementById('wf-tracker-' + i);
+      if (t && t.classList.contains('done')) done++;
+    });
+    var pct = Math.round((done / wfState.steps.length) * 100);
+    $('#wf-progress-fill').style.width = pct + '%';
+  }
+
+  // ── 취소 ──
+  $('#wf-cancel').addEventListener('click', function () {
+    wfState.cancelled = true;
+    wfState.running = false;
+    $('#wf-run-status').textContent = '취소됨';
+    $('#wf-run-status').className = 'wf-run-status cancelled';
+    $('#wf-cancel').style.display = 'none';
+    $('#wf-done').style.display = '';
+    wfLog('워크플로우가 취소되었습니다', 'wf-log-error');
+  });
+
+  // ── 완료 닫기 ──
+  $('#wf-done').addEventListener('click', function () {
+    $('#workflow-overlay').classList.remove('active');
+    wfState.running = false;
+  });
+
+  // ── 워크플로우 실행 엔진 ──
+  function wfExecute() {
+    wfRunNextStep(0);
+  }
+
+  function wfRunNextStep(idx) {
+    if (idx >= wfState.steps.length) {
+      wfComplete();
+      return;
+    }
+    if (wfState.cancelled) return;
+
+    wfState.currentStep = idx;
+    var step = wfState.steps[idx];
+    wfUpdateStep(idx, 'active', '진행 중...');
+    wfLog(step.icon + ' ' + step.label + ' 시작...');
+
+    var handler = wfStepHandlers[step.key];
+    if (!handler) {
+      wfUpdateStep(idx, 'done', '스킵');
+      wfLog(step.label + ' — 핸들러 없음, 스킵', 'wf-log-error');
+      wfRunNextStep(idx + 1);
+      return;
+    }
+
+    handler().then(function (result) {
+      if (wfState.cancelled) return;
+      wfState.results[step.key] = result;
+      wfUpdateStep(idx, 'done', '완료');
+      wfLog(step.label + ' 완료 ✓', 'wf-log-success');
+      wfRunNextStep(idx + 1);
+    }).catch(function (err) {
+      if (wfState.cancelled) return;
+      wfUpdateStep(idx, 'error', '오류: ' + err.message);
+      wfLog(step.label + ' 실패: ' + err.message, 'wf-log-error');
+      // 오류 발생 시에도 다음 스텝으로 진행
+      wfRunNextStep(idx + 1);
+    });
+  }
+
+  function wfComplete() {
+    wfState.running = false;
+    $('#wf-run-status').textContent = '완료';
+    $('#wf-run-status').className = 'wf-run-status completed';
+    $('#wf-progress-fill').style.width = '100%';
+    $('#wf-cancel').style.display = 'none';
+    $('#wf-done').style.display = '';
+    wfLog('🎉 워크플로우가 완료되었습니다!', 'wf-log-success');
+    toast('워크플로우가 완료되었습니다!');
+  }
+
+  // ── 스텝별 핸들러 ──
+  var wfStepHandlers = {
+    'select-meeting': function () {
+      // 이미 wfState.meeting에 로드됨
+      return Promise.resolve(wfState.meeting);
+    },
+
+    'ai-analyze': function () {
+      var mtg = wfState.meeting;
+      var jnls = wfState.journals;
+      var textContent = '';
+
+      if (mtg) {
+        textContent = buildMeetingText(mtg);
+        wfLog('회의 텍스트 구성 완료 (' + textContent.length + '자)');
+      } else if (jnls && jnls.length > 0) {
+        textContent = jnls.map(function (e) { return jnlEntryToText(e); }).join('\n\n---\n\n');
+        wfLog('업무일지 ' + jnls.length + '건 텍스트 구성 완료');
+      }
+
+      if (!textContent) return Promise.reject(new Error('분석할 데이터가 없습니다'));
+
+      var systemPrompt = mtg
+        ? '당신은 회의 분석 전문가입니다. 아래 회의 내용을 분석하여 JSON으로 응답하세요.\n응답 형식: {"summary":"전체 요약","key_points":["핵심 포인트"],"action_items":[{"task":"할 일","assignee":"담당자","priority":"high|medium|low"}],"decisions":["결정 사항"],"keywords":["키워드"]}'
+        : '당신은 업무일지 분석 전문가입니다. 아래 업무일지들을 분석하여 성장 포인트를 찾아 JSON으로 응답하세요.\n응답 형식: {"summary":"종합 분석","achievements":["주요 성과"],"growth_areas":[{"area":"역량 영역","evidence":"근거","star":{"situation":"상황","task":"과제","action":"행동","result":"결과"}}],"skills":["발휘된 역량"],"recommendations":["성장 제안"]}';
+
+      return callClaudeAPI(systemPrompt, textContent, false).then(function (text) {
+        try {
+          var jsonMatch = text.match(/\{[\s\S]*\}/);
+          return jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+        } catch (e) {
+          return { raw: text };
+        }
+      });
+    },
+
+    'to-journal': function () {
+      var analysis = wfState.results['ai-analyze'];
+      if (!analysis) return Promise.reject(new Error('AI 분석 결과가 없습니다'));
+      var mtg = wfState.meeting;
+
+      var cols = loadJnlColumns();
+      var entries = load(JNL_KEY);
+
+      // 업무일지 엔트리 생성
+      var entry = { id: uid(), attachments: [], createdAt: new Date().toISOString() };
+
+      // 날짜 컬럼
+      var dateCol = cols.find(function (c) { return c.type === 'date'; });
+      if (dateCol) entry[dateCol.key] = (mtg && mtg.date) || new Date().toISOString().slice(0, 10);
+
+      // 텍스트 컬럼에 내용 채우기
+      var textCols = cols.filter(function (c) { return c.type === 'text' || c.type === 'longtext'; });
+      if (textCols.length > 0) {
+        // 첫 번째 텍스트 컬럼: 제목
+        var titleContent = mtg ? (mtg.title || '회의 정리') + ' — 워크플로우 자동 생성' : '워크플로우 자동 생성 일지';
+        entry[textCols[0].key] = titleContent;
+      }
+      if (textCols.length > 1) {
+        // 두 번째 텍스트/롱텍스트 컬럼: 내용
+        var body = '';
+        if (analysis.summary) body += '📋 요약: ' + analysis.summary + '\n\n';
+        if (analysis.key_points) body += '💡 핵심 포인트:\n' + analysis.key_points.map(function (p) { return '• ' + p; }).join('\n') + '\n\n';
+        if (analysis.decisions) body += '✅ 결정 사항:\n' + analysis.decisions.map(function (d) { return '• ' + d; }).join('\n') + '\n\n';
+        if (analysis.action_items) body += '📌 액션 아이템:\n' + analysis.action_items.map(function (a) { return '• ' + a.task + (a.assignee ? ' (' + a.assignee + ')' : ''); }).join('\n');
+        entry[textCols[1].key] = body.trim();
+      }
+
+      entries.unshift(entry);
+      save(JNL_KEY, entries);
+      renderJnlTable();
+      wfLog('업무일지 저장 완료 (ID: ' + entry.id.slice(0, 8) + '...)');
+      return Promise.resolve(entry);
+    },
+
+    'to-tasks': function () {
+      var analysis = wfState.results['ai-analyze'];
+      if (!analysis) return Promise.reject(new Error('AI 분석 결과가 없습니다'));
+      var items = analysis.action_items || [];
+      if (items.length === 0) return Promise.resolve([]);
+
+      var tasks = loadTasks();
+      var created = [];
+      items.forEach(function (item) {
+        var task = {
+          id: uid(),
+          stage: 'todo',
+          text: item.task || item,
+          priority: item.priority || 'normal',
+          assignee: item.assignee || '',
+          dueDate: item.deadline || '',
+          memo: '',
+          date: new Date().toISOString().slice(0, 10)
+        };
+        tasks.push(task);
+        created.push(task);
+      });
+      saveTasks(tasks);
+      renderTaskList();
+      wfLog('할 일 ' + created.length + '건 생성 완료');
+      return Promise.resolve(created);
+    },
+
+    'to-briefing': function () {
+      var analysis = wfState.results['ai-analyze'];
+      var mtg = wfState.meeting;
+      if (!analysis) return Promise.reject(new Error('AI 분석 결과가 없습니다'));
+
+      var systemPrompt = '당신은 비즈니스 커뮤니케이션 전문가입니다. 회의 분석 결과를 바탕으로 팀원들에게 공유할 깔끔한 브리핑 문서를 작성하세요. 마크다운 형식으로 작성하되, 핵심만 간결하게 정리하세요.';
+      var userMsg = '회의: ' + (mtg ? mtg.title : '업무 분석') + '\n분석 결과:\n' + JSON.stringify(analysis, null, 2) + '\n\n위 내용을 바탕으로 팀 브리핑 문서를 작성해주세요.';
+
+      return callClaudeAPI(systemPrompt, userMsg, false).then(function (text) {
+        // 브리핑을 메모에 저장
+        var memos = load('fl_memos') || [];
+        var memo = {
+          id: uid(),
+          title: '📨 브리핑: ' + (mtg ? mtg.title : '워크플로우 결과'),
+          content: text,
+          createdAt: new Date().toISOString(),
+          color: 'blue'
+        };
+        memos.unshift(memo);
+        save('fl_memos', memos);
+        renderMemoList();
+        wfLog('브리핑 문서 메모에 저장 완료');
+        return memo;
+      });
+    },
+
+    'to-growth': function () {
+      var analysis = wfState.results['ai-analyze'];
+      if (!analysis) return Promise.reject(new Error('AI 분석 결과가 없습니다'));
+
+      var growthAreas = analysis.growth_areas || [];
+      if (growthAreas.length === 0 && analysis.raw) {
+        // raw 텍스트에서 성장 기록 직접 생성 요청
+        return callClaudeAPI(
+          '당신은 성장 코칭 전문가입니다. 아래 분석 내용에서 STAR 기법으로 성장 기록을 추출하세요.\nJSON 응답 형식: {"stories":[{"title":"제목","category":"problem_solving","tags":["태그"],"situation":"상황","task":"과제","action":"행동","result":"결과","lesson":"교훈"}]}',
+          analysis.raw || JSON.stringify(analysis),
+          false
+        ).then(function (text) {
+          var jsonMatch = text.match(/\{[\s\S]*\}/);
+          var parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { stories: [] };
+          return wfSaveGrowthStories(parsed.stories || []);
+        });
+      }
+
+      var stories = growthAreas.map(function (ga) {
+        return {
+          title: ga.area || '성장 기록',
+          category: wfMapCategory(ga.area),
+          tags: analysis.skills || [],
+          situation: ga.star ? ga.star.situation : ga.evidence || '',
+          task: ga.star ? ga.star.task : '',
+          action: ga.star ? ga.star.action : '',
+          result: ga.star ? ga.star.result : '',
+          lesson: ''
+        };
+      });
+      return Promise.resolve(wfSaveGrowthStories(stories));
+    }
+  };
+
+  function wfSaveGrowthStories(stories) {
+    if (!stories || stories.length === 0) {
+      wfLog('생성할 성장 기록이 없습니다');
+      return [];
+    }
+    var existing = loadGwStories();
+    var created = [];
+    stories.forEach(function (s) {
+      var story = {
+        id: uid(),
+        title: s.title || '워크플로우 성장 기록',
+        category: s.category || 'other',
+        tags: s.tags || [],
+        periodFrom: new Date().toISOString().slice(0, 10),
+        periodTo: '',
+        situation: s.situation || '',
+        task: s.task || '',
+        action: s.action || '',
+        result: s.result || '',
+        lesson: s.lesson || '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      existing.unshift(story);
+      created.push(story);
+    });
+    saveGwStories(existing);
+    renderGwDashboard();
+    wfLog('성장 기록 ' + created.length + '건 생성 완료');
+    return created;
+  }
+
+  function wfMapCategory(area) {
+    if (!area) return 'other';
+    var lower = area.toLowerCase();
+    if (lower.indexOf('기술') >= 0 || lower.indexOf('technical') >= 0) return 'technical';
+    if (lower.indexOf('리더') >= 0 || lower.indexOf('leader') >= 0) return 'leadership';
+    if (lower.indexOf('커뮤니케이션') >= 0 || lower.indexOf('소통') >= 0) return 'communication';
+    if (lower.indexOf('기획') >= 0 || lower.indexOf('전략') >= 0) return 'planning';
+    if (lower.indexOf('데이터') >= 0) return 'data';
+    if (lower.indexOf('문제') >= 0 || lower.indexOf('해결') >= 0) return 'problem_solving';
+    if (lower.indexOf('성장') >= 0) return 'growth';
+    return 'other';
+  }
+
   // ── Init ──
   function init() {
     // Initialize side panels for all tabs
