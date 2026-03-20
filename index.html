@@ -690,7 +690,10 @@
             </div>
           </div>
           <div class="tab-col-main">
-        <div id="jnl-list-view">
+        <div id="jnl-list-view" style="display:none">
+          <div class="jnl-list-top-bar">
+            <button class="btn btn-primary btn-small" id="jnl-go-form">✏️ 새 항목 작성</button>
+          </div>
           <!-- 완료된 할 일 반영 배너 -->
           <div class="jnl-task-banner" id="jnl-task-banner" style="display:none">
             <div class="jnl-task-banner-icon">✅</div>
@@ -764,10 +767,26 @@
         </div>
 
         <!-- 업무일지 작성/수정 폼 -->
-        <div id="jnl-form-view" class="form-slide-wrapper form-hidden">
+        <div id="jnl-form-view" class="form-slide-wrapper">
           <div class="view-form-header">
-            <button class="btn btn-secondary btn-small" id="jnl-back">← 목록</button>
+            <button class="btn btn-secondary btn-small" id="jnl-back">📋 목록 보기</button>
             <span id="jnl-form-title-label" style="font-weight:600;font-size:0.9rem;color:var(--text-muted)">새 항목 추가</span>
+          </div>
+          <!-- 완료된 할 일 알림 (폼 뷰) -->
+          <div class="jnl-task-form-notify" id="jnl-task-form-notify" style="display:none">
+            <span class="jnl-task-form-notify-icon">✅</span>
+            <span id="jnl-task-form-notify-text">완료된 할 일 0건</span>
+            <button class="btn btn-accent btn-small" id="jnl-task-ai-apply">🤖 AI 자동 반영</button>
+            <button class="btn btn-secondary btn-small" id="jnl-task-manual-apply">수동 반영</button>
+          </div>
+          <!-- 자연어 빠른 입력 (폼 뷰 내) -->
+          <div class="jnl-nl-section" id="jnl-nl-section">
+            <div class="jnl-nl-label">💬 자연어로 빠르게 입력</div>
+            <div class="jnl-nl-row">
+              <input type="text" id="jnl-nl-input" class="jnl-quick-text" placeholder="예: '3/19 기획안 리뷰 완료, 다음 주까지 수정본 제출'">
+              <button class="btn btn-secondary btn-small" id="jnl-nl-parse" title="규칙 기반 자동 파싱">⚡ 자동 파싱</button>
+              <button class="btn btn-accent btn-small" id="jnl-nl-ai" title="AI로 정교하게 분류 (API 키 필요)">🤖 AI 분류</button>
+            </div>
           </div>
           <div class="form-row">
             <div class="form-group flex-1">

@@ -5385,3 +5385,58 @@ body {
   0% { background: var(--accent-subtle, rgba(59,130,246,0.15)); border-color: var(--accent); }
   100% { background: var(--bg-surface); border-color: var(--border); }
 }
+
+/* ── 업무일지 폼/리스트 스플릿 ── */
+.jnl-list-top-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.jnl-nl-section {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--bg-surface, #f7f8fc);
+  border: 1.5px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+}
+.jnl-nl-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: 8px;
+}
+.jnl-nl-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.jnl-nl-row .jnl-quick-text {
+  flex: 1;
+}
+
+/* 폼 뷰 내 할 일 알림 */
+.jnl-task-form-notify {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+  border: 1.5px solid #86efac;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  color: #166534;
+}
+.jnl-task-form-notify-icon {
+  font-size: 1.1rem;
+}
+
+/* 자동 파싱 결과 하이라이트 */
+@keyframes jnlFieldFilled {
+  0% { background-color: rgba(59, 130, 246, 0.15); }
+  100% { background-color: transparent; }
+}
+.jnl-field-filled {
+  animation: jnlFieldFilled 1.5s ease;
+}
