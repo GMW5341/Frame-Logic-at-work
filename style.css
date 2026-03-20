@@ -5713,6 +5713,7 @@ body {
   line-height: 1.7;
   max-height: 500px;
   overflow-y: auto;
+  white-space: pre-wrap;
 }
 .gw-interview-result-body h4 {
   font-size: 0.88rem;
@@ -5834,6 +5835,7 @@ body {
   line-height: 1.7;
   max-height: 400px;
   overflow-y: auto;
+  white-space: pre-wrap;
 }
 
 .gw-dashboard-actions {

@@ -234,6 +234,7 @@
       case 'tasks': items = loadTasks(); items.forEach(function (i) { var d = i.date || ''; if (d) dates[d] = (dates[d] || 0) + 1; }); break;
       case 'diagram': items = loadDiagrams(); items.forEach(function (i) { var d = (i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
       case 'journal': items = load(JNL_KEY); items.forEach(function (i) { var d = (i.date || i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
+      case 'growth': items = load(GW_KEY); items.forEach(function (i) { var d = (i.createdAt || '').slice(0, 10); if (d) dates[d] = (dates[d] || 0) + 1; }); break;
     }
     return dates;
   }
@@ -359,6 +360,12 @@
         dateFn = function (i) { return i.date || i.createdAt; };
         idFn = function (i) { return i.id; };
         break;
+      case 'growth':
+        items = load(GW_KEY);
+        titleFn = function (i) { return i.title || '(제목 없음)'; };
+        dateFn = function (i) { return i.createdAt; };
+        idFn = function (i) { return i.id; };
+        break;
     }
 
     // Filter by selected date
@@ -424,6 +431,11 @@
         var jnlItem = jnlItems.find(function (i) { return i.id === id; });
         if (jnlItem) { loadJnlToForm(jnlItem); toast('불러왔습니다'); }
         break;
+      case 'growth':
+        var gwItems = load(GW_KEY);
+        var gwItem = gwItems.find(function (i) { return i.id === id; });
+        if (gwItem) { loadGwToForm(gwItem); toast('불러왔습니다'); }
+        break;
     }
   }
 
@@ -435,12 +447,14 @@
       case 'ideas': key = IDEA_KEY; break;
       case 'proposal': key = PROP_KEY; break;
       case 'journal': key = JNL_KEY; break;
+      case 'growth': key = GW_KEY; break;
       default: return;
     }
     var items = load(key);
     save(key, items.filter(function (i) { return i.id !== id; }));
     renderMiniCal(tab);
     renderSideHistory(tab);
+    if (tab === 'growth') renderGwDashboard();
     toast('삭제되었습니다');
   }
 
@@ -8970,6 +8984,511 @@
     });
   });
 
+  // ══════════════════════════════════════
+  // 9. 성장 기록 탭
+  // ══════════════════════════════════════
+  var GW_KEY = 'fl_growth';
+  var currentGwEditId = null;
+  var GW_CATEGORIES = {
+    problem_solving: '문제 해결', leadership: '리더십', technical: '기술 역량',
+    communication: '커뮤니케이션', planning: '기획/전략', data: '데이터 분석',
+    growth: '자기 성장', other: '기타'
+  };
+
+  function loadGwStories() {
+    return load(GW_KEY);
+  }
+
+  function saveGwStories(items) {
+    save(GW_KEY, items);
+  }
+
+  function clearGwForm() {
+    currentGwEditId = null;
+    $('#gw-title').value = '';
+    $('#gw-category').value = 'problem_solving';
+    $('#gw-period-from').value = '';
+    $('#gw-period-to').value = '';
+    $('#gw-tags').value = '';
+    $('#gw-situation').value = '';
+    $('#gw-task').value = '';
+    $('#gw-action').value = '';
+    $('#gw-result').value = '';
+    $('#gw-lesson').value = '';
+    $('#gw-form-title-label').textContent = '새 성장 스토리';
+    $('#gw-linked-items').innerHTML = '<span class="gw-linked-empty">저장 후 업무일지/회의 항목과 연결할 수 있습니다</span>';
+  }
+
+  function getGwFormData() {
+    return {
+      id: currentGwEditId || uid(),
+      title: $('#gw-title').value.trim(),
+      category: $('#gw-category').value,
+      periodFrom: $('#gw-period-from').value,
+      periodTo: $('#gw-period-to').value,
+      tags: $('#gw-tags').value.split(',').map(function (t) { return t.trim(); }).filter(Boolean),
+      situation: $('#gw-situation').value.trim(),
+      task: $('#gw-task').value.trim(),
+      action: $('#gw-action').value.trim(),
+      result: $('#gw-result').value.trim(),
+      lesson: $('#gw-lesson').value.trim(),
+      createdAt: currentGwEditId ? undefined : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function loadGwToForm(item) {
+    currentGwEditId = item.id;
+    showGwForm();
+    $('#gw-title').value = item.title || '';
+    $('#gw-category').value = item.category || 'problem_solving';
+    $('#gw-period-from').value = item.periodFrom || '';
+    $('#gw-period-to').value = item.periodTo || '';
+    $('#gw-tags').value = (item.tags || []).join(', ');
+    $('#gw-situation').value = item.situation || '';
+    $('#gw-task').value = item.task || '';
+    $('#gw-action').value = item.action || '';
+    $('#gw-result').value = item.result || '';
+    $('#gw-lesson').value = item.lesson || '';
+    $('#gw-form-title-label').textContent = '스토리 수정';
+  }
+
+  function showGwForm() {
+    $('#gw-dashboard-view').style.display = 'none';
+    $('#gw-list-view').style.display = 'none';
+    $('#gw-interview-view').style.display = 'none';
+    slideFormIn('gw-form-view');
+  }
+
+  function showGwView(viewName) {
+    slideFormOut('gw-form-view');
+    $('#gw-dashboard-view').style.display = viewName === 'dashboard' ? '' : 'none';
+    $('#gw-list-view').style.display = viewName === 'list' ? '' : 'none';
+    $('#gw-interview-view').style.display = viewName === 'interview' ? '' : 'none';
+    if (viewName === 'dashboard') renderGwDashboard();
+    if (viewName === 'list') renderGwStoryList();
+  }
+
+  // ── Dashboard ──
+  function renderGwDashboard() {
+    var stories = loadGwStories();
+    renderGwCompetencyMap(stories);
+    renderGwTimeline(stories);
+    renderGwRecentCards(stories);
+  }
+
+  function renderGwCompetencyMap(stories) {
+    var grid = $('#gw-competency-grid');
+    if (!grid) return;
+    var tagCounts = {};
+    stories.forEach(function (s) {
+      (s.tags || []).forEach(function (tag) {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      });
+    });
+    var sortedTags = Object.keys(tagCounts).sort(function (a, b) { return tagCounts[b] - tagCounts[a]; });
+    if (sortedTags.length === 0) {
+      grid.innerHTML = '<div class="gw-empty-state"><div class="gw-empty-icon">📊</div><p>성장 스토리를 작성하면 역량 맵이 표시됩니다</p></div>';
+      return;
+    }
+    var maxCount = tagCounts[sortedTags[0]];
+    grid.innerHTML = sortedTags.map(function (tag) {
+      var count = tagCounts[tag];
+      var pct = Math.round((count / maxCount) * 100);
+      return '<div class="gw-comp-card">' +
+        '<div class="gw-comp-tag">' + escapeHtml(tag) + '</div>' +
+        '<div class="gw-comp-bar-bg"><div class="gw-comp-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="gw-comp-count">' + count + '건</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderGwTimeline(stories) {
+    var el = $('#gw-timeline');
+    if (!el) return;
+    var sorted = stories.slice().sort(function (a, b) {
+      return (b.periodFrom || b.createdAt || '').localeCompare(a.periodFrom || a.createdAt || '');
+    });
+    if (sorted.length === 0) {
+      el.innerHTML = '<div class="gw-empty-state"><div class="gw-empty-icon">📅</div><p>성장 스토리를 작성하면 타임라인이 표시됩니다</p></div>';
+      return;
+    }
+    el.innerHTML = sorted.slice(0, 10).map(function (s) {
+      var dateStr = s.periodFrom ? s.periodFrom : (s.createdAt || '').slice(0, 10);
+      var catLabel = GW_CATEGORIES[s.category] || s.category;
+      return '<div class="gw-tl-item" data-id="' + s.id + '">' +
+        '<div class="gw-tl-dot"></div>' +
+        '<div class="gw-tl-date">' + escapeHtml(dateStr) + ' · ' + escapeHtml(catLabel) + '</div>' +
+        '<div class="gw-tl-title">' + escapeHtml(s.title || '(제목 없음)') + '</div>' +
+        (s.tags && s.tags.length ? '<div class="gw-tl-tags">' + s.tags.map(function (t) { return '<span class="gw-tl-tag">' + escapeHtml(t) + '</span>'; }).join('') + '</div>' : '') +
+        '</div>';
+    }).join('');
+    el.querySelectorAll('.gw-tl-item').forEach(function (item) {
+      item.addEventListener('click', function () {
+        var story = loadGwStories().find(function (s) { return s.id === item.dataset.id; });
+        if (story) loadGwToForm(story);
+      });
+    });
+  }
+
+  function renderGwRecentCards(stories) {
+    var el = $('#gw-recent-cards');
+    if (!el) return;
+    var sorted = stories.slice().sort(function (a, b) {
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+    if (sorted.length === 0) {
+      el.innerHTML = '<div class="gw-empty-state"><div class="gw-empty-icon">📈</div><p>"+ 새 성장 스토리" 버튼을 눌러 첫 스토리를 작성하세요</p></div>';
+      return;
+    }
+    el.innerHTML = sorted.slice(0, 6).map(function (s) {
+      var catLabel = GW_CATEGORIES[s.category] || s.category;
+      return '<div class="gw-story-card" data-id="' + s.id + '">' +
+        '<div class="gw-card-header">' +
+        '<span class="gw-card-cat gw-cat-' + (s.category || 'other') + '">' + escapeHtml(catLabel) + '</span>' +
+        '<span class="gw-card-date">' + formatDate(s.createdAt) + '</span>' +
+        '</div>' +
+        '<div class="gw-card-title">' + escapeHtml(s.title || '(제목 없음)') + '</div>' +
+        (s.result ? '<div class="gw-card-summary">' + escapeHtml(s.result.substring(0, 100)) + (s.result.length > 100 ? '...' : '') + '</div>' : '') +
+        (s.tags && s.tags.length ? '<div class="gw-card-tags">' + s.tags.slice(0, 3).map(function (t) { return '<span class="gw-card-tag">' + escapeHtml(t) + '</span>'; }).join('') + '</div>' : '') +
+        '</div>';
+    }).join('');
+    el.querySelectorAll('.gw-story-card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var story = loadGwStories().find(function (s) { return s.id === card.dataset.id; });
+        if (story) loadGwToForm(story);
+      });
+    });
+  }
+
+  // ── Story List ──
+  function renderGwStoryList() {
+    var stories = loadGwStories();
+    var searchText = ($('#gw-search').value || '').toLowerCase();
+    var filterTag = $('#gw-filter-tag').value;
+    var filterCat = $('#gw-filter-cat').value;
+
+    var filtered = stories.filter(function (s) {
+      if (filterCat && s.category !== filterCat) return false;
+      if (filterTag && !(s.tags || []).some(function (t) { return t === filterTag; })) return false;
+      if (searchText) {
+        var text = (s.title + ' ' + s.situation + ' ' + s.task + ' ' + s.action + ' ' + s.result + ' ' + s.lesson + ' ' + (s.tags || []).join(' ')).toLowerCase();
+        if (text.indexOf(searchText) === -1) return false;
+      }
+      return true;
+    });
+
+    filtered.sort(function (a, b) {
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+
+    var listEl = $('#gw-story-list');
+    if (filtered.length === 0) {
+      listEl.innerHTML = '<div class="gw-empty-state"><p>' + (stories.length === 0 ? '저장된 성장 스토리가 없습니다' : '검색 조건에 맞는 스토리가 없습니다') + '</p></div>';
+      return;
+    }
+
+    listEl.innerHTML = filtered.map(function (s) {
+      var catLabel = GW_CATEGORIES[s.category] || s.category;
+      return '<div class="gw-story-row" data-id="' + s.id + '">' +
+        '<span class="gw-story-row-cat gw-cat-' + (s.category || 'other') + '">' + escapeHtml(catLabel) + '</span>' +
+        '<div class="gw-story-row-main">' +
+        '<div class="gw-story-row-title">' + escapeHtml(s.title || '(제목 없음)') + '</div>' +
+        '<div class="gw-story-row-meta">' + formatDate(s.createdAt) +
+        (s.tags && s.tags.length ? ' · ' + s.tags.join(', ') : '') +
+        '</div>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+
+    listEl.querySelectorAll('.gw-story-row').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var story = loadGwStories().find(function (s) { return s.id === el.dataset.id; });
+        if (story) loadGwToForm(story);
+      });
+    });
+  }
+
+  function populateGwTagFilter() {
+    var stories = loadGwStories();
+    var tags = {};
+    stories.forEach(function (s) { (s.tags || []).forEach(function (t) { tags[t] = true; }); });
+    var sel = $('#gw-filter-tag');
+    var current = sel.value;
+    sel.innerHTML = '<option value="">전체 역량</option>';
+    Object.keys(tags).sort().forEach(function (t) {
+      sel.innerHTML += '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>';
+    });
+    sel.value = current;
+  }
+
+  // ── View Toggles ──
+  function bindGwViewToggle(btnId, view) {
+    var el = $('#' + btnId);
+    if (el) el.addEventListener('click', function () { showGwView(view); });
+  }
+  bindGwViewToggle('gw-show-dashboard', 'dashboard');
+  bindGwViewToggle('gw-show-list', 'list');
+  bindGwViewToggle('gw-show-interview', 'interview');
+  bindGwViewToggle('gw-show-dashboard2', 'dashboard');
+  bindGwViewToggle('gw-show-list2', 'list');
+  bindGwViewToggle('gw-show-interview2', 'interview');
+  bindGwViewToggle('gw-show-dashboard3', 'dashboard');
+  bindGwViewToggle('gw-show-list3', 'list');
+  bindGwViewToggle('gw-show-interview3', 'interview');
+
+  // ── New / Save / Clear / Back ──
+  $('#gw-new').addEventListener('click', function () {
+    clearGwForm();
+    showGwForm();
+  });
+
+  $('#gw-back').addEventListener('click', function () {
+    showGwView('dashboard');
+  });
+
+  $('#gw-save').addEventListener('click', function () {
+    var data = getGwFormData();
+    if (!data.title) { toast('제목을 입력해주세요'); return; }
+    var items = loadGwStories();
+    if (currentGwEditId) {
+      var idx = items.findIndex(function (i) { return i.id === currentGwEditId; });
+      if (idx !== -1) {
+        data.createdAt = items[idx].createdAt;
+        items[idx] = data;
+      } else {
+        data.createdAt = data.createdAt || new Date().toISOString();
+        items.unshift(data);
+      }
+    } else {
+      data.createdAt = new Date().toISOString();
+      items.unshift(data);
+    }
+    saveGwStories(items);
+    currentGwEditId = null;
+    refreshSidePanel('growth');
+    showGwView('dashboard');
+    toast('성장 스토리가 저장되었습니다');
+  });
+
+  $('#gw-form-clear').addEventListener('click', function () {
+    clearGwForm();
+    toast('초기화되었습니다');
+  });
+
+  // ── Tag Presets ──
+  $$('.gw-tag-preset').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var input = $('#gw-tags');
+      var current = input.value.split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+      var tag = el.dataset.tag;
+      if (current.indexOf(tag) === -1) {
+        current.push(tag);
+        input.value = current.join(', ');
+      }
+    });
+  });
+
+  // ── Search / Filter ──
+  if ($('#gw-search')) {
+    $('#gw-search').addEventListener('input', function () { renderGwStoryList(); });
+  }
+  if ($('#gw-filter-tag')) {
+    $('#gw-filter-tag').addEventListener('change', function () { renderGwStoryList(); });
+  }
+  if ($('#gw-filter-cat')) {
+    $('#gw-filter-cat').addEventListener('change', function () { renderGwStoryList(); });
+  }
+
+  // ── AI Growth Analysis ──
+  $('#gw-ai-analyze').addEventListener('click', function () {
+    var stories = loadGwStories();
+    if (stories.length === 0) { toast('분석할 성장 스토리가 없습니다'); return; }
+    var btn = $('#gw-ai-analyze');
+    btn.disabled = true;
+    btn.textContent = '분석 중...';
+
+    var storyTexts = stories.slice(0, 20).map(function (s, i) {
+      return (i + 1) + '. [' + (GW_CATEGORIES[s.category] || s.category) + '] ' + s.title +
+        '\n   상황: ' + (s.situation || '-') +
+        '\n   행동: ' + (s.action || '-') +
+        '\n   결과: ' + (s.result || '-') +
+        '\n   역량: ' + (s.tags || []).join(', ');
+    }).join('\n\n');
+
+    var systemPrompt = '당신은 직무 역량 분석 전문가입니다. 사용자의 성장 스토리를 분석하여 강점, 개선점, 역량 발전 방향을 한국어로 제시하세요. 마크다운을 사용하지 말고 간결하게 작성하세요.';
+    var userMsg = '다음 성장 스토리들을 종합 분석해주세요:\n\n' + storyTexts + '\n\n다음을 포함해주세요:\n1. 핵심 강점 (Top 3)\n2. 역량 발전 패턴\n3. 보완이 필요한 영역\n4. 커리어 성장을 위한 구체적 제안';
+
+    callClaudeAPI(systemPrompt, userMsg, false).then(function (text) {
+      var insightEl = $('#gw-ai-insight');
+      var bodyEl = $('#gw-ai-insight-body');
+      bodyEl.textContent = text;
+      insightEl.style.display = '';
+      btn.disabled = false;
+      btn.textContent = '🤖 AI 성장 분석';
+    }).catch(function (err) {
+      toast('AI 분석 실패: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = '🤖 AI 성장 분석';
+    });
+  });
+
+  $('#gw-ai-insight-close').addEventListener('click', function () {
+    $('#gw-ai-insight').style.display = 'none';
+  });
+
+  // ── AI Auto-Generate from existing data ──
+  $('#gw-ai-gen-btn').addEventListener('click', function () {
+    var dateFrom = $('#gw-ai-date-from').value;
+    var dateTo = $('#gw-ai-date-to').value;
+    if (!dateFrom || !dateTo) { toast('기간을 선택해주세요'); return; }
+
+    var statusEl = $('#gw-ai-gen-status');
+    statusEl.style.display = '';
+    statusEl.textContent = 'AI 초안 생성 중...';
+
+    // Gather data from journal and meetings within the date range
+    var jnlItems = load(JNL_KEY).filter(function (j) {
+      var d = (j.date || j.createdAt || '').slice(0, 10);
+      return d >= dateFrom && d <= dateTo;
+    });
+    var mtgItems = load(MTG_KEY).filter(function (m) {
+      var d = (m.date || m.createdAt || '').slice(0, 10);
+      return d >= dateFrom && d <= dateTo;
+    });
+
+    if (jnlItems.length === 0 && mtgItems.length === 0) {
+      statusEl.textContent = '해당 기간에 업무일지/회의 데이터가 없습니다';
+      return;
+    }
+
+    var sourceText = '';
+    if (jnlItems.length > 0) {
+      sourceText += '=== 업무일지 ===\n';
+      jnlItems.slice(0, 15).forEach(function (j) {
+        sourceText += '- ' + (j.date || '') + ': ';
+        Object.keys(j).forEach(function (k) {
+          if (k !== 'id' && k !== 'date' && k !== 'createdAt' && j[k]) {
+            var val = typeof j[k] === 'string' ? htmlToText(j[k]).substring(0, 100) : j[k];
+            sourceText += val + ' / ';
+          }
+        });
+        sourceText += '\n';
+      });
+    }
+    if (mtgItems.length > 0) {
+      sourceText += '\n=== 회의 ===\n';
+      mtgItems.slice(0, 10).forEach(function (m) {
+        sourceText += '- ' + (m.date || '') + ' ' + (m.title || '') + ': ' + htmlToText(m.summary || '').substring(0, 150) + '\n';
+      });
+    }
+
+    var systemPrompt = '당신은 직무 역량 분석 전문가입니다. 업무 데이터를 기반으로 STAR 기법의 성장 스토리 초안을 한국어로 작성하세요. JSON으로 응답하세요.';
+    var userMsg = '기간: ' + dateFrom + ' ~ ' + dateTo + '\n\n' + sourceText +
+      '\n\n위 데이터를 분석하여 성장 스토리 초안을 JSON으로 작성해주세요. 형식:\n' +
+      '{"title":"제목","category":"problem_solving|leadership|technical|communication|planning|data|growth|other",' +
+      '"tags":["태그1","태그2"],"situation":"상황","task":"과제","action":"행동","result":"결과","lesson":"배운점"}';
+
+    callClaudeAPI(systemPrompt, userMsg, false).then(function (text) {
+      try {
+        var jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('JSON 파싱 실패');
+        var data = JSON.parse(jsonMatch[0]);
+        $('#gw-title').value = data.title || '';
+        $('#gw-category').value = data.category || 'problem_solving';
+        $('#gw-tags').value = (data.tags || []).join(', ');
+        $('#gw-situation').value = data.situation || '';
+        $('#gw-task').value = data.task || '';
+        $('#gw-action').value = data.action || '';
+        $('#gw-result').value = data.result || '';
+        $('#gw-lesson').value = data.lesson || '';
+        $('#gw-period-from').value = dateFrom;
+        $('#gw-period-to').value = dateTo;
+        statusEl.textContent = 'AI 초안이 생성되었습니다. 내용을 확인하고 수정하세요.';
+      } catch (e) {
+        statusEl.textContent = 'AI 응답 파싱 실패. 다시 시도해주세요.';
+      }
+    }).catch(function (err) {
+      statusEl.textContent = '생성 실패: ' + err.message;
+    });
+  });
+
+  // ── Interview Prep ──
+  $('#gw-interview-generate').addEventListener('click', function () {
+    var stories = loadGwStories();
+    if (stories.length === 0) { toast('성장 스토리를 먼저 작성해주세요'); return; }
+    var interviewType = $('#gw-interview-type').value;
+    var position = $('#gw-interview-position').value.trim();
+    var btn = $('#gw-interview-generate');
+    btn.disabled = true;
+    btn.textContent = '생성 중...';
+
+    var typeLabels = { behavioral: '행동 면접', competency: '역량 면접', technical: '기술 면접', culture: '컬처핏 면접' };
+    var storyTexts = stories.slice(0, 10).map(function (s, i) {
+      return (i + 1) + '. ' + s.title + '\n   상황: ' + (s.situation || '-') +
+        '\n   과제: ' + (s.task || '-') +
+        '\n   행동: ' + (s.action || '-') +
+        '\n   결과: ' + (s.result || '-') +
+        '\n   역량: ' + (s.tags || []).join(', ');
+    }).join('\n\n');
+
+    var systemPrompt = '당신은 ' + typeLabels[interviewType] + ' 전문 면접 코치입니다. 지원자의 성장 스토리를 기반으로 예상 질문과 모범 답변을 한국어로 작성하세요.';
+    var userMsg = '면접 유형: ' + typeLabels[interviewType] +
+      (position ? '\n지원 포지션: ' + position : '') +
+      '\n\n지원자의 성장 스토리:\n' + storyTexts +
+      '\n\n위 스토리를 기반으로 예상 질문 5개와 각 질문에 대한 STAR 기법 답변 초안을 작성해주세요.';
+
+    callClaudeAPI(systemPrompt, userMsg, false).then(function (text) {
+      var resultEl = $('#gw-interview-result');
+      var bodyEl = $('#gw-interview-result-body');
+      bodyEl.textContent = text;
+      resultEl.style.display = '';
+      btn.disabled = false;
+      btn.textContent = '🤖 AI 예상 질문 생성';
+    }).catch(function (err) {
+      toast('생성 실패: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = '🤖 AI 예상 질문 생성';
+    });
+  });
+
+  if ($('#gw-interview-copy')) {
+    $('#gw-interview-copy').addEventListener('click', function () {
+      var text = $('#gw-interview-result-body').textContent;
+      if (text) copyToClipboard(text);
+    });
+  }
+
+  // ── PDF Export ──
+  $('#gw-export-pdf').addEventListener('click', function () {
+    var stories = loadGwStories();
+    if (stories.length === 0) { toast('내보낼 스토리가 없습니다'); return; }
+
+    var sorted = stories.slice().sort(function (a, b) {
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+
+    var html = '<h1>성장 포트폴리오</h1>' +
+      '<div class="meta">생성일: ' + new Date().toLocaleDateString('ko-KR') + ' · ' + stories.length + '건</div>';
+
+    sorted.forEach(function (s) {
+      var catLabel = GW_CATEGORIES[s.category] || s.category;
+      html += '<h2>' + escapeHtml(s.title || '(제목 없음)') + '</h2>';
+      html += '<div class="meta">' + escapeHtml(catLabel);
+      if (s.periodFrom) html += ' · ' + s.periodFrom + (s.periodTo ? ' ~ ' + s.periodTo : '');
+      if (s.tags && s.tags.length) html += ' · ' + s.tags.join(', ');
+      html += '</div>';
+      if (s.situation) html += '<p><strong>상황:</strong> ' + escapeHtml(s.situation) + '</p>';
+      if (s.task) html += '<p><strong>과제:</strong> ' + escapeHtml(s.task) + '</p>';
+      if (s.action) html += '<p><strong>행동:</strong> ' + escapeHtml(s.action) + '</p>';
+      if (s.result) html += '<p><strong>결과:</strong> ' + escapeHtml(s.result) + '</p>';
+      if (s.lesson) html += '<p><strong>배운 점:</strong> ' + escapeHtml(s.lesson) + '</p>';
+      html += '<hr>';
+    });
+
+    exportAsPDF('성장 포트폴리오', html);
+  });
+
   // ── Init ──
   function init() {
     // Initialize side panels for all tabs
@@ -8982,6 +9501,8 @@
     populateJnlCategoryFilter();
     populateJnlColFilters();
     renderMemoList();
+    renderGwDashboard();
+    populateGwTagFilter();
 
     // 임시 저장된 회의 draft 복원
     var draft = loadMeetingDraft();
