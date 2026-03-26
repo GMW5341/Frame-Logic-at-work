@@ -470,6 +470,8 @@
   var TAB_TO_CAL = { context: 'context', ideas: 'ideas', meeting: 'meeting', proposal: 'proposal', tasks: 'tasks', diagram: 'diagram', journal: 'journal', growth: 'growth' };
 
   function switchTab(tabName) {
+    // 탭 전환 전에 회의 draft 저장 (폼이 숨겨지기 전에 저장해야 함)
+    saveMeetingDraft();
     tabBtns.forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
     tabPanels.forEach(function (p) { p.classList.remove('active'); });
     var btn = document.querySelector('.tab-btn[data-tab="' + tabName + '"]');
@@ -502,6 +504,41 @@
     if (tabName === 'growth') {
       hideFormImmediate('gw-form-view');
       if (typeof renderGwDashboard === 'function') renderGwDashboard();
+    }
+    // 회의 탭 재진입 시 임시 저장된 draft가 있으면 복원 바 표시
+    if (tabName === 'meeting') {
+      var draft = loadMeetingDraft();
+      if (draft) {
+        var existing = $('#mtg-draft-bar');
+        if (existing) existing.remove();
+        var restoreBar = document.createElement('div');
+        restoreBar.id = 'mtg-draft-bar';
+        restoreBar.className = 'mtg-draft-bar';
+        var hasRec = Array.isArray(draft.recordings) && draft.recordings.length > 0;
+        var hasAi = !!draft.aiLastResult;
+        var extraInfo = '';
+        if (hasRec || hasAi) {
+          var parts = [];
+          if (hasRec) parts.push('녹음 ' + draft.recordings.length + '건');
+          if (hasAi) parts.push('AI 분석');
+          extraInfo = ' (' + parts.join(' + ') + ' 포함)';
+        }
+        restoreBar.innerHTML = '<span>임시 저장된 회의가 있습니다' + extraInfo + '</span>' +
+          '<button class="btn btn-primary btn-small" id="mtg-draft-restore">이어서 작성</button>' +
+          '<button class="btn btn-ghost btn-small" id="mtg-draft-discard">삭제</button>';
+        var emptyState = $('#mtg-empty-state');
+        if (emptyState) emptyState.insertBefore(restoreBar, emptyState.firstChild);
+
+        $('#mtg-draft-restore').addEventListener('click', function () {
+          restoreBar.remove();
+          restoreMeetingDraft(draft);
+        });
+        $('#mtg-draft-discard').addEventListener('click', function () {
+          clearMeetingDraft();
+          restoreBar.remove();
+          toast('임시 저장이 삭제되었습니다');
+        });
+      }
     }
   }
 
@@ -1244,8 +1281,19 @@
 
   // ── 회의 임시 저장 (Draft) ──
   function saveMeetingDraft() {
-    // 회의 폼이 열려 있을 때만 저장
-    if ($('#mtg-form-view').style.display === 'none') return;
+    // 회의 폼이 열려 있을 때만 저장 (inline style 및 CSS class 모두 확인)
+    var formEl = $('#mtg-form-view');
+    if (!formEl) return;
+    var isHidden = formEl.style.display === 'none' || formEl.classList.contains('form-hidden');
+    if (isHidden) return;
+    // 녹음 메타데이터 (blob 제외 — IndexedDB에 별도 저장됨)
+    var recMeta = mtgRecordings.map(function (r) {
+      return { id: r.id, duration: r.duration || 0, transcript: r.transcript || '', transcribing: false };
+    });
+    // 참고 문서 (파일 바이너리 제외)
+    var refDocMeta = mtgRefDocs.map(function (d) {
+      return { id: d.id, name: d.name, size: d.size || 0, text: d.text || '' };
+    });
     var draft = {
       type: currentMtgType,
       editId: currentMtgEditId,
@@ -1256,11 +1304,21 @@
       notes: getRich('mtg-notes') ? getRich('mtg-notes').getHTML() : '',
       sections: getMtgAllSections(),
       folder: ($('#mtg-folder') && $('#mtg-folder').value) || '',
+      // 녹음, AI 분석 결과, 참고 문서, 화자 매핑 포함
+      recordings: recMeta,
+      refDocs: refDocMeta,
+      aiConversation: mtgAiConversation.slice(),
+      aiLastResult: mtgAiLastResult,
+      aiLastContent: mtgAiLastContent,
+      aiCurrentPreset: mtgAiCurrentPreset,
+      speakerMap: Object.assign({}, mtgSpeakerMap),
       savedAt: Date.now()
     };
     // 내용이 있을 때만 저장
     var hasSections = Array.isArray(draft.sections) && draft.sections.some(function (s) { return s.text; });
-    if (draft.title || htmlToText(draft.notes).trim() || hasSections || draft.agenda.length) {
+    var hasRecordings = recMeta.length > 0;
+    var hasAiResult = !!mtgAiLastResult;
+    if (draft.title || htmlToText(draft.notes).trim() || hasSections || draft.agenda.length || hasRecordings || hasAiResult) {
       localStorage.setItem(MTG_DRAFT_KEY, JSON.stringify(draft));
     }
   }
@@ -1297,7 +1355,57 @@
         return { key: s.key, label: s.label, text: draft[s.key] || '' };
       }));
     }
-    toast('임시 저장된 회의를 복원했습니다');
+    // 녹음 복원 (IndexedDB에서 오디오 blob 로드)
+    if (Array.isArray(draft.recordings) && draft.recordings.length > 0) {
+      mtgRecordings = draft.recordings.map(function (r) {
+        return { id: r.id, blob: null, url: null, duration: r.duration || 0, transcript: r.transcript || '', transcribing: false };
+      });
+      renderRecordings();
+      mtgRecordings.forEach(function (rec) {
+        loadAudioBlob(rec.id).then(function (blob) {
+          if (blob) {
+            rec.blob = blob;
+            rec.url = URL.createObjectURL(blob);
+            renderRecordings();
+          }
+        }).catch(function (err) {
+          console.warn('[Draft] 오디오 복원 실패 (id=' + rec.id + '):', err);
+        });
+      });
+    }
+    // 참고 문서 복원
+    if (Array.isArray(draft.refDocs) && draft.refDocs.length > 0) {
+      mtgRefDocs = draft.refDocs.map(function (d) {
+        return { id: d.id || uid(), name: d.name, size: d.size || 0, text: d.text || '', parsed: { meta: { type: 'restored' } }, parsing: false, error: null };
+      });
+      renderRefDocs();
+      updateRefDocsStatus();
+    }
+    // AI 분석 결과 복원
+    mtgAiConversation = Array.isArray(draft.aiConversation) ? draft.aiConversation.slice() : [];
+    mtgAiLastContent = draft.aiLastContent || '';
+    mtgAiCurrentPreset = draft.aiCurrentPreset || 'default';
+    mtgSpeakerMap = draft.speakerMap || {};
+    if (draft.aiLastResult) {
+      mtgAiLastResult = draft.aiLastResult;
+      processMtgAiResult(draft.aiLastResult);
+      renderSpeakerMap();
+      if (draft.editId) renderVersionBar(draft.editId);
+      // 후속 질문 대화 이력 복원
+      if (mtgAiConversation.length > 1) {
+        var msgContainer = $('#mtg-followup-messages');
+        msgContainer.innerHTML = '';
+        mtgAiConversation.forEach(function (msg) {
+          if (msg.role === 'user') {
+            msgContainer.innerHTML += '<div class="followup-msg user">' + escapeHtml(msg.content) + '</div>';
+          } else if (msg.role === 'assistant') {
+            msgContainer.innerHTML += '<div class="followup-msg assistant">' + msg.content + '</div>';
+          }
+        });
+        $('#mtg-followup-chat').style.display = '';
+      }
+    }
+    toast('임시 저장된 회의를 복원했습니다 (녹음·AI 분석 포함)');
   }
 
   function clearMeetingDraft() {
@@ -8897,12 +9005,7 @@
     }
   });
 
-  // 탭 전환 시에도 draft 저장
-  $$('.tab-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      saveMeetingDraft();
-    });
-  });
+  // 탭 전환 시 draft 저장은 switchTab() 내부에서 폼 숨기기 전에 수행됨
 
   // ══════════════════════════════════════
   // 9. 성장 기록 탭
