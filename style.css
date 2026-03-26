@@ -1423,6 +1423,20 @@ body {
   font-weight: 500;
 }
 
+#mtg-recover-btn {
+  background: var(--danger-bg, #fef2f2);
+  border: 1px solid var(--danger, #e74c3c);
+  color: var(--danger, #e74c3c);
+  font-weight: 500;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#mtg-recover-btn:hover {
+  background: var(--danger, #e74c3c);
+  color: #fff;
+}
+
 .mtg-voice-bar {
   display: flex;
   align-items: center;

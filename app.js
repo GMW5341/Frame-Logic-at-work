@@ -81,6 +81,135 @@
     });
   }
 
+  // ── IndexedDB에서 모든 오디오 레코드 목록 조회 ──
+  function listAllAudioBlobs() {
+    return openAudioDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(AUDIO_STORE_NAME, 'readonly');
+        var store = tx.objectStore(AUDIO_STORE_NAME);
+        var req = store.getAll();
+        req.onsuccess = function () { resolve(req.result || []); };
+        req.onerror = function (e) { reject(e.target.error); };
+      });
+    });
+  }
+
+  // ── 소실된 회의 데이터 복구 ──
+  // IndexedDB의 고아 오디오 + localStorage의 AI 버전 이력에서 복원
+  function recoverLostMeetingData() {
+    var meetings = load(MTG_KEY);
+    // 저장된 회의에 연결된 녹음 ID 수집
+    var knownRecIds = {};
+    meetings.forEach(function (m) {
+      if (Array.isArray(m.transcripts)) {
+        m.transcripts.forEach(function (t) { if (t.id) knownRecIds[t.id] = true; });
+      }
+    });
+    // 기존 draft에 연결된 녹음 ID도 수집
+    var existingDraft = loadMeetingDraft();
+    if (existingDraft && Array.isArray(existingDraft.recordings)) {
+      existingDraft.recordings.forEach(function (r) { if (r.id) knownRecIds[r.id] = true; });
+    }
+
+    return listAllAudioBlobs().then(function (allBlobs) {
+      // 고아 녹음: IndexedDB에 있지만 어떤 회의에도 연결되지 않은 것
+      var orphanBlobs = allBlobs.filter(function (b) { return !knownRecIds[b.id]; });
+
+      // AI 버전 이력에서 최근 것 찾기
+      var aiVersions = {};
+      try { aiVersions = JSON.parse(localStorage.getItem('fl_mtg_versions')) || {}; } catch (e) {}
+      // 저장되지 않은 회의의 AI 결과 (id가 저장된 회의 목록에 없는 것)
+      var savedIds = {};
+      meetings.forEach(function (m) { savedIds[m.id] = true; });
+      var orphanAiResults = [];
+      Object.keys(aiVersions).forEach(function (id) {
+        if (!savedIds[id] && aiVersions[id].length > 0) {
+          orphanAiResults.push({
+            meetingId: id,
+            versions: aiVersions[id]
+          });
+        }
+      });
+
+      // 최근 AI 분석 세션 비용에서 단서 찾기
+      var latestAiResult = null;
+      if (orphanAiResults.length > 0) {
+        var latest = orphanAiResults[orphanAiResults.length - 1];
+        latestAiResult = latest.versions[latest.versions.length - 1];
+      }
+
+      return {
+        orphanRecordings: orphanBlobs,
+        orphanAiResults: orphanAiResults,
+        latestAiResult: latestAiResult,
+        totalOrphanRecordings: orphanBlobs.length,
+        totalOrphanAiVersions: orphanAiResults.reduce(function (sum, o) { return sum + o.versions.length; }, 0)
+      };
+    });
+  }
+
+  // 복구 데이터를 draft로 만들어 바로 복원
+  function executeRecovery() {
+    return recoverLostMeetingData().then(function (result) {
+      if (result.totalOrphanRecordings === 0 && result.totalOrphanAiVersions === 0) {
+        toast('복구할 데이터를 찾지 못했습니다');
+        return null;
+      }
+
+      // 고아 녹음을 draft recordings로 변환
+      var recMeta = result.orphanRecordings.map(function (b) {
+        return { id: b.id, duration: 0, transcript: '', transcribing: false };
+      });
+
+      // 기존 draft가 있으면 병합, 없으면 새로 생성
+      var draft = loadMeetingDraft() || {
+        type: '',
+        editId: null,
+        title: '',
+        date: new Date().toISOString().slice(0, 16),
+        attendees: '',
+        agenda: [],
+        notes: '',
+        sections: [],
+        folder: '',
+        savedAt: Date.now()
+      };
+
+      // 고아 녹음 추가 (기존 draft 녹음과 병합)
+      var existingRecIds = {};
+      if (Array.isArray(draft.recordings)) {
+        draft.recordings.forEach(function (r) { existingRecIds[r.id] = true; });
+      } else {
+        draft.recordings = [];
+      }
+      recMeta.forEach(function (r) {
+        if (!existingRecIds[r.id]) draft.recordings.push(r);
+      });
+
+      // AI 결과 복원 (가장 최근 것)
+      if (result.latestAiResult && !draft.aiLastResult) {
+        draft.aiLastResult = result.latestAiResult.result || null;
+        draft.aiCurrentPreset = result.latestAiResult.preset || 'default';
+        draft.aiConversation = [];
+        draft.aiLastContent = '';
+      }
+
+      draft.savedAt = Date.now();
+      localStorage.setItem(MTG_DRAFT_KEY, JSON.stringify(draft));
+
+      var parts = [];
+      if (result.totalOrphanRecordings > 0) parts.push('녹음 ' + result.totalOrphanRecordings + '건');
+      if (result.totalOrphanAiVersions > 0) parts.push('AI 분석 ' + result.totalOrphanAiVersions + '건');
+      toast('복구 완료: ' + parts.join(', ') + ' — 회의 탭에서 확인하세요');
+
+      return result;
+    }).catch(function (err) {
+      console.error('[Recovery] 복구 실패:', err);
+      toast('복구 중 오류가 발생했습니다');
+      return null;
+    });
+  }
+
   function toast(msg) {
     var el = $('#toast');
     el.textContent = msg;
@@ -10119,6 +10248,36 @@
         toast('임시 저장이 삭제되었습니다');
       });
     }
+
+    // 고아 데이터(소실된 녹음/AI 분석) 자동 감지 → 복구 버튼 표시
+    recoverLostMeetingData().then(function (result) {
+      if (!result) return;
+      if (result.totalOrphanRecordings > 0 || result.totalOrphanAiVersions > 0) {
+        var recoverBtn = $('#mtg-recover-btn');
+        if (recoverBtn) {
+          var parts = [];
+          if (result.totalOrphanRecordings > 0) parts.push('녹음 ' + result.totalOrphanRecordings + '건');
+          if (result.totalOrphanAiVersions > 0) parts.push('AI 분석 ' + result.totalOrphanAiVersions + '건');
+          recoverBtn.textContent = '🔄 소실된 데이터 복구 (' + parts.join(' + ') + ')';
+          recoverBtn.style.display = '';
+          recoverBtn.addEventListener('click', function () {
+            recoverBtn.disabled = true;
+            recoverBtn.textContent = '복구 중...';
+            executeRecovery().then(function (res) {
+              if (res) {
+                recoverBtn.textContent = '✅ 복구 완료 — 회의 탭에서 "이어서 작성" 클릭';
+                // 회의 탭 재진입 로직 트리거
+                switchTab('meeting');
+              } else {
+                recoverBtn.style.display = 'none';
+              }
+            });
+          });
+        }
+      }
+    }).catch(function (err) {
+      console.warn('[Recovery] 자동 감지 실패:', err);
+    });
   }
 
   init();
