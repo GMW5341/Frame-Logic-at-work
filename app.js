@@ -2153,11 +2153,23 @@
 
   function startRecordingWithDevice(deviceId) {
     var btn = $('#mtg-rec-btn');
-    var constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true };
+    var audioOpts = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      sampleRate: 48000
+    };
+    if (deviceId) audioOpts.deviceId = { exact: deviceId };
+    var constraints = { audio: audioOpts };
 
     navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
       mtgAudioChunks = [];
-      mtgMediaRecorder = new MediaRecorder(stream);
+      var recorderOptions = { audioBitsPerSecond: 128000 };
+      var preferredMime = 'audio/webm;codecs=opus';
+      if (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(preferredMime)) {
+        recorderOptions.mimeType = preferredMime;
+      }
+      mtgMediaRecorder = new MediaRecorder(stream, recorderOptions);
 
       mtgMediaRecorder.ondataavailable = function (e) {
         if (e.data.size > 0) mtgAudioChunks.push(e.data);
@@ -2165,7 +2177,7 @@
 
       mtgMediaRecorder.onstop = function () {
         stream.getTracks().forEach(function (t) { t.stop(); });
-        var blob = new Blob(mtgAudioChunks, { type: 'audio/webm' });
+        var blob = new Blob(mtgAudioChunks, { type: mtgMediaRecorder.mimeType || 'audio/webm' });
         var url = URL.createObjectURL(blob);
         var duration = Math.floor((Date.now() - mtgRecStartTime) / 1000);
 
@@ -3016,15 +3028,64 @@
 
   // ── JSON 파싱 헬퍼 ──
   function parseMtgAiResponse(raw) {
+    // 1차: 마크다운 코드블록에서 추출
     var jsonStr = raw;
     var jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (jsonMatch) jsonStr = jsonMatch[1].trim();
+    // 2차: { } 범위 추출
     var braceStart = jsonStr.indexOf('{');
     var braceEnd = jsonStr.lastIndexOf('}');
     if (braceStart !== -1 && braceEnd !== -1) {
       jsonStr = jsonStr.substring(braceStart, braceEnd + 1);
     }
-    return JSON.parse(jsonStr);
+    // 3차: 제어 문자 제거 (JSON 깨짐 방지)
+    jsonStr = jsonStr.replace(/[\x00-\x1f\x7f]/g, function (ch) {
+      return ch === '\n' || ch === '\r' || ch === '\t' ? ch : '';
+    });
+    try {
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      // 4차: 흔한 JSON 오류 수정 후 재시도
+      var fixed = jsonStr
+        .replace(/,\s*([}\]])/g, '$1')           // trailing commas
+        .replace(/'/g, '"')                       // 작은따옴표 → 큰따옴표
+        .replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":'); // unquoted keys
+      return JSON.parse(fixed);
+    }
+  }
+
+  // ── raw 텍스트에서 섹션 추출 fallback ──
+  function extractSectionsFromText(raw) {
+    var sections = [];
+    // JSON이 그대로 보이지 않도록, 텍스트 형태로 변환 시도
+    var cleanText = raw;
+    // JSON 문자열이면 읽기 쉬운 형태로 변환
+    if (cleanText.trim().charAt(0) === '{' || cleanText.trim().charAt(0) === '[') {
+      try {
+        var obj = JSON.parse(cleanText);
+        // JSON 파싱은 되었지만 parseMtgAiResponse에서 실패한 경우 (구조가 다른 경우)
+        if (obj.sections && Array.isArray(obj.sections)) {
+          return obj.sections;
+        }
+        // 기타 JSON 구조를 텍스트로 변환
+        var lines = [];
+        Object.keys(obj).forEach(function (k) {
+          var v = obj[k];
+          if (typeof v === 'string') lines.push('**' + k + '**: ' + v);
+          else if (Array.isArray(v)) lines.push('**' + k + '**:\n' + v.map(function (item) {
+            return typeof item === 'string' ? '- ' + item : '- ' + JSON.stringify(item);
+          }).join('\n'));
+          else lines.push('**' + k + '**: ' + JSON.stringify(v));
+        });
+        cleanText = lines.join('\n\n');
+      } catch (ignore) {
+        // JSON이 아님 — 원문 텍스트 사용
+      }
+    }
+    // 마크다운 백틱 제거
+    cleanText = cleanText.replace(/```(?:json)?\s*/g, '').replace(/```/g, '').trim();
+    sections.push({ key: 'summary', label: '핵심 요약', text: cleanText });
+    return sections;
   }
 
   // ── 분석 결과 처리 ──
@@ -3420,8 +3481,9 @@
 
           var parsed;
           try { parsed = parseMtgAiResponse(raw); } catch (e) {
-            renderMtgSections([{ key: 'summary', label: '핵심 요약', text: raw }]);
-            toast('AI 분석 완료 (구조 파싱 실패, 원문 표시)');
+            console.warn('[MtgAI] JSON 파싱 실패, fallback 처리:', e.message);
+            renderMtgSections(extractSectionsFromText(raw));
+            toast('AI 분석 완료 (구조 파싱 실패, 텍스트로 표시)');
             return;
           }
 
@@ -3464,8 +3526,9 @@
 
           var parsed;
           try { parsed = parseMtgAiResponse(raw); } catch (e) {
-            renderMtgSections([{ key: 'summary', label: '핵심 요약', text: raw }]);
-            toast('AI 분석 완료 (구조 파싱 실패, 원문 표시)');
+            console.warn('[MtgAI] JSON 파싱 실패, fallback 처리:', e.message);
+            renderMtgSections(extractSectionsFromText(raw));
+            toast('AI 분석 완료 (구조 파싱 실패, 텍스트로 표시)');
             return;
           }
 
