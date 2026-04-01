@@ -757,7 +757,78 @@
           <div class="view-form-header">
             <button class="btn btn-secondary btn-small" id="jnl-back">📋 목록 보기</button>
             <span id="jnl-form-title-label" style="font-weight:600;font-size:0.9rem;color:var(--text-muted)">새 항목 추가</span>
+            <span style="flex:1"></span>
+            <div class="jnl-mode-toggle" id="jnl-mode-toggle">
+              <button class="jnl-mode-btn jnl-mode-active" data-mode="lite">Lite</button>
+              <button class="jnl-mode-btn" data-mode="full">Full</button>
+            </div>
           </div>
+
+          <!-- ════ Lite 모드 ══════════════════════════ -->
+          <div id="jnl-lite-view">
+            <!-- 완료된 할 일 자동 반영 영역 -->
+            <div class="jnl-lite-section" id="jnl-lite-tasks">
+              <div class="jnl-lite-section-header">
+                <span class="jnl-lite-section-icon">✅</span>
+                <span class="jnl-lite-section-title">완료된 할 일</span>
+                <span class="jnl-lite-task-count" id="jnl-lite-task-count">0건</span>
+              </div>
+              <div class="jnl-lite-task-list" id="jnl-lite-task-list">
+                <div class="jnl-lite-empty">완료된 할 일이 없습니다</div>
+              </div>
+            </div>
+
+            <!-- 돌발/비계획 업무 자유 입력 -->
+            <div class="jnl-lite-section">
+              <div class="jnl-lite-section-header">
+                <span class="jnl-lite-section-icon">⚡</span>
+                <span class="jnl-lite-section-title">추가 업무 (돌발/비계획)</span>
+              </div>
+              <textarea id="jnl-lite-adhoc" class="jnl-lite-textarea" rows="3" placeholder="할 일 목록에 없었던 업무를 자유롭게 적어주세요&#10;예: 긴급 고객 대응, 서버 장애 처리, 팀장님 요청 자료 작성..."></textarea>
+            </div>
+
+            <!-- 내일 할 일 / 후속 조치 -->
+            <div class="jnl-lite-section">
+              <div class="jnl-lite-section-header">
+                <span class="jnl-lite-section-icon">📌</span>
+                <span class="jnl-lite-section-title">내일 할 일 / 후속 조치</span>
+                <span class="jnl-lite-hint">(선택)</span>
+              </div>
+              <textarea id="jnl-lite-tomorrow" class="jnl-lite-textarea" rows="2" placeholder="내일 이어서 할 일이나 후속 조치를 적어주세요 (선택사항)"></textarea>
+            </div>
+
+            <!-- 한 줄 코멘트 -->
+            <div class="jnl-lite-section">
+              <div class="jnl-lite-section-header">
+                <span class="jnl-lite-section-icon">💬</span>
+                <span class="jnl-lite-section-title">오늘 한마디</span>
+                <span class="jnl-lite-hint">(선택)</span>
+              </div>
+              <input type="text" id="jnl-lite-comment" class="jnl-lite-input" placeholder="오늘 느낀 점, 배운 것 등을 한 줄로 (선택사항)">
+            </div>
+
+            <!-- AI 생성 버튼 -->
+            <div class="jnl-lite-actions">
+              <button class="btn btn-accent" id="jnl-lite-ai-generate">🤖 AI로 업무일지 자동 생성</button>
+              <button class="btn btn-secondary" id="jnl-lite-save-simple">📝 간단 저장 (AI 없이)</button>
+            </div>
+
+            <!-- AI 처리 결과 미리보기 -->
+            <div class="jnl-lite-preview" id="jnl-lite-preview" style="display:none">
+              <div class="jnl-lite-preview-header">
+                <span>AI 생성 결과 미리보기</span>
+                <button class="btn btn-small btn-ghost" id="jnl-lite-preview-close">✕</button>
+              </div>
+              <div class="jnl-lite-preview-body" id="jnl-lite-preview-body"></div>
+              <div class="jnl-lite-preview-actions">
+                <button class="btn btn-primary" id="jnl-lite-preview-save">저장하기</button>
+                <button class="btn btn-ghost" id="jnl-lite-preview-cancel">취소</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══════ Full 모드 (기존) ═══════════════════ -->
+          <div id="jnl-full-view" style="display:none">
           <!-- 완료된 할 일 알림 (폼 뷰) -->
           <div class="jnl-task-form-notify" id="jnl-task-form-notify" style="display:none">
             <span class="jnl-task-form-notify-icon">✅</span>
@@ -788,6 +859,7 @@
           <div class="btn-row">
             <button class="btn btn-primary" id="jnl-save">저장</button>
             <button class="btn btn-ghost" id="jnl-form-clear">초기화</button>
+          </div>
           </div>
         </div>
           </div>
